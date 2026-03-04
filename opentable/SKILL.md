@@ -79,6 +79,7 @@ Present results:
 - No authentication or API key required
 - Uses OpenTable's internal GraphQL API with a persisted query hash
 - The hash (`b2d05a06...`) may need updating if OpenTable deploys new frontend code — if availability queries start returning errors, the hash is likely stale
+- Override the hash via the `OPENTABLE_AVAILABILITY_HASH` environment variable
 - OpenTable does not expose a text search API; restaurant lookup requires the URL slug
 - Results include a booking URL — the user completes the reservation on OpenTable's website
 - Requires `curl_cffi` Python package for TLS fingerprint impersonation
