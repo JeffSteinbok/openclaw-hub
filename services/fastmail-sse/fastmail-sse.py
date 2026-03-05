@@ -100,8 +100,10 @@ def save_state(state):
     os.replace(tmp, STATE_FILE)
 
 # ── Format + send notification ────────────────────────────────
-def format_message(sender_str, sender_email, subject):
-    """Apply emoji formatting rules. Returns formatted string or None to skip."""
+NOTIFY_MODE = os.environ.get("NOTIFY_MODE", "agent")  # "agent" or "direct"
+
+def format_direct_message(sender_str, sender_email, subject):
+    """Format for direct Telegram delivery. Returns string or None to skip."""
     low = (subject or "").lower()
     # Suppress automated/marketing messages that match common opt-out keywords
     if any(k in low for k in ("unsubscribe", "noreply", "no-reply")):
@@ -122,16 +124,42 @@ def format_message(sender_str, sender_email, subject):
     name = sender_str.split("<")[0].strip() or sender_email
     return f"📧 {name}: {subject}"
 
-def notify(email):
-    """Format email metadata and send directly to Telegram."""
-    # JMAP "from" is a list of {name, email} objects; grab the first or default to {}
-    sender = (email.get("from") or [{}])[0] if email.get("from") else {}
-    sender_name = sender.get("name", "")
-    sender_email = sender.get("email", "unknown")
-    sender_str = f"{sender_name} <{sender_email}>" if sender_name else sender_email
-    subject = (email.get("subject", "(no subject)") or "(no subject)")[:150]  # truncate long subjects
+def notify_via_agent(sender_str, sender_email, subject):
+    """Send a pre-formatted notification through the mail-agent.
 
-    msg = format_message(sender_str, sender_email, subject)
+    Python handles all triage and formatting. The mail-agent simply
+    delivers the message to Telegram. If the agent times out or fails,
+    falls back to direct delivery.
+    """
+    msg = format_direct_message(sender_str, sender_email, subject)
+    if msg is None:
+        log(f"skipped: {sender_str} — {subject}")
+        return
+
+    try:
+        result = subprocess.run(
+            ["openclaw", "agent",
+             "--agent", "mail-agent",
+             "--channel", "telegram",
+             "--deliver",
+             "--message", f"Deliver this email notification exactly as written:\n\n{msg}"],
+            timeout=60, capture_output=True, text=True
+        )
+        if result.returncode != 0:
+            log(f"warn: mail-agent returned {result.returncode}: {result.stderr[:200]}")
+            notify_direct(sender_str, sender_email, subject)
+        else:
+            log(f"agent delivered: {msg}")
+    except subprocess.TimeoutExpired:
+        log(f"warn: mail-agent timed out, falling back to direct")
+        notify_direct(sender_str, sender_email, subject)
+    except Exception as e:
+        log(f"error: mail-agent failed: {e}, falling back to direct")
+        notify_direct(sender_str, sender_email, subject)
+
+def notify_direct(sender_str, sender_email, subject):
+    """Send a pre-formatted notification directly to Telegram (no AI, no tokens)."""
+    msg = format_direct_message(sender_str, sender_email, subject)
     if msg is None:
         log(f"skipped: {sender_str} — {subject}")
         return
@@ -149,6 +177,20 @@ def notify(email):
         log(f"warn: telegram send timed out")
     except Exception as e:
         log(f"error: send failed: {e}")
+
+def notify(email):
+    """Route email notification based on NOTIFY_MODE (agent or direct)."""
+    # JMAP "from" is a list of {name, email} objects; grab the first or default to {}
+    sender = (email.get("from") or [{}])[0] if email.get("from") else {}
+    sender_name = sender.get("name", "")
+    sender_email = sender.get("email", "unknown")
+    sender_str = f"{sender_name} <{sender_email}>" if sender_name else sender_email
+    subject = (email.get("subject", "(no subject)") or "(no subject)")[:150]  # truncate long subjects
+
+    if NOTIFY_MODE == "agent":
+        notify_via_agent(sender_str, sender_email, subject)
+    else:
+        notify_direct(sender_str, sender_email, subject)
 
 # ── SSE stream ────────────────────────────────────────────────
 def stream(token):
