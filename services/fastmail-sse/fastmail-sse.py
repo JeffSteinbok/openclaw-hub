@@ -101,6 +101,7 @@ def save_state(state):
 
 # ── Format + send notification ────────────────────────────────
 NOTIFY_MODE = os.environ.get("NOTIFY_MODE", "agent")  # "agent" or "direct"
+NOTIFY_CHANNEL = os.environ.get("NOTIFY_CHANNEL", "telegram")  # delivery channel for agent mode
 
 def format_direct_message(sender_str, sender_email, subject):
     """Format for direct Telegram delivery. Returns string or None to skip."""
@@ -140,7 +141,7 @@ def notify_via_agent(sender_str, sender_email, subject):
         result = subprocess.run(
             ["openclaw", "agent",
              "--agent", "mail-agent",
-             "--channel", "telegram",
+             "--channel", NOTIFY_CHANNEL,
              "--deliver",
              "--message", f"Deliver this email notification exactly as written:\n\n{msg}"],
             timeout=60, capture_output=True, text=True
@@ -167,7 +168,7 @@ def notify_direct(sender_str, sender_email, subject):
     try:
         subprocess.run(
             ["openclaw", "message", "send",
-             "--channel", "telegram",
+             "--channel", NOTIFY_CHANNEL,
              "--target", TELEGRAM_TARGET,
              "--message", msg],
             timeout=30, capture_output=True
