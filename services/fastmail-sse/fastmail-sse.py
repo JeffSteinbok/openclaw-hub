@@ -113,6 +113,21 @@ def save_state(state):
     os.replace(tmp, STATE_FILE)
 
 
+# ── Mark as read ──────────────────────────────────────────────
+def mark_as_read(token, email_ids):
+    """Mark emails as read via JMAP Email/set (sets $seen keyword)."""
+    if not email_ids:
+        return
+    updates = {eid: {"keywords/$seen": True} for eid in email_ids}
+    try:
+        jmap(token, [
+            ["Email/set", {"accountId": ACCOUNT_ID, "update": updates}, "mark"]
+        ])
+        log(f"marked {len(email_ids)} email(s) as read")
+    except Exception as e:
+        log(f"warn: failed to mark as read: {e}")
+
+
 # ── Format + deliver notification ─────────────────────────────
 def format_message(sender_str, sender_email, subject):
     """Format an email into a notification string. Returns None to skip."""
@@ -206,8 +221,11 @@ def stream(token):
             if email_state is not None:
                 log(f"state change: {email_state} → {new_email_state}")
                 try:
-                    for em in fetch_new_emails(token, email_state):
+                    emails = fetch_new_emails(token, email_state)
+                    for em in emails:
                         notify(em)
+                    # Mark all processed emails as read
+                    mark_as_read(token, [em["id"] for em in emails])
                 except Exception as e:
                     log(f"error fetching changes: {e}")
             else:
