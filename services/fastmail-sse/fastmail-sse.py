@@ -2,16 +2,16 @@
 """Fastmail JMAP EventSource daemon for OpenClaw.
 
 Connects to Fastmail's SSE stream, detects new Inbox emails,
-formats a notification, and delivers it via an OpenClaw agent.
+formats a notification, and delivers it via openclaw message send.
 Runs as a systemd user service.
 
 Required environment variables:
     FASTMAIL_JMAP_TOKEN   — Fastmail API token (or put in ~/.fastmail_token)
     FASTMAIL_ACCOUNT_ID   — Your Fastmail JMAP account ID
     FASTMAIL_INBOX_ID     — JMAP mailbox ID for your Inbox
+    NOTIFY_TARGET         — Delivery target (e.g. Telegram chat ID, Discord channel)
 
 Optional environment variables:
-    NOTIFY_AGENT          — Agent to deliver notifications (default: "mail-agent")
     NOTIFY_CHANNEL        — Delivery channel (default: "telegram")
 """
 
@@ -26,9 +26,9 @@ RECONNECT_DELAY = 10
 EMAIL_PROPS     = ["id", "from", "subject"]
 
 # Loaded at startup from environment variables
-ACCOUNT_ID    = None
-INBOX_ID      = None
-NOTIFY_AGENT  = None
+ACCOUNT_ID     = None
+INBOX_ID       = None
+NOTIFY_TARGET  = None
 NOTIFY_CHANNEL = None
 
 
@@ -154,7 +154,7 @@ def format_message(sender_str, sender_email, subject):
 
 
 def notify(email):
-    """Format an email notification and deliver it via the configured agent."""
+    """Format an email notification and deliver it via openclaw message send."""
     sender = (email.get("from") or [{}])[0] if email.get("from") else {}
     sender_name = sender.get("name", "")
     sender_email = sender.get("email", "unknown")
@@ -168,19 +168,18 @@ def notify(email):
 
     try:
         result = subprocess.run(
-            ["openclaw", "agent",
-             "--agent", NOTIFY_AGENT,
+            ["openclaw", "message", "send",
              "--channel", NOTIFY_CHANNEL,
-             "--deliver",
-             "--message", f"Deliver this email notification exactly as written:\n\n{msg}"],
-            timeout=60, capture_output=True, text=True
+             "--target", NOTIFY_TARGET,
+             "--message", msg],
+            timeout=30, capture_output=True, text=True
         )
         if result.returncode != 0:
-            log(f"error: agent returned {result.returncode}: {result.stderr[:200]}")
+            log(f"error: message send returned {result.returncode}: {result.stderr[:200]}")
         else:
             log(f"delivered: {msg}")
     except subprocess.TimeoutExpired:
-        log(f"error: agent timed out for: {msg}")
+        log(f"error: send timed out for: {msg}")
     except Exception as e:
         log(f"error: delivery failed: {e}")
 
@@ -238,17 +237,17 @@ def stream(token):
 
 # ── Main ──────────────────────────────────────────────────────
 def main():
-    global ACCOUNT_ID, INBOX_ID, NOTIFY_AGENT, NOTIFY_CHANNEL
+    global ACCOUNT_ID, INBOX_ID, NOTIFY_TARGET, NOTIFY_CHANNEL
 
     ACCOUNT_ID     = require_env("FASTMAIL_ACCOUNT_ID")
     INBOX_ID       = require_env("FASTMAIL_INBOX_ID")
-    NOTIFY_AGENT   = os.environ.get("NOTIFY_AGENT", "mail-agent")
+    NOTIFY_TARGET  = require_env("NOTIFY_TARGET")
     NOTIFY_CHANNEL = os.environ.get("NOTIFY_CHANNEL", "telegram")
 
     token = get_token()
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
-    log(f"config: agent={NOTIFY_AGENT}, channel={NOTIFY_CHANNEL}, account={ACCOUNT_ID[:4]}...")
+    log(f"config: channel={NOTIFY_CHANNEL}, target={NOTIFY_TARGET[:6]}..., account={ACCOUNT_ID[:4]}...")
 
     while True:
         try:
