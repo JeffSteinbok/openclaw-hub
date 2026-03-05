@@ -1,5 +1,7 @@
+---
 name: hass-camera-snapshot
 description: Take a snapshot from any home security camera via Home Assistant CLI. Use this whenever the user asks to see a camera, check a camera, take a snapshot, or look at what's happening at home. Do NOT use nodes, camera.snap, or UniFi APIs — this skill handles everything.
+---
 
 ## Usage
 
