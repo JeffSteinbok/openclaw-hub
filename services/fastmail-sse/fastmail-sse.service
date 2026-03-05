@@ -1,0 +1,16 @@
+[Unit]
+Description=Fastmail JMAP EventSource — real-time email notifications for OpenClaw
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/git/openclaw/services/fastmail-sse/fastmail-sse.py
+Environment=PATH=%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
