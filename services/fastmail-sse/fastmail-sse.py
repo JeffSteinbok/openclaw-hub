@@ -12,12 +12,26 @@ from urllib.request import Request, urlopen
 # ── Config ────────────────────────────────────────────────────
 JMAP_API    = "https://api.fastmail.com/jmap/api/"
 EVENT_URL   = "https://api.fastmail.com/jmap/event/?types=Email,EmailDelivery&closeafter=no&ping=30"
-ACCOUNT_ID  = "***REDACTED_ACCOUNT***"
 STATE_FILE  = os.path.expanduser("~/.openclaw/services/fastmail-sse-state.json")
 RECONNECT_DELAY = 10
 EMAIL_PROPS = ["id", "from", "subject"]
-TELEGRAM_TARGET = "***REDACTED_TELEGRAM***"
-INBOX_ID    = "P-F"
+
+def require_env(name):
+    """Read a required environment variable or exit with a clear message."""
+    val = os.environ.get(name)
+    if not val:
+        sys.exit(f"ERROR: Required environment variable {name} is not set. "
+                 f"Add it to your .env file or systemd service Environment= line.")
+    return val
+
+# These are loaded at startup from environment variables.
+# Set them in ~/.openclaw/.env or in the systemd service unit.
+#   FASTMAIL_ACCOUNT_ID  — your Fastmail JMAP account ID (e.g. "***REDACTED_ACCOUNT***")
+#   TELEGRAM_CHAT_ID     — Telegram chat/user ID for notifications
+#   FASTMAIL_INBOX_ID    — JMAP mailbox ID for your Inbox (e.g. "P-F")
+ACCOUNT_ID      = None
+TELEGRAM_TARGET = None
+INBOX_ID        = None
 
 def log(msg):
     print(f"[fastmail-sse] {msg}", flush=True)
@@ -186,6 +200,11 @@ def stream(token):
 
 # ── Main ──────────────────────────────────────────────────────
 def main():
+    global ACCOUNT_ID, TELEGRAM_TARGET, INBOX_ID
+    ACCOUNT_ID      = require_env("FASTMAIL_ACCOUNT_ID")
+    TELEGRAM_TARGET = require_env("TELEGRAM_CHAT_ID")
+    INBOX_ID        = require_env("FASTMAIL_INBOX_ID")
+
     token = get_token()
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))  # graceful systemd stop
 
