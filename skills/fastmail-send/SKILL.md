@@ -1,6 +1,6 @@
 ---
 name: fastmail-send
-description: Send email and meeting requests via Fastmail JMAP. Use when asked to send an email, compose a message, or create a meeting/calendar invite. Supports plain email, meeting requests with accept/decline buttons, and updating existing calendar events.
+description: Send email and meeting requests via Fastmail JMAP. Use when asked to send an email, compose a message, or create a meeting/calendar invite. Supports plain email, meeting requests with accept/decline buttons, updating existing calendar events, and querying events with RSVP status.
 metadata:
   openclaw:
     emoji: "📧"
@@ -11,16 +11,21 @@ metadata:
 # Fastmail Send
 
 Send email and meeting requests from `octo@steinbok.net` (as "Octo") via Fastmail JMAP.
+Supports a three-tier fallback for calendar events: JMAP Calendar → CalDAV → MIME/iCal.
 
 ## Config env vars
 
-| Variable               | Required | Default              | Description                                |
-|------------------------|----------|----------------------|--------------------------------------------|
-| `FASTMAIL_JMAP_TOKEN`  | ✓        | —                    | API bearer token                           |
-| `FASTMAIL_ACCOUNT_ID`  | ✓        | —                    | JMAP account ID (e.g. `u204e4053`)         |
-| `FASTMAIL_IDENTITY_ID` |          | `176075455`          | EmailIdentity ID for submission            |
-| `FASTMAIL_FROM_EMAIL`  |          | `octo@steinbok.net`  | Sender address                             |
-| `FASTMAIL_CALENDAR_ID` |          | *(server default)*   | Calendar to create events in (optional)    |
+| Variable                | Required | Default              | Description                                            |
+|-------------------------|----------|----------------------|--------------------------------------------------------|
+| `FASTMAIL_JMAP_TOKEN`   | ✓        | —                    | API bearer token                                       |
+| `FASTMAIL_ACCOUNT_ID`   | ✓        | —                    | JMAP account ID (e.g. `u204e4053`)                    |
+| `FASTMAIL_IDENTITY_ID`  |          | `176075455`          | EmailIdentity ID for submission                        |
+| `FASTMAIL_FROM_EMAIL`   |          | `octo@steinbok.net`  | Sender address                                         |
+| `FASTMAIL_CALENDAR_ID`  |          | *(server default)*   | JMAP Calendar ID to create events in (optional)        |
+| `CALDAV_URL`            |          | —                    | CalDAV server base URL (e.g. `https://caldav.fastmail.com/`) |
+| `CALDAV_USERNAME`       |          | —                    | CalDAV username (usually the account e-mail address)   |
+| `CALDAV_PASSWORD`       |          | —                    | CalDAV password or app-specific password               |
+| `CALDAV_CALENDAR_PATH`  |          | *(auto-discovered)*  | CalDAV calendar collection path (optional)             |
 
 ---
 
@@ -55,19 +60,26 @@ Optional flags:
 - `--cc addr1 addr2`
 - `--timezone IANA_TZ` (default: `America/Los_Angeles`)
 - `--duration` accepts `30m`, `1.5h`, `90` (bare number = minutes; default: `1h`)
-- `--no-jmap-calendar` — force MIME/iCal fallback, skip JMAP Calendar API
+- `--no-jmap-calendar` — skip JMAP Calendar *and* CalDAV; force MIME/iCal fallback
 
-### How it works
+### How it works (fallback chain)
 
-1. **JMAP Calendar path** (preferred): If the account has the `urn:ietf:params:jmap:calendars`
-   capability, the script calls `CalendarEvent/set` with `sendSchedulingMessages: true`.
+1. **JMAP Calendar** (preferred): If the account has the `urn:ietf:params:jmap:calendars`
+   capability, calls `CalendarEvent/set` with `sendSchedulingMessages: true`.
    The server creates the event in the organizer's calendar **and** sends iMIP invite emails
    to all attendees automatically.
 
-2. **MIME fallback**: If JMAP Calendar is unavailable (or `--no-jmap-calendar` is passed),
-   the script assembles a `multipart/alternative` MIME message with a `text/calendar;method=REQUEST`
-   part. This produces the standard accept/decline buttons in mail clients, but the event is
-   **not** added to the organizer's calendar.
+2. **CalDAV** (if `CALDAV_URL` / `CALDAV_USERNAME` / `CALDAV_PASSWORD` are set):
+   Creates the event in the organizer's CalDAV calendar via `PUT`, then sends iMIP
+   invite emails separately via JMAP MIME upload.  CalDAV calendar path is
+   auto-discovered if `CALDAV_CALENDAR_PATH` is not set.
+
+3. **MIME fallback** (last resort): Assembles a `multipart/alternative` MIME message
+   with a `text/calendar;method=REQUEST` part.  Produces accept/decline buttons in
+   mail clients, but the event is **not** added to the organizer's calendar.
+
+RSVP state (attendee responses) is automatically tracked in
+`~/.openclaw/services/meeting-rsvp.json` for all three paths.
 
 ---
 
@@ -113,9 +125,54 @@ also passed (which updates **all** matching events).
 
 ---
 
+## Query events and RSVP status
+
+```bash
+python3 <skill>/scripts/fastmail.py query-events \
+  --after 2026-03-01 \
+  --before 2026-04-01
+```
+
+Optional filters:
+- `--text QUERY` — free-text filter on event title / description
+- `--attendee EMAIL` — only show events that include this attendee
+- `--uid UID` — return the single event with this exact UID
+
+### How it works
+
+Data sources are tried in order:
+
+1. **CalDAV** — if `CALDAV_*` env vars are set; RSVP statuses are read directly
+   from attendee `PARTSTAT` values in the iCalendar data and synced to the local
+   state file.
+2. **JMAP Calendar** — if the account has the calendars capability; attendee
+   `participationStatus` values are used.
+3. **Local RSVP state only** — if no live backend is available, the local
+   `~/.openclaw/services/meeting-rsvp.json` file is shown as a last resort.
+
+### Output example
+
+```
+📅 Project Sync
+   Date:     20260315T140000 – 20260315T150000
+   Location: Zoom
+   UID:      abc123@steinbok.net
+   Backend:  caldav
+   Attendees:
+     ✓ Alice <alice@example.com> (ACCEPTED)
+     · Bob <bob@example.com> (NEEDS-ACTION)
+     ✗ Carol <carol@example.com> (DECLINED)
+```
+
+RSVP icons: `✓` accepted · `✗` declined · `?` tentative · `·` needs-action · `→` delegated
+
+---
+
 ## Notes
 
 - Always pass `--signature` separately from `--body`/`--description`; the script appends it.
 - The `--to` / `--cc` flags accept multiple addresses: `--to a@x.com b@x.com`
 - Token is loaded from `FASTMAIL_JMAP_TOKEN` env var or `~/.fastmail_token`.
 - UIDs are printed on meeting creation — save them to reference events later.
+- For Fastmail CalDAV: set `CALDAV_URL=https://caldav.fastmail.com/` and
+  `CALDAV_USERNAME` to the account e-mail, `CALDAV_PASSWORD` to an app password.

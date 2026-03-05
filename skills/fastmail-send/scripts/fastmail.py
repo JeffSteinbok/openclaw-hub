@@ -1,22 +1,30 @@
 #!/usr/bin/env python3
-"""Send email and meeting requests via Fastmail JMAP.
+"""Send email and manage calendar events via Fastmail JMAP and/or CalDAV.
 
 Supports commands:
   send          – plain-text email with optional file attachments
-  meeting       – calendar invite: creates JMAP CalendarEvent + sends iMIP invites
-                  (falls back to raw MIME/iCal if Calendar JMAP is unavailable)
+  meeting       – calendar invite with attendees; uses the best available backend:
+                    1. JMAP CalendarEvent/set (preferred — server sends iMIP invites)
+                    2. CalDAV PUT + MIME iMIP email (when CALDAV_* vars are set)
+                    3. Raw MIME/iCal fallback (last resort)
   update-event  – find a CalendarEvent by UID or subject and modify it
+  query-events  – search calendar events by date range / text / UID;
+                    shows attendee RSVP status
 
 Auth:
   Reads FASTMAIL_JMAP_TOKEN from env or ~/.fastmail_token.
 
 Config env vars:
-  FASTMAIL_JMAP_TOKEN    – API bearer token (required)
-  FASTMAIL_ACCOUNT_ID    – JMAP account ID (required, e.g. "u204e4053")
-  FASTMAIL_IDENTITY_ID   – EmailIdentity ID for submission (default "176075455")
-  FASTMAIL_FROM_EMAIL    – Sender address (default "octo@steinbok.net")
-  FASTMAIL_CALENDAR_ID   – Calendar ID to create events in (optional; if unset,
-                           the server picks the primary calendar)
+  FASTMAIL_JMAP_TOKEN      – API bearer token (required)
+  FASTMAIL_ACCOUNT_ID      – JMAP account ID (required, e.g. "u204e4053")
+  FASTMAIL_IDENTITY_ID     – EmailIdentity ID for submission (default "176075455")
+  FASTMAIL_FROM_EMAIL      – Sender address (default "octo@steinbok.net")
+  FASTMAIL_CALENDAR_ID     – JMAP Calendar ID (optional; server picks primary if unset)
+
+  CALDAV_URL               – CalDAV server base URL (e.g. https://caldav.fastmail.com/)
+  CALDAV_USERNAME          – CalDAV username (usually the account e-mail address)
+  CALDAV_PASSWORD          – CalDAV password / app-specific password
+  CALDAV_CALENDAR_PATH     – CalDAV calendar collection path (auto-discovered if unset)
 """
 
 import argparse
@@ -35,6 +43,10 @@ from email.policy import SMTP as SMTP_POLICY
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+# CalDAV client lives alongside this script
+sys.path.insert(0, os.path.dirname(__file__))
+from caldav_client import CalDAVClient, CalDAVError, parse_ical_event, update_ical_vevent  # noqa: E402
+
 # ── Config ────────────────────────────────────────────────────────────────────
 
 JMAP_API    = "https://api.fastmail.com/jmap/api/"
@@ -45,6 +57,15 @@ CALENDAR_ID = os.environ.get("FASTMAIL_CALENDAR_ID", "")  # optional: specific c
 FROM_NAME   = "Octo (Jeff's Assistant)"
 DRAFTS_ID   = "P3V"
 SENT_ID     = "P2F"
+
+# CalDAV configuration (optional; enables JMAP → CalDAV → MIME fallback chain)
+CALDAV_URL           = os.environ.get("CALDAV_URL", "")
+CALDAV_USERNAME      = os.environ.get("CALDAV_USERNAME", "")
+CALDAV_PASSWORD      = os.environ.get("CALDAV_PASSWORD", "")
+CALDAV_CALENDAR_PATH = os.environ.get("CALDAV_CALENDAR_PATH", "")
+
+# RSVP state persistence: ~/.openclaw/services/meeting-rsvp.json
+RSVP_STATE_FILE = os.path.expanduser("~/.openclaw/services/meeting-rsvp.json")
 
 # JMAP capability URNs
 CAP_CORE       = "urn:ietf:params:jmap:core"
@@ -73,6 +94,108 @@ def get_token() -> str:
         with open(p) as f:
             return f.read().strip()
     sys.exit("FASTMAIL_JMAP_TOKEN not found (checked env + ~/.fastmail_token)")
+
+
+def get_caldav_client() -> CalDAVClient | None:
+    """Return a CalDAVClient if CALDAV_URL/USERNAME/PASSWORD are configured, else None."""
+    if CALDAV_URL and CALDAV_USERNAME and CALDAV_PASSWORD:
+        return CalDAVClient(CALDAV_URL, CALDAV_USERNAME, CALDAV_PASSWORD)
+    return None
+
+
+# ── RSVP state helpers ────────────────────────────────────────────────────────
+
+def load_rsvp_state() -> dict:
+    """Load RSVP tracking state from disk.
+
+    Returns:
+        Dict mapping event UID → event dict with attendee RSVP info.
+        Returns an empty dict if the file does not exist or cannot be parsed.
+    """
+    if os.path.exists(RSVP_STATE_FILE):
+        try:
+            with open(RSVP_STATE_FILE) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def save_rsvp_state(state: dict) -> None:
+    """Persist RSVP tracking state to disk.
+
+    Creates parent directories if needed.  Writes atomically to a temp file
+    then renames to avoid partial writes.
+
+    Args:
+        state: Dict mapping event UID → event dict.
+    """
+    os.makedirs(os.path.dirname(RSVP_STATE_FILE), exist_ok=True)
+    tmp = RSVP_STATE_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(state, f, indent=2)
+    os.replace(tmp, RSVP_STATE_FILE)
+
+
+def rsvp_record_event(
+    uid: str,
+    title: str,
+    start: str,
+    attendees: list[str],
+    backend: str,
+) -> None:
+    """Record a new event in the RSVP state file with initial attendee statuses.
+
+    All attendees are initialised to ``needs-action``.  Existing records for
+    the same UID are overwritten.
+
+    Args:
+        uid:       Event UID.
+        title:     Event title / summary.
+        start:     ISO datetime string of the event start.
+        attendees: List of attendee e-mail addresses.
+        backend:   Which backend created the event: "jmap", "caldav", or "mime".
+    """
+    state = load_rsvp_state()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    state[uid] = {
+        "uid":        uid,
+        "title":      title,
+        "start":      start,
+        "backend":    backend,
+        "organizer":  FROM_EMAIL,
+        "attendees":  {
+            addr: {"partstat": "needs-action", "name": "", "last_seen": now}
+            for addr in attendees
+        },
+        "last_synced": now,
+    }
+    save_rsvp_state(state)
+
+
+def rsvp_update_from_ical(uid: str, attendees: list[dict]) -> None:
+    """Update attendee RSVP statuses in the state file from parsed iCalendar data.
+
+    Args:
+        uid:       Event UID to update.
+        attendees: List of attendee dicts as returned by :func:`parse_ical_event`,
+                   each with at least ``email`` and ``partstat`` keys.
+    """
+    state = load_rsvp_state()
+    if uid not in state:
+        return
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stored = state[uid].setdefault("attendees", {})
+    for att in attendees:
+        email = att.get("email", "")
+        if not email:
+            continue
+        stored.setdefault(email, {})
+        stored[email]["partstat"]  = att.get("partstat", "needs-action")
+        stored[email]["name"]      = att.get("name", stored[email].get("name", ""))
+        stored[email]["last_seen"] = now
+    state[uid]["last_synced"] = now
+    save_rsvp_state(state)
 
 
 # ── Core HTTP / JMAP helpers ──────────────────────────────────────────────────
@@ -607,16 +730,45 @@ def cmd_send(args) -> None:
 
 # ── cmd: meeting ──────────────────────────────────────────────────────────────
 
+def _caldav_calendar_path(client: CalDAVClient) -> str:
+    """Return the configured CalDAV calendar path, or auto-discover it.
+
+    Args:
+        client: Authenticated :class:`CalDAVClient`.
+
+    Returns:
+        Calendar collection path to use for event operations.
+
+    Raises:
+        SystemExit: If no calendar path is configured and none can be discovered.
+    """
+    if CALDAV_CALENDAR_PATH:
+        return CALDAV_CALENDAR_PATH
+    calendars = client.discover_calendars()
+    if not calendars:
+        sys.exit(
+            "CalDAV: no calendars discovered at the configured base URL.\n"
+            "Set CALDAV_CALENDAR_PATH explicitly."
+        )
+    # Prefer the first non-inbox calendar by display name
+    path = calendars[0]["href"]
+    print(f"  CalDAV auto-discovered calendar: {calendars[0]['display_name']!r} → {path}")
+    return path
+
+
 def cmd_meeting(args) -> None:
     """Create a calendar meeting invite and send it to attendees.
 
-    Strategy (in order):
-      1. If JMAP Calendar capability is available: create the event via
-         CalendarEvent/set with sendSchedulingMessages=True.  The server
-         handles both the calendar entry and the iMIP emails.
-      2. Otherwise: fall back to uploading a raw MIME message with an
-         attached text/calendar;method=REQUEST part (the old approach).
-         The event is NOT added to the organizer's calendar in this case.
+    Fallback strategy (in order):
+      1. JMAP Calendar (``CalendarEvent/set`` with ``sendSchedulingMessages=True``):
+         the server adds the event to the organizer's calendar *and* sends iMIP
+         invite emails to all attendees.  Preferred when available.
+      2. CalDAV (``PUT`` to ``CALDAV_URL``): the event is created in the
+         organizer's CalDAV calendar, and iMIP invite emails are sent
+         separately via MIME upload to JMAP.
+      3. MIME/iCal fallback: a ``multipart/alternative`` email with a
+         ``text/calendar;method=REQUEST`` part is sent.  The event is NOT
+         added to the organizer's calendar.
     """
     token = get_token()
     recipients = args.to + (args.cc or [])
@@ -631,8 +783,9 @@ def cmd_meeting(args) -> None:
     end  = start + timedelta(minutes=mins)
     tz   = args.timezone
     uid  = f"{uuid.uuid4()}@steinbok.net"
+    all_attendees = args.to + (args.cc or [])
 
-    # ── Attempt JMAP Calendar path ────────────────────────────
+    # ── 1. Attempt JMAP Calendar path ────────────────────────────
     if not args.no_jmap_calendar and check_calendar_capability(token):
         print("Using JMAP CalendarEvent/set (server will send iMIP invites) …")
         event_obj = build_jscalendar_event(
@@ -643,10 +796,11 @@ def cmd_meeting(args) -> None:
             timezone_str=tz,
             location=args.location,
             description=args.description,
-            attendees=args.to + (args.cc or []),
+            attendees=all_attendees,
         )
         try:
             event_id = calendar_event_create(token, event_obj, send_scheduling_messages=True)
+            rsvp_record_event(uid, args.subject, args.start, all_attendees, backend="jmap")
             print(f"✓ Calendar event created (id={event_id}, uid={uid})")
             print(f"  {start.strftime('%a %b %d %I:%M %p')}–{end.strftime('%I:%M %p')} {tz}")
             if args.location:
@@ -654,10 +808,51 @@ def cmd_meeting(args) -> None:
             print(f"  Invites sent to: {', '.join(recipients)}")
             return
         except Exception as exc:
-            print(f"⚠ JMAP Calendar creation failed ({exc}); falling back to MIME …",
+            print(f"⚠ JMAP Calendar creation failed ({exc}); trying CalDAV …",
                   file=sys.stderr)
 
-    # ── MIME fallback: build iCalendar + email ─────────────────
+    # ── 2. Attempt CalDAV path ────────────────────────────────
+    caldav = get_caldav_client()
+    if caldav is not None and not args.no_jmap_calendar:
+        ical_str = build_ical_vevent(
+            uid=uid,
+            subject=args.subject,
+            start=start,
+            end=end,
+            timezone_str=tz,
+            location=args.location,
+            description=args.description,
+            attendees=all_attendees,
+        )
+        try:
+            cal_path = _caldav_calendar_path(caldav)
+            print(f"Using CalDAV PUT → {cal_path} …")
+            resource_path = caldav.create_event(cal_path, uid, ical_str)
+            print(f"  Event resource: {resource_path}")
+        except CalDAVError as exc:
+            print(f"⚠ CalDAV event creation failed ({exc}); falling back to MIME …",
+                  file=sys.stderr)
+        else:
+            # CalDAV created the event; now send iMIP invite emails via JMAP MIME
+            print("Sending iMIP invite emails via JMAP …")
+            text_body = body_with_sig(args.description or "", args.signature)
+            msg = MIMEMultipart("alternative")
+            build_mime_headers(msg, args)
+            msg.attach(MIMEText(text_body, "plain", "utf-8"))
+            cal_part = MIMEText(ical_str, "calendar", "utf-8")
+            cal_part.set_param("method", "REQUEST")
+            msg.attach(cal_part)
+            upload_and_submit(token, msg, recipients)
+
+            rsvp_record_event(uid, args.subject, args.start, all_attendees, backend="caldav")
+            print(f"✓ Calendar event created via CalDAV + invites sent: {args.subject}")
+            print(f"  {start.strftime('%a %b %d %I:%M %p')}–{end.strftime('%I:%M %p')} {tz}")
+            if args.location:
+                print(f"  Location: {args.location}")
+            print(f"  UID: {uid}")
+            return
+
+    # ── 3. MIME fallback: build iCalendar + email ─────────────────
     ical_str = build_ical_vevent(
         uid=uid,
         subject=args.subject,
@@ -666,7 +861,7 @@ def cmd_meeting(args) -> None:
         timezone_str=tz,
         location=args.location,
         description=args.description,
-        attendees=args.to + (args.cc or []),
+        attendees=all_attendees,
     )
 
     # Text body for clients that cannot render calendar parts
@@ -683,12 +878,13 @@ def cmd_meeting(args) -> None:
 
     upload_and_submit(token, msg, recipients)
 
+    rsvp_record_event(uid, args.subject, args.start, all_attendees, backend="mime")
     print(f"✓ Meeting invite sent to {', '.join(args.to)}: {args.subject}")
     print(f"  {start.strftime('%a %b %d %I:%M %p')}–{end.strftime('%I:%M %p')} {tz}")
     if args.location:
         print(f"  Location: {args.location}")
     print(f"  UID: {uid}")
-    print("  Note: event was NOT added to the organizer's calendar (JMAP Calendar unavailable)")
+    print("  Note: event was NOT added to the organizer's calendar (JMAP Calendar / CalDAV unavailable)")
 
 
 # ── cmd: update-event ─────────────────────────────────────────────────────────
@@ -849,6 +1045,219 @@ def cmd_update_event(args) -> None:
         print("  Attendees notified of changes via iMIP.")
 
 
+# ── cmd: query-events ─────────────────────────────────────────────────────────
+
+_PARTSTAT_ICON = {
+    "accepted":     "✓",
+    "declined":     "✗",
+    "tentative":    "?",
+    "needs-action": "·",
+    "delegated":    "→",
+}
+
+
+def _format_event_block(
+    title: str,
+    dtstart: str,
+    dtend: str,
+    duration: str,
+    location: str,
+    uid: str,
+    attendees: list[dict],
+    backend: str = "",
+) -> str:
+    """Format a single event as a human-readable text block."""
+    lines: list[str] = [f"📅 {title}"]
+    time_part = dtstart
+    if dtend:
+        time_part += f" – {dtend}"
+    elif duration:
+        time_part += f" ({duration})"
+    lines.append(f"   Date:     {time_part}")
+    if location:
+        lines.append(f"   Location: {location}")
+    if uid:
+        lines.append(f"   UID:      {uid}")
+    if backend:
+        lines.append(f"   Backend:  {backend}")
+    if attendees:
+        lines.append("   Attendees:")
+        for att in attendees:
+            icon  = _PARTSTAT_ICON.get(att.get("partstat", "").lower(), "·")
+            label = att.get("name") or att.get("email", "?")
+            stat  = att.get("partstat", "needs-action")
+            lines.append(f"     {icon} {label} <{att.get('email', '')}> ({stat})")
+    return "\n".join(lines)
+
+
+def cmd_query_events(args) -> None:
+    """Search calendar events by date range / text / UID and display RSVP status.
+
+    Data sources (tried in order):
+      1. CalDAV — if CALDAV_URL / CALDAV_USERNAME / CALDAV_PASSWORD are set.
+         Events are read from the CalDAV server; RSVP state is refreshed from
+         attendee PARTSTATs in the iCalendar data.
+      2. JMAP Calendar — if the account has the calendars capability.
+      3. Local RSVP state file — always consulted as a supplementary source to
+         show attendee responses tracked from previous meeting invites.
+
+    Exits with an error if no calendar backend is available.
+    """
+    token = get_token()
+
+    # ── Parse date filters ────────────────────────────────────
+    after: datetime | None = None
+    before: datetime | None = None
+    if args.after:
+        try:
+            after = datetime.fromisoformat(args.after).replace(tzinfo=timezone.utc)
+        except ValueError:
+            sys.exit(f"Invalid --after: {args.after!r} (use ISO format, e.g. 2026-03-01)")
+    if args.before:
+        try:
+            before = datetime.fromisoformat(args.before).replace(tzinfo=timezone.utc)
+        except ValueError:
+            sys.exit(f"Invalid --before: {args.before!r} (use ISO format, e.g. 2026-04-01)")
+
+    found_any = False
+
+    # ── 1. CalDAV query ───────────────────────────────────────
+    caldav = get_caldav_client()
+    if caldav is not None:
+        print("Querying CalDAV …")
+        try:
+            cal_path = _caldav_calendar_path(caldav)
+            if args.uid:
+                ev = caldav.get_event_by_uid(cal_path, args.uid)
+                raw_events = [ev] if ev else []
+            else:
+                raw_events = caldav.get_calendar_events(cal_path, start=after, end=before)
+
+            # Apply client-side text / attendee filters
+            events: list[dict] = []
+            for ev in raw_events:
+                if args.text:
+                    needle = args.text.lower()
+                    if needle not in ev.get("summary", "").lower() \
+                            and needle not in ev.get("description", "").lower():
+                        continue
+                if args.attendee:
+                    emails = {a.get("email", "").lower() for a in ev.get("attendees", [])}
+                    if args.attendee.lower() not in emails:
+                        continue
+                events.append(ev)
+
+            for ev in events:
+                found_any = True
+                # Refresh RSVP state from CalDAV data
+                uid_val = ev.get("uid", "")
+                if uid_val:
+                    rsvp_update_from_ical(uid_val, ev.get("attendees", []))
+                print(_format_event_block(
+                    title=ev.get("summary", "(no title)"),
+                    dtstart=ev.get("dtstart", ""),
+                    dtend=ev.get("dtend", ""),
+                    duration=ev.get("duration", ""),
+                    location=ev.get("location", ""),
+                    uid=uid_val,
+                    attendees=ev.get("attendees", []),
+                    backend="caldav",
+                ))
+                print()
+        except CalDAVError as exc:
+            print(f"⚠ CalDAV query failed: {exc}", file=sys.stderr)
+
+    # ── 2. JMAP Calendar query ────────────────────────────────
+    elif check_calendar_capability(token):
+        print("Querying JMAP Calendar …")
+        ids = calendar_event_query(
+            token,
+            uid=args.uid or None,
+            text=args.text or None,
+            after=after,
+            before=before,
+        )
+        if ids:
+            jmap_events = calendar_event_get(token, ids)
+            for ev in jmap_events:
+                if args.attendee:
+                    emails = {
+                        p.get("email", "").lower()
+                        for p in ev.get("participants", {}).values()
+                    }
+                    if args.attendee.lower() not in emails:
+                        continue
+                found_any = True
+                # Normalise JMAP participants into attendee dicts for display
+                attendees = [
+                    {
+                        "email":    p.get("email", ""),
+                        "name":     p.get("name", ""),
+                        "partstat": p.get("participationStatus", "needs-action"),
+                        "rsvp":     p.get("expectReply", False),
+                    }
+                    for p in ev.get("participants", {}).values()
+                ]
+                uid_val = ev.get("uid", "")
+                if uid_val:
+                    rsvp_update_from_ical(uid_val, attendees)
+                print(_format_event_block(
+                    title=ev.get("title", "(no title)"),
+                    dtstart=ev.get("start", ""),
+                    dtend="",
+                    duration=ev.get("duration", ""),
+                    location=next(
+                        (loc.get("name", "") for loc in ev.get("locations", {}).values()), ""
+                    ),
+                    uid=uid_val,
+                    attendees=attendees,
+                    backend="jmap",
+                ))
+                print()
+    else:
+        # ── 3. Local RSVP state only ──────────────────────────────────
+        state = load_rsvp_state()
+        if not state:
+            sys.exit(
+                "No calendar backend available (JMAP Calendar not enabled, "
+                "CALDAV_* vars not set) and no local RSVP state found."
+            )
+        print("No live calendar backend available — showing local RSVP state …\n")
+        for uid_key, rec in state.items():
+            if args.uid and uid_key != args.uid:
+                continue
+            if args.text:
+                needle = args.text.lower()
+                if needle not in rec.get("title", "").lower():
+                    continue
+            if args.attendee:
+                if args.attendee.lower() not in {e.lower() for e in rec.get("attendees", {})}:
+                    continue
+            found_any = True
+            attendee_list = [
+                {
+                    "email":    email,
+                    "name":     info.get("name", ""),
+                    "partstat": info.get("partstat", "needs-action"),
+                }
+                for email, info in rec.get("attendees", {}).items()
+            ]
+            print(_format_event_block(
+                title=rec.get("title", "(no title)"),
+                dtstart=rec.get("start", ""),
+                dtend="",
+                duration="",
+                location="",
+                uid=uid_key,
+                attendees=attendee_list,
+                backend=rec.get("backend", ""),
+            ))
+            print()
+
+    if not found_any:
+        print("No events found matching the specified filters.")
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -885,7 +1294,7 @@ def main() -> None:
                    help="IANA timezone (default: America/Los_Angeles)")
     m.add_argument("--signature",   help="Signature block for the email body")
     m.add_argument("--no-jmap-calendar", action="store_true",
-                   help="Skip JMAP Calendar and always use MIME iCal fallback")
+                   help="Skip JMAP Calendar and CalDAV; always use MIME iCal fallback")
 
     # ── update-event ──────────────────────────────────────────
     u = sub.add_parser("update-event",
@@ -913,11 +1322,28 @@ def main() -> None:
     u.add_argument("--force",        action="store_true",
                    help="Apply update to ALL matching events when multiple are found")
 
+    # ── query-events ──────────────────────────────────────────
+    q = sub.add_parser(
+        "query-events",
+        help="Search calendar events by date/text/UID; shows attendee RSVP status",
+    )
+    q.add_argument("--after",    metavar="DATE",
+                   help="Only show events starting at or after this date (ISO, e.g. 2026-03-01)")
+    q.add_argument("--before",   metavar="DATE",
+                   help="Only show events starting before this date (ISO, e.g. 2026-04-01)")
+    q.add_argument("--text",     metavar="QUERY",
+                   help="Filter by text match against event title / description")
+    q.add_argument("--attendee", metavar="EMAIL",
+                   help="Filter to events that include this attendee email address")
+    q.add_argument("--uid",      metavar="UID",
+                   help="Return the single event with this exact UID")
+
     args = p.parse_args()
     dispatch = {
-        "send":         cmd_send,
-        "meeting":      cmd_meeting,
-        "update-event": cmd_update_event,
+        "send":          cmd_send,
+        "meeting":       cmd_meeting,
+        "update-event":  cmd_update_event,
+        "query-events":  cmd_query_events,
     }
     dispatch[args.cmd](args)
 
