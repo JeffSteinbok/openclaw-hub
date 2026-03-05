@@ -11,17 +11,18 @@ Fastmail SSE stream
     → Python detects new Inbox email
     → Formats notification (📧 Sender: Subject)
     → Skips spam/marketing (unsubscribe, noreply)
-    → openclaw agent --agent <agent> --channel <channel> --deliver
+    → Marks email as read via JMAP
+    → openclaw message send --channel <channel> --target <target>
     → You get a notification
 ```
 
-The Python daemon handles **all** triage and formatting. The OpenClaw agent is a thin delivery relay — it receives a pre-formatted message and passes it through to your channel.
+All triage and formatting happens in Python. No AI agent needed — just a direct message send. Zero tokens consumed.
 
 ## Prerequisites
 
 - **OpenClaw** installed and gateway running
 - **Fastmail** account with an API token
-- **An OpenClaw agent** to deliver notifications (see [Agent Setup](#agent-setup))
+- **A configured messaging channel** in OpenClaw (Telegram, Discord, etc.)
 - **Python 3** (no pip dependencies — stdlib only)
 
 ## Environment Variables
@@ -31,32 +32,10 @@ The Python daemon handles **all** triage and formatting. The OpenClaw agent is a
 | `FASTMAIL_JMAP_TOKEN` | ✅ | Fastmail API token ([create one here](https://www.fastmail.com/settings/security/tokens)) |
 | `FASTMAIL_ACCOUNT_ID` | ✅ | Your JMAP account ID (see [Finding Your IDs](#finding-your-ids)) |
 | `FASTMAIL_INBOX_ID` | ✅ | JMAP mailbox ID for your Inbox |
-| `NOTIFY_AGENT` | | Agent to deliver notifications (default: `mail-agent`) |
+| `NOTIFY_TARGET` | ✅ | Delivery target — Telegram chat ID, Discord channel ID, etc. |
 | `NOTIFY_CHANNEL` | | Delivery channel — `telegram`, `discord`, etc. (default: `telegram`) |
 
 Add these to `~/.openclaw/.env` or your systemd `EnvironmentFile`.
-
-## Agent Setup
-
-Create a dedicated agent for mail delivery:
-
-```bash
-openclaw agents add --agent mail-agent
-```
-
-Give it a minimal `SOUL.md` in its workspace (`~/.openclaw/agents/mail-agent/workspace/SOUL.md`):
-
-```markdown
-# Mail Agent
-
-You are the mail delivery agent. You receive pre-formatted email
-notifications. Deliver the message exactly as written. Do not
-reformat, summarize, or editorialize.
-```
-
-The agent needs a model configured (any cheap/fast model works — it's just relaying messages). Copy `auth-profiles.json` from your main agent or configure one.
-
-You can use any existing agent instead — just set `NOTIFY_AGENT` to its ID.
 
 ## Installation
 
@@ -67,6 +46,7 @@ You can use any existing agent instead — just set `NOTIFY_AGENT` to its ID.
 FASTMAIL_JMAP_TOKEN=your-token-here
 FASTMAIL_ACCOUNT_ID=uXXXXXXXX
 FASTMAIL_INBOX_ID=X-X
+NOTIFY_TARGET=your-chat-id
 NOTIFY_CHANNEL=telegram
 ```
 
