@@ -759,16 +759,9 @@ def _caldav_calendar_path(client: CalDAVClient) -> str:
 def cmd_meeting(args) -> None:
     """Create a calendar meeting invite and send it to attendees.
 
-    Fallback strategy (in order):
-      1. JMAP Calendar (``CalendarEvent/set`` with ``sendSchedulingMessages=True``):
-         the server adds the event to the organizer's calendar *and* sends iMIP
-         invite emails to all attendees.  Preferred when available.
-      2. CalDAV (``PUT`` to ``CALDAV_URL``): the event is created in the
-         organizer's CalDAV calendar, and iMIP invite emails are sent
-         separately via MIME upload to JMAP.
-      3. MIME/iCal fallback: a ``multipart/alternative`` email with a
-         ``text/calendar;method=REQUEST`` part is sent.  The event is NOT
-         added to the organizer's calendar.
+    Creates the event in the organizer's CalDAV calendar via PUT, then
+    sends iMIP invite emails to attendees via JMAP MIME upload.
+    Requires CALDAV_URL, CALDAV_USERNAME, and CALDAV_PASSWORD env vars.
     """
     token = get_token()
     recipients = args.to + (args.cc or [])
@@ -785,74 +778,11 @@ def cmd_meeting(args) -> None:
     uid  = f"{uuid.uuid4()}@steinbok.net"
     all_attendees = args.to + (args.cc or [])
 
-    # ── 1. Attempt JMAP Calendar path ────────────────────────────
-    if not args.no_jmap_calendar and check_calendar_capability(token):
-        print("Using JMAP CalendarEvent/set (server will send iMIP invites) …")
-        event_obj = build_jscalendar_event(
-            uid=uid,
-            subject=args.subject,
-            start=start,
-            duration_str=args.duration,
-            timezone_str=tz,
-            location=args.location,
-            description=args.description,
-            attendees=all_attendees,
-        )
-        try:
-            event_id = calendar_event_create(token, event_obj, send_scheduling_messages=True)
-            rsvp_record_event(uid, args.subject, args.start, all_attendees, backend="jmap")
-            print(f"✓ Calendar event created (id={event_id}, uid={uid})")
-            print(f"  {start.strftime('%a %b %d %I:%M %p')}–{end.strftime('%I:%M %p')} {tz}")
-            if args.location:
-                print(f"  Location: {args.location}")
-            print(f"  Invites sent to: {', '.join(recipients)}")
-            return
-        except Exception as exc:
-            print(f"⚠ JMAP Calendar creation failed ({exc}); trying CalDAV …",
-                  file=sys.stderr)
-
-    # ── 2. Attempt CalDAV path ────────────────────────────────
+    # ── CalDAV: create event + send iMIP invites ──────────────
     caldav = get_caldav_client()
-    if caldav is not None and not args.no_jmap_calendar:
-        ical_str = build_ical_vevent(
-            uid=uid,
-            subject=args.subject,
-            start=start,
-            end=end,
-            timezone_str=tz,
-            location=args.location,
-            description=args.description,
-            attendees=all_attendees,
-        )
-        try:
-            cal_path = _caldav_calendar_path(caldav)
-            print(f"Using CalDAV PUT → {cal_path} …")
-            resource_path = caldav.create_event(cal_path, uid, ical_str)
-            print(f"  Event resource: {resource_path}")
-        except CalDAVError as exc:
-            print(f"⚠ CalDAV event creation failed ({exc}); falling back to MIME …",
-                  file=sys.stderr)
-        else:
-            # CalDAV created the event; now send iMIP invite emails via JMAP MIME
-            print("Sending iMIP invite emails via JMAP …")
-            text_body = body_with_sig(args.description or "", args.signature)
-            msg = MIMEMultipart("alternative")
-            build_mime_headers(msg, args)
-            msg.attach(MIMEText(text_body, "plain", "utf-8"))
-            cal_part = MIMEText(ical_str, "calendar", "utf-8")
-            cal_part.set_param("method", "REQUEST")
-            msg.attach(cal_part)
-            upload_and_submit(token, msg, recipients)
+    if caldav is None:
+        sys.exit("CalDAV not configured. Set CALDAV_URL, CALDAV_USERNAME, and CALDAV_PASSWORD.")
 
-            rsvp_record_event(uid, args.subject, args.start, all_attendees, backend="caldav")
-            print(f"✓ Calendar event created via CalDAV + invites sent: {args.subject}")
-            print(f"  {start.strftime('%a %b %d %I:%M %p')}–{end.strftime('%I:%M %p')} {tz}")
-            if args.location:
-                print(f"  Location: {args.location}")
-            print(f"  UID: {uid}")
-            return
-
-    # ── 3. MIME fallback: build iCalendar + email ─────────────────
     ical_str = build_ical_vevent(
         uid=uid,
         subject=args.subject,
@@ -864,27 +794,28 @@ def cmd_meeting(args) -> None:
         attendees=all_attendees,
     )
 
-    # Text body for clients that cannot render calendar parts
-    text_body = body_with_sig(args.description or "", args.signature)
+    cal_path = _caldav_calendar_path(caldav)
+    print(f"Using CalDAV PUT → {cal_path} …")
+    resource_path = caldav.create_event(cal_path, uid, ical_str)
+    print(f"  Event resource: {resource_path}")
 
-    # multipart/alternative → text/plain + text/calendar
-    # "alternative" tells clients to show the calendar accept/decline UI
+    # Send iMIP invite emails via JMAP MIME
+    print("Sending iMIP invite emails via JMAP …")
+    text_body = body_with_sig(args.description or "", args.signature)
     msg = MIMEMultipart("alternative")
     build_mime_headers(msg, args)
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     cal_part = MIMEText(ical_str, "calendar", "utf-8")
     cal_part.set_param("method", "REQUEST")
     msg.attach(cal_part)
-
     upload_and_submit(token, msg, recipients)
 
-    rsvp_record_event(uid, args.subject, args.start, all_attendees, backend="mime")
-    print(f"✓ Meeting invite sent to {', '.join(args.to)}: {args.subject}")
+    rsvp_record_event(uid, args.subject, args.start, all_attendees, backend="caldav")
+    print(f"✓ Calendar event created via CalDAV + invites sent: {args.subject}")
     print(f"  {start.strftime('%a %b %d %I:%M %p')}–{end.strftime('%I:%M %p')} {tz}")
     if args.location:
         print(f"  Location: {args.location}")
     print(f"  UID: {uid}")
-    print("  Note: event was NOT added to the organizer's calendar (JMAP Calendar / CalDAV unavailable)")
 
 
 # ── cmd: update-event ─────────────────────────────────────────────────────────
@@ -1293,8 +1224,6 @@ def main() -> None:
     m.add_argument("--timezone",    default="America/Los_Angeles",
                    help="IANA timezone (default: America/Los_Angeles)")
     m.add_argument("--signature",   help="Signature block for the email body")
-    m.add_argument("--no-jmap-calendar", action="store_true",
-                   help="Skip JMAP Calendar and CalDAV; always use MIME iCal fallback")
 
     # ── update-event ──────────────────────────────────────────
     u = sub.add_parser("update-event",
