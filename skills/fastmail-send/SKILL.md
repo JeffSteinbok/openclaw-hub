@@ -1,6 +1,6 @@
 ---
 name: fastmail-send
-description: Send email and meeting requests via Fastmail JMAP and CalDAV. Use when asked to send an email, compose a message, or create a meeting/calendar invite. Supports plain email, meeting requests with accept/decline buttons, updating existing calendar events, and querying events with RSVP status.
+description: Send email, search/read inbox, and manage meeting requests via Fastmail JMAP and CalDAV. Use when asked to send an email, compose a message, search the inbox, read emails, or create a meeting/calendar invite. Supports plain email, meeting requests with accept/decline buttons, updating existing calendar events, querying events with RSVP status, and searching/reading the shared personal inbox.
 metadata:
   openclaw:
     emoji: "📧"
@@ -19,13 +19,13 @@ and sends iMIP invite emails to attendees.
 | Variable                | Required | Default              | Description                                            |
 |-------------------------|----------|----------------------|--------------------------------------------------------|
 | `FASTMAIL_JMAP_TOKEN`   | ✓        | —                    | API bearer token                                       |
-| `FASTMAIL_ACCOUNT_ID`   | ✓        | —                    | JMAP account ID (e.g. `REDACTED_ACCOUNT_ID`)                    |
-| `FASTMAIL_IDENTITY_ID`  |          | `REDACTED_IDENTITY_ID`          | EmailIdentity ID for submission                        |
+| `FASTMAIL_ACCOUNT_ID`   | ✓        | —                    | JMAP account ID                                        |
+| `FASTMAIL_IDENTITY_ID`  | ✓        | —                    | EmailIdentity ID for submission                        |
 | `FASTMAIL_FROM_EMAIL`   |          | `octo@steinbok.net`  | Sender address                                         |
-| `CALDAV_URL`            | ✓        | —                    | CalDAV server base URL (e.g. `https://caldav.fastmail.com`) |
-| `CALDAV_USERNAME`       | ✓        | —                    | CalDAV username (usually the account e-mail address)   |
-| `CALDAV_PASSWORD`       | ✓        | —                    | CalDAV password or app-specific password               |
-| `CALDAV_CALENDAR_PATH`  |          | *(auto-discovered)*  | CalDAV calendar collection path (optional)             |
+| `FASTMAIL_CALDAV_URL`    | ✓        | —                    | CalDAV server base URL (e.g. `https://caldav.fastmail.com`) |
+| `FASTMAIL_CALDAV_USERNAME` | ✓     | —                    | CalDAV username (usually the account e-mail address)   |
+| `FASTMAIL_CALDAV_PASSWORD` | ✓     | —                    | CalDAV password or app-specific password               |
+| `FASTMAIL_CALDAV_CALENDAR_PATH` |  | *(auto-discovered)*  | CalDAV calendar collection path (optional)             |
 
 ---
 
