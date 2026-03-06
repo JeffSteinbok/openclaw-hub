@@ -14,17 +14,19 @@ Supports commands:
 Auth:
   Reads FASTMAIL_JMAP_TOKEN from env or ~/.fastmail_token.
 
-Config env vars:
+Env vars (secrets only):
   FASTMAIL_JMAP_TOKEN      – API bearer token (required)
-  FASTMAIL_ACCOUNT_ID      – JMAP account ID (required, e.g. "REDACTED_ACCOUNT_ID")
-  FASTMAIL_IDENTITY_ID     – EmailIdentity ID for submission (default "REDACTED_IDENTITY_ID")
-  FASTMAIL_FROM_EMAIL      – Sender address (default "octo@steinbok.net")
-  FASTMAIL_CALENDAR_ID     – JMAP Calendar ID (optional; server picks primary if unset)
+  FASTMAIL_CALDAV_PASSWORD – CalDAV password / app-specific password
 
-  CALDAV_URL               – CalDAV server base URL (e.g. https://caldav.fastmail.com/)
-  CALDAV_USERNAME          – CalDAV username (usually the account e-mail address)
-  CALDAV_PASSWORD          – CalDAV password / app-specific password
-  CALDAV_CALENDAR_PATH     – CalDAV calendar collection path (auto-discovered if unset)
+CLI args (non-secret config):
+  --account-id             – JMAP account ID (required)
+  --identity-id            – EmailIdentity ID for submission (required)
+  --drafts-id              – Drafts mailbox ID (required)
+  --sent-id                – Sent mailbox ID (required)
+  --caldav-url             – CalDAV server base URL
+  --caldav-username        – CalDAV username
+  --caldav-calendar-path   – CalDAV calendar collection path
+  --calendar-id            – JMAP Calendar ID (optional)
 """
 
 import argparse
@@ -51,19 +53,19 @@ from caldav_client import CalDAVClient, CalDAVError, parse_ical_event, update_ic
 # ── Config ────────────────────────────────────────────────────────────────────
 
 JMAP_API    = "https://api.fastmail.com/jmap/api/"
-ACCOUNT_ID  = os.environ.get("FASTMAIL_ACCOUNT_ID", "")
-IDENTITY_ID = os.environ.get("FASTMAIL_IDENTITY_ID", "REDACTED_IDENTITY_ID")
+ACCOUNT_ID  = ""
+IDENTITY_ID = ""
 FROM_EMAIL  = os.environ.get("FASTMAIL_FROM_EMAIL", "octo@steinbok.net")
-CALENDAR_ID = os.environ.get("FASTMAIL_CALENDAR_ID", "")  # optional: specific calendar ID
+CALENDAR_ID = ""
 FROM_NAME   = "Octo (Jeff's Assistant)"
-DRAFTS_ID   = "REDACTED_DRAFTS_ID"
-SENT_ID     = "REDACTED_SENT_ID"
+DRAFTS_ID   = ""
+SENT_ID     = ""
 
 # CalDAV configuration (optional; enables JMAP → CalDAV → MIME fallback chain)
-CALDAV_URL           = os.environ.get("CALDAV_URL", "")
-CALDAV_USERNAME      = os.environ.get("CALDAV_USERNAME", "")
-CALDAV_PASSWORD      = os.environ.get("CALDAV_PASSWORD", "")
-CALDAV_CALENDAR_PATH = os.environ.get("CALDAV_CALENDAR_PATH", "")
+CALDAV_URL           = ""
+CALDAV_USERNAME      = ""
+CALDAV_PASSWORD      = os.environ.get("FASTMAIL_CALDAV_PASSWORD", "")
+CALDAV_CALENDAR_PATH = ""
 
 # RSVP state persistence: ~/.openclaw/services/meeting-rsvp.json
 RSVP_STATE_FILE = os.path.expanduser("~/.openclaw/services/meeting-rsvp.json")
@@ -77,10 +79,7 @@ CAP_CALENDARS  = "urn:ietf:params:jmap:calendars"
 MAIL_CAPS      = [CAP_CORE, CAP_MAIL, CAP_SUBMISSION]
 CALENDAR_CAPS  = [CAP_CORE, CAP_CALENDARS]
 
-if not ACCOUNT_ID:
-    sys.exit("FASTMAIL_ACCOUNT_ID not set (required)")
-
-UPLOAD_URL = f"https://api.fastmail.com/jmap/upload/{ACCOUNT_ID}/"
+UPLOAD_URL = ""
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -1224,10 +1223,22 @@ def cmd_query_events(args) -> None:
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    global ACCOUNT_ID, IDENTITY_ID, DRAFTS_ID, SENT_ID
+    global CALDAV_URL, CALDAV_USERNAME, CALDAV_CALENDAR_PATH, CALENDAR_ID
+    global UPLOAD_URL
+
     p = argparse.ArgumentParser(
         prog="fastmail",
         description="Send emails and manage calendar events via Fastmail JMAP.",
     )
+    p.add_argument("--account-id", required=True, help="JMAP account ID")
+    p.add_argument("--identity-id", required=True, help="EmailIdentity ID for submission")
+    p.add_argument("--drafts-id", required=True, help="Drafts mailbox ID")
+    p.add_argument("--sent-id", required=True, help="Sent mailbox ID")
+    p.add_argument("--caldav-url", default="", help="CalDAV server base URL")
+    p.add_argument("--caldav-username", default="", help="CalDAV username")
+    p.add_argument("--caldav-calendar-path", default="", help="CalDAV calendar collection path")
+    p.add_argument("--calendar-id", default="", help="JMAP Calendar ID (optional)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     # ── send ──────────────────────────────────────────────────
@@ -1300,6 +1311,18 @@ def main() -> None:
                    help="Return the single event with this exact UID")
 
     args = p.parse_args()
+
+    # Populate globals from CLI args
+    ACCOUNT_ID  = args.account_id
+    IDENTITY_ID = args.identity_id
+    DRAFTS_ID   = args.drafts_id
+    SENT_ID     = args.sent_id
+    CALDAV_URL           = args.caldav_url
+    CALDAV_USERNAME      = args.caldav_username
+    CALDAV_CALENDAR_PATH = args.caldav_calendar_path
+    CALENDAR_ID          = args.calendar_id
+    UPLOAD_URL  = f"https://api.fastmail.com/jmap/upload/{ACCOUNT_ID}/"
+
     dispatch = {
         "send":          cmd_send,
         "meeting":       cmd_meeting,
