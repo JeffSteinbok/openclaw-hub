@@ -31,6 +31,7 @@ import argparse
 import json
 import mimetypes
 import os
+import re
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -821,152 +822,163 @@ def cmd_meeting(args) -> None:
 # ── cmd: update-event ─────────────────────────────────────────────────────────
 
 def cmd_update_event(args) -> None:
-    """Find a calendar event by UID or subject, then apply requested changes.
+    """Find a calendar event by UID or subject, then apply requested changes via CalDAV.
 
     Discovery order:
       1. If --uid is provided: query by exact UID (deterministic).
-      2. If --find is provided: full-text search across title/description.
-      3. If both are provided, UID takes precedence.
+      2. If --find is provided: text search across event titles.
 
     After locating the event, applies any combination of:
       --new-title, --new-start, --new-duration, --new-location,
       --new-description, --add-attendee, --remove-attendee,
       --timezone (used when interpreting --new-start)
 
-    Exits with an error if:
-      • Calendar capability is not available.
-      • No event is found matching the search criteria.
-      • Multiple events are found and --uid was not used (ambiguous).
+    Requires CALDAV_URL, CALDAV_USERNAME, and CALDAV_PASSWORD env vars.
     """
     token = get_token()
+    caldav = get_caldav_client()
+    if caldav is None:
+        sys.exit("CalDAV not configured. Set CALDAV_URL, CALDAV_USERNAME, and CALDAV_PASSWORD.")
 
-    # ── Verify Calendar capability ────────────────────────────
-    if not check_calendar_capability(token):
-        sys.exit(
-            "JMAP Calendar capability not available for this account.\n"
-            "Cannot use update-event without CalendarEvent JMAP support."
-        )
-
-    # ── Discover event ID ─────────────────────────────────────
     if not args.uid and not args.find:
         sys.exit("Provide --uid <uid> or --find <text> to identify the event.")
 
+    cal_path = _caldav_calendar_path(caldav)
+
+    # ── Discover event ────────────────────────────────────────
     print("Searching for event …")
-    ids: list[str] = []
 
     if args.uid:
-        ids = calendar_event_query(token, uid=args.uid)
-        if not ids:
+        ev = caldav.get_event_by_uid(cal_path, args.uid)
+        if not ev:
             sys.exit(f"No event found with UID: {args.uid}")
+        events = [ev]
     else:
-        ids = calendar_event_query(token, text=args.find)
-        if not ids:
+        # Text search: fetch all events and filter client-side
+        all_events = caldav.get_calendar_events(cal_path)
+        needle = args.find.lower()
+        events = [
+            e for e in all_events
+            if needle in e.get("summary", "").lower()
+            or needle in e.get("description", "").lower()
+        ]
+        if not events:
             sys.exit(f"No event found matching: {args.find!r}")
-        if len(ids) > 1 and not args.force:
-            print(f"Found {len(ids)} matching events. Fetching details to disambiguate …")
-            events = calendar_event_get(token, ids)
+        if len(events) > 1 and not args.force:
+            print(f"Found {len(events)} matching events:")
             for ev in events:
-                print(f"  id={ev.get('id')}  uid={ev.get('uid')}  title={ev.get('title')!r}"
-                      f"  start={ev.get('start')}")
+                print(f"  uid={ev.get('uid')}  title={ev.get('summary')!r}"
+                      f"  start={ev.get('dtstart')}")
             sys.exit(
                 "Multiple events found. Re-run with --uid <uid> to target a specific one,\n"
                 "or pass --force to update all matching events."
             )
 
-    # ── Fetch current event data ──────────────────────────────
-    events = calendar_event_get(token, ids)
-    if not events:
-        sys.exit("Event IDs found but CalendarEvent/get returned nothing.")
-
-    # ── Build patch object ────────────────────────────────────
-    patches: dict = {}
+    # ── Build iCal patches ────────────────────────────────────
+    ical_patches: dict[str, str | None] = {}
 
     if args.new_title:
-        patches["title"] = args.new_title
+        ical_patches["SUMMARY"] = args.new_title
 
     if args.new_description:
-        patches["description"] = args.new_description
+        ical_patches["DESCRIPTION"] = args.new_description
 
     if args.new_location:
-        # Clear existing locations and set a single new one
-        patches["locations"] = {"loc1": {"@type": "Location", "name": args.new_location}}
+        ical_patches["LOCATION"] = args.new_location
 
     if args.new_start:
         try:
             new_start = datetime.fromisoformat(args.new_start)
         except ValueError:
-            sys.exit(f"Invalid --new-start: {args.new_start!r} (use ISO format, e.g. 2026-03-15T14:00)")
-        patches["start"] = new_start.strftime("%Y-%m-%dT%H:%M:%S")
-        if args.timezone:
-            patches["timeZone"] = args.timezone
+            sys.exit(f"Invalid --new-start: {args.new_start!r}")
+        ical_patches["DTSTART"] = new_start.strftime("%Y%m%dT%H%M%S")
 
     if args.new_duration:
-        patches["duration"] = duration_to_iso8601(args.new_duration)
+        mins = duration_to_minutes(args.new_duration)
+        if args.new_start:
+            new_end = datetime.fromisoformat(args.new_start) + timedelta(minutes=mins)
+        elif events:
+            dtstart_str = events[0].get("dtstart", "")
+            try:
+                existing_start = datetime.fromisoformat(dtstart_str)
+            except ValueError:
+                existing_start = datetime.now()
+            new_end = existing_start + timedelta(minutes=mins)
+        else:
+            new_end = datetime.now() + timedelta(minutes=mins)
+        ical_patches["DTEND"] = new_end.strftime("%Y%m%dT%H%M%S")
 
     if args.status:
-        patches["status"] = args.status.lower()
+        ical_patches["STATUS"] = args.status.upper()
 
-    # Attendee add/remove: patch the participants map
-    # We need to work from the existing participants
-    if args.add_attendee or args.remove_attendee:
-        existing_participants = events[0].get("participants", {}) if len(ids) == 1 else {}
-        updated_participants = dict(existing_participants)
-
-        if args.remove_attendee:
-            to_remove = {e.lower() for e in args.remove_attendee}
-            updated_participants = {
-                k: v for k, v in updated_participants.items()
-                if v.get("email", "").lower() not in to_remove
-            }
-
-        if args.add_attendee:
-            existing_emails = {v.get("email", "").lower() for v in updated_participants.values()}
-            # Find next available attendeeN key
-            existing_keys = {k for k in updated_participants if k.startswith("attendee")}
-            n = 1
-            for email in args.add_attendee:
-                if email.lower() in existing_emails:
-                    print(f"  Skipping {email} (already an attendee)")
-                    continue
-                while f"attendee{n}" in existing_keys:
-                    n += 1
-                key = f"attendee{n}"
-                existing_keys.add(key)
-                updated_participants[key] = {
-                    "@type": "Participant",
-                    "email": email,
-                    "roles": {"attendee": True},
-                    "participationStatus": "needs-action",
-                    "expectReply": True,
-                    "sendTo": {"imip": f"mailto:{email}"},
-                }
-                n += 1
-
-        patches["participants"] = updated_participants
-
-    if not patches:
+    if not ical_patches and not args.add_attendee and not args.remove_attendee:
         sys.exit("No changes specified. Provide at least one --new-* / --add-attendee / --status.")
 
-    # ── Apply patches ─────────────────────────────────────────
+    # ── Apply patches via CalDAV PUT ──────────────────────────
     updated_count = 0
     for ev in events:
-        event_id = ev.get("id")
-        if not event_id:
-            print(f"  ⚠ Skipping event with no id: {ev}", file=sys.stderr)
+        href = ev.get("href")
+        etag = ev.get("etag")
+        ical = ev.get("ical", "")
+        if not href or not ical:
+            print(f"  ⚠ Skipping event (no href/ical data): {ev.get('summary')}", file=sys.stderr)
             continue
 
-        print(f"Updating event id={event_id} title={ev.get('title')!r} …")
-        calendar_event_update(
-            token,
-            event_id,
-            patches,
-            send_scheduling_messages=not args.no_notify,
-        )
+        # Apply property patches
+        updated_ical = update_ical_vevent(ical, **ical_patches) if ical_patches else ical
+
+        # Handle attendee add/remove by editing ATTENDEE lines directly
+        if args.add_attendee:
+            for email in args.add_attendee:
+                attendee_line = f"ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{email}"
+                updated_ical = updated_ical.replace(
+                    "END:VEVENT",
+                    f"{attendee_line}\r\nEND:VEVENT",
+                )
+
+        if args.remove_attendee:
+            for email in args.remove_attendee:
+                # Remove any ATTENDEE line containing this email
+                lines = updated_ical.split("\r\n")
+                lines = [l for l in lines if f"mailto:{email}" not in l.lower()]
+                updated_ical = "\r\n".join(lines)
+
+        # Bump SEQUENCE
+        seq_match = re.search(r"SEQUENCE:(\d+)", updated_ical)
+        if seq_match:
+            new_seq = int(seq_match.group(1)) + 1
+            updated_ical = updated_ical.replace(
+                seq_match.group(0), f"SEQUENCE:{new_seq}"
+            )
+
+        print(f"Updating event uid={ev.get('uid')}  title={ev.get('summary')!r} …")
+        caldav.update_event(href, updated_ical, etag=etag)
         updated_count += 1
 
+        # Send updated iMIP invites to attendees
+        attendees = ev.get("attendees", [])
+        attendee_emails = [a["email"] for a in attendees if a.get("email")]
+        if args.add_attendee:
+            attendee_emails.extend(args.add_attendee)
+        if args.remove_attendee:
+            remove_set = {e.lower() for e in args.remove_attendee}
+            attendee_emails = [e for e in attendee_emails if e.lower() not in remove_set]
+
+        if attendee_emails and not args.no_notify:
+            print("  Sending updated iMIP invites …")
+            msg = MIMEMultipart("alternative")
+            msg["From"] = FROM_ADDR
+            msg["To"] = ", ".join(attendee_emails)
+            msg["Subject"] = ical_patches.get("SUMMARY", ev.get("summary", "Meeting Update"))
+            msg.attach(MIMEText("Meeting updated.", "plain", "utf-8"))
+            cal_part = MIMEText(updated_ical, "calendar", "utf-8")
+            cal_part.set_param("method", "REQUEST")
+            msg.attach(cal_part)
+            upload_and_submit(token, msg, attendee_emails)
+
     print(f"✓ Updated {updated_count} event(s).")
-    for k, v in patches.items():
-        if k != "participants":
+    for k, v in ical_patches.items():
+        if v is not None:
             print(f"  {k}: {v}")
     if args.add_attendee:
         print(f"  Added attendees: {', '.join(args.add_attendee)}")
