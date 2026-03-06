@@ -999,6 +999,17 @@ _PARTSTAT_ICON = {
 }
 
 
+def _format_time_12h(raw: str) -> str:
+    """Convert an iCal datetime string like '20260306T150000' to '3:00 PM'."""
+    for fmt in ("%Y%m%dT%H%M%S", "%Y%m%dT%H%M%SZ", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%SZ"):
+        try:
+            dt = datetime.strptime(raw, fmt)
+            return dt.strftime("%a %b %d %I:%M %p").replace(" 0", " ")
+        except ValueError:
+            continue
+    return raw
+
+
 def _format_event_block(
     title: str,
     dtstart: str,
@@ -1011,11 +1022,20 @@ def _format_event_block(
 ) -> str:
     """Format a single event as a human-readable text block."""
     lines: list[str] = [f"📅 {title}"]
-    time_part = dtstart
+    start_fmt = _format_time_12h(dtstart)
     if dtend:
-        time_part += f" – {dtend}"
+        end_fmt = _format_time_12h(dtend)
+        # If same day, only show time for end
+        if start_fmt.split(" ")[:-2] == end_fmt.split(" ")[:-2]:
+            end_short = datetime.strptime(dtend, "%Y%m%dT%H%M%S").strftime("%I:%M %p").lstrip("0") \
+                if len(dtend) == 15 else end_fmt
+            time_part = f"{start_fmt}–{end_short}"
+        else:
+            time_part = f"{start_fmt} – {end_fmt}"
     elif duration:
-        time_part += f" ({duration})"
+        time_part = f"{start_fmt} ({duration})"
+    else:
+        time_part = start_fmt
     lines.append(f"   Date:     {time_part}")
     if location:
         lines.append(f"   Location: {location}")
