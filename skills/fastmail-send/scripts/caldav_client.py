@@ -245,7 +245,8 @@ class CalDAVClient:
             if etag == "*":
                 headers["If-None-Match"] = "*"
             else:
-                headers["If-Match"] = etag
+                quoted = etag if etag.startswith('"') else f'"{etag}"'
+                headers["If-Match"] = quoted
 
         body = ical_data.encode("utf-8")
         _, resp_headers, _ = self._request("PUT", path, headers, body)
@@ -380,8 +381,6 @@ class CalDAVClient:
             Returns an empty list if the request fails or no events match.
         """
         root_el = ET.Element(_q(NS_CALDAV, "calendar-query"))
-        root_el.set("xmlns:d", NS_DAV)
-        root_el.set("xmlns:c", NS_CALDAV)
 
         prop_el = ET.SubElement(root_el, _q(NS_DAV, "prop"))
         ET.SubElement(prop_el, _HREF)
@@ -420,8 +419,6 @@ class CalDAVClient:
             ``etag``), or ``None`` if not found.
         """
         root_el = ET.Element(_q(NS_CALDAV, "calendar-query"))
-        root_el.set("xmlns:d", NS_DAV)
-        root_el.set("xmlns:c", NS_CALDAV)
 
         prop_el = ET.SubElement(root_el, _q(NS_DAV, "prop"))
         ET.SubElement(prop_el, _HREF)
