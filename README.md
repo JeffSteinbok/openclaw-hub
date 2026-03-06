@@ -10,7 +10,7 @@ Skills are agent capabilities that Octo can invoke. They're symlinked into the O
 
 | Skill | Description |
 |-------|-------------|
-| [fastmail-send](skills/fastmail-send/) | Send email and meeting requests (with accept/decline) via Fastmail JMAP |
+| [fastmail](skills/fastmail/) | Send/search email and manage meetings via Fastmail JMAP and CalDAV |
 | [hass-camera-snapshot](skills/hass-camera-snapshot/) | Take snapshots from home security cameras via Home Assistant CLI |
 | [opentable](skills/opentable/) | Check real-time restaurant availability on OpenTable |
 
