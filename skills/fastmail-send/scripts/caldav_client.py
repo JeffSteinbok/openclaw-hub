@@ -133,6 +133,23 @@ class CalDAVClient:
             with urlopen(req, timeout=self.timeout) as resp:
                 return resp.status, dict(resp.headers), resp.read()
         except HTTPError as exc:
+            # Follow redirects for non-GET methods (urllib only auto-follows GET)
+            if exc.code in (301, 302, 307, 308):
+                location = exc.headers.get("Location", "")
+                if location:
+                    req2 = Request(
+                        location, data=body, headers=all_headers, method=method
+                    )
+                    try:
+                        with urlopen(req2, timeout=self.timeout) as resp2:
+                            return resp2.status, dict(resp2.headers), resp2.read()
+                    except HTTPError as exc2:
+                        snippet = exc2.read()[:200] if exc2.fp else b""
+                        raise CalDAVError(
+                            f"HTTP {exc2.code} {exc2.reason} for {method} "
+                            f"{location}: {snippet!r}",
+                            status_code=exc2.code,
+                        ) from exc2
             snippet = exc.read()[:200] if exc.fp else b""
             raise CalDAVError(
                 f"HTTP {exc.code} {exc.reason} for {method} {url}: {snippet!r}",
@@ -283,8 +300,13 @@ class CalDAVClient:
         Sends a ``Depth: 1`` PROPFIND requesting ``displayname``,
         ``resourcetype``, ``calendar-description``, and ``calendar-color``.
 
+        If *path* is empty, tries (in order):
+          1. ``/.well-known/caldav`` (standard discovery endpoint)
+          2. ``/dav/calendars/user/{username}/`` (Fastmail convention)
+          3. ``/`` (root fallback)
+
         Args:
-            path: Starting path; defaults to the base URL root.
+            path: Starting path; defaults to auto-discovery.
 
         Returns:
             List of dicts, each with keys ``href``, ``display_name``,
@@ -297,9 +319,20 @@ class CalDAVClient:
             ET.SubElement(prop_el, name)
         body = ET.tostring(root_el, encoding="unicode").encode()
 
-        try:
-            ms = self.propfind(path or "", depth="1", body=body)
-        except CalDAVError:
+        paths_to_try = [path] if path else [
+            f"/dav/calendars/user/{self.username}/",
+            "/.well-known/caldav",
+            "",
+        ]
+
+        ms = None
+        for try_path in paths_to_try:
+            try:
+                ms = self.propfind(try_path, depth="1", body=body)
+                break
+            except CalDAVError:
+                continue
+        if ms is None:
             return []
 
         calendars: list[dict] = []
