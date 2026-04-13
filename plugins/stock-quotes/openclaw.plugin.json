@@ -1,0 +1,22 @@
+{
+  "id": "stock-quotes",
+  "name": "Stock Quotes",
+  "description": "Fetch current stock, ETF, and mutual fund quotes",
+  "version": "1.0.0",
+  "entry": "dist/index.js",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "source": {
+    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalPath": "plugins/stock-quotes",
+    "mirrors": [
+      {
+        "repo": "JeffSteinbok/openclaw-hub",
+        "path": "plugins/stock-quotes"
+      }
+    ]
+  }
+}

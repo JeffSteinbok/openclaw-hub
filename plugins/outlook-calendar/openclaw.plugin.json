@@ -1,0 +1,20 @@
+{
+  "id": "outlook-calendar",
+  "name": "Outlook Calendar",
+  "description": "Fetch upcoming events from Outlook personal and family calendars",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "source": {
+    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalPath": "plugins/outlook-calendar",
+    "mirrors": [
+      {
+        "repo": "JeffSteinbok/openclaw-hub",
+        "path": "plugins/outlook-calendar"
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "fastmail",
+  "name": "FastMail tools",
+  "description": "Send email and manage calendar events in Fastmail",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "source": {
+    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalPath": "plugins/fastmail",
+    "mirrors": [
+      {
+        "repo": "JeffSteinbok/openclaw-hub",
+        "path": "plugins/fastmail"
+      }
+    ]
+  }
+}

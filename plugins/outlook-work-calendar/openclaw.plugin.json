@@ -1,0 +1,22 @@
+{
+  "id": "outlook-work-calendar",
+  "name": "Outlook Work Calendar",
+  "version": "1.0.0",
+  "description": "Fetch upcoming events from a published Outlook work calendar",
+  "entry": "dist/index.js",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "source": {
+    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalPath": "plugins/outlook-work-calendar",
+    "mirrors": [
+      {
+        "repo": "JeffSteinbok/openclaw-hub",
+        "path": "plugins/outlook-work-calendar"
+      }
+    ]
+  }
+}

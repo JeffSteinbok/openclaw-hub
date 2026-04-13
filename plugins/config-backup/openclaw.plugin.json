@@ -1,0 +1,22 @@
+{
+  "id": "config-backup",
+  "name": "Config Backup",
+  "version": "1.0.0",
+  "description": "Backs up OpenClaw config to Git with SHA-256 change detection",
+  "entry": "dist/index.js",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "source": {
+    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalPath": "plugins/config-backup",
+    "mirrors": [
+      {
+        "repo": "JeffSteinbok/openclaw-hub",
+        "path": "plugins/config-backup"
+      }
+    ]
+  }
+}
