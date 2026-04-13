@@ -1,0 +1,20 @@
+{
+  "id": "spotify",
+  "name": "Spotify",
+  "description": "Control Spotify playback, search music, and manage playlists",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "source": {
+    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalPath": "plugins/spotify",
+    "mirrors": [
+      {
+        "repo": "JeffSteinbok/openclaw-hub",
+        "path": "plugins/spotify"
+      }
+    ]
+  }
+}

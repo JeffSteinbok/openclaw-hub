@@ -1,0 +1,22 @@
+{
+  "id": "ics-calendar",
+  "name": "ICS Calendar",
+  "version": "1.0.0",
+  "description": "Fetch upcoming events from a published ICS calendar feed",
+  "entry": "dist/index.js",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "source": {
+    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalPath": "plugins/ics-calendar",
+    "mirrors": [
+      {
+        "repo": "JeffSteinbok/openclaw-hub",
+        "path": "plugins/ics-calendar"
+      }
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "outlook-mail",
+  "name": "Outlook Mail",
+  "description": "Search and read messages from Outlook inboxes",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "source": {
+    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalPath": "plugins/outlook-mail",
+    "mirrors": [
+      {
+        "repo": "JeffSteinbok/openclaw-hub",
+        "path": "plugins/outlook-mail"
+      }
+    ]
+  }
+}

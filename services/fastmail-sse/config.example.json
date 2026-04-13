@@ -1,0 +1,96 @@
+{
+  "accounts": {
+    "<account-id-1>": {
+      "label": "assistant@example.com"
+    },
+    "<account-id-2>": {
+      "label": "personal@example.com"
+    }
+  },
+  "mail_rules": [
+    {
+      "id": "assistant-detect-tracking",
+      "accounts": ["<account-id-1>"],
+      "actions": [
+        {
+          "name": "detect_tracking"
+        }
+      ],
+      "continue": true
+    },
+    {
+      "id": "assistant-notify-meetings",
+      "accounts": ["<account-id-1>"],
+      "match": {
+        "subject_prefix": ["accepted:", "declined:", "tentative:"]
+      },
+      "actions": [
+        {
+          "name": "notify_email"
+        }
+      ]
+    },
+    {
+      "id": "personal-detect-tracking",
+      "accounts": ["<account-id-2>"],
+      "actions": [
+        {
+          "name": "detect_tracking"
+        }
+      ],
+      "continue": true
+    },
+    {
+      "id": "usps-informed-delivery",
+      "accounts": ["<account-id-2>"],
+      "match": {
+        "sender_domain": "usps.com",
+        "subject_contains": ["Informed Delivery", "Daily Digest"]
+      },
+      "actions": [
+        {
+          "name": "process_usps_digest",
+          "params": {
+            "agent": "main",
+            "workspace_agent": "mail",
+            "memory_agent": "main",
+            "vision_agent": "mail",
+            "vision_backend": "auto"
+          }
+        }
+      ],
+      "continue": true
+    },
+    {
+      "id": "forwarded-usps-informed-delivery",
+      "accounts": ["<account-id-2>"],
+      "match": {
+        "sender_email": "you@example.com",
+        "subject_contains": ["Informed Delivery", "Daily Digest"],
+        "body_contains": ["USPS", "Informed Delivery"]
+      },
+      "actions": [
+        {
+          "name": "process_usps_digest",
+          "params": {
+            "agent": "main",
+            "workspace_agent": "mail",
+            "memory_agent": "main",
+            "vision_agent": "mail",
+            "vision_backend": "auto"
+          }
+        }
+      ],
+      "continue": true
+    },
+    {
+      "id": "personal-notify-all",
+      "accounts": ["<account-id-2>"],
+      "actions": [
+        {
+          "name": "notify_email"
+        }
+      ]
+    }
+  ]
+}
