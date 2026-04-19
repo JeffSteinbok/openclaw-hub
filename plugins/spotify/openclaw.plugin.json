@@ -8,7 +8,7 @@
     "properties": {}
   },
   "source": {
-    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalRepo": "JeffSteinbok/octo",
     "canonicalPath": "plugins/spotify",
     "mirrors": [
       {
@@ -16,5 +16,6 @@
         "path": "plugins/spotify"
       }
     ]
-  }
+  },
+  "version": "1.0.1"
 }

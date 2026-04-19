@@ -1,7 +1,0 @@
-title: OpenClaw Hub
-description: Documentation for the OpenClaw system
-theme: minima
-baseurl: /openclaw-hub
-
-nav:
-  - Home: index.md

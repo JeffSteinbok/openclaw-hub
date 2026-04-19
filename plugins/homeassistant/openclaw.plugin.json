@@ -1,7 +1,7 @@
 {
   "id": "homeassistant",
   "name": "Home Assistant",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Control devices, query state, and inspect activity in Home Assistant",
   "entry": "dist/index.js",
   "tools": "src/tools.py",
@@ -11,7 +11,7 @@
     "properties": {}
   },
   "source": {
-    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalRepo": "JeffSteinbok/octo",
     "canonicalPath": "plugins/homeassistant",
     "mirrors": [
       {

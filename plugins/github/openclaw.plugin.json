@@ -2,7 +2,7 @@
   "id": "github",
   "name": "GitHub",
   "description": "Manage GitHub issues. Create, read, update, close, comment on, and list issues.",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "entry": "dist/index.js",
   "configSchema": {
     "type": "object",
@@ -10,7 +10,7 @@
     "properties": {}
   },
   "source": {
-    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalRepo": "JeffSteinbok/octo",
     "canonicalPath": "plugins/github",
     "mirrors": [
       {

@@ -1,7 +1,7 @@
 {
   "id": "llmvision",
-  "name": "Home Assistant – LLM Vision",
-  "version": "1.0.0",
+  "name": "Home Assistant \u2013 LLM Vision",
+  "version": "1.0.1",
   "description": "Home Assistant LLM Vision integration: analyze camera images with AI, query the vision timeline, and create timeline events.",
   "entry": "dist/index.js",
   "tools": "src/tools.py",
@@ -11,7 +11,7 @@
     "properties": {}
   },
   "source": {
-    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalRepo": "JeffSteinbok/octo",
     "canonicalPath": "plugins/llmvision",
     "mirrors": [
       {
