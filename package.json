@@ -5,9 +5,7 @@
   "type": "module",
   "workspaces": [
     "plugins/framework",
-    "plugins/config-backup",
     "plugins/fastmail",
-    "plugins/github",
     "plugins/homeassistant",
     "plugins/ics-calendar",
     "plugins/llmvision",
@@ -21,7 +19,7 @@
   ],
   "scripts": {
     "build:framework": "npm run build --workspace plugins/framework",
-    "build:plugins": "npm run build --workspace plugins/config-backup --workspace plugins/fastmail --workspace plugins/github --workspace plugins/homeassistant --workspace plugins/ics-calendar --workspace plugins/llmvision --workspace plugins/outlook-calendar --workspace plugins/outlook-mail --workspace plugins/outlook-work-calendar --workspace plugins/package-tracking --workspace plugins/spotify --workspace plugins/stock-quotes --workspace plugins/usps-mail",
+    "build:plugins": "npm run build --workspace plugins/fastmail --workspace plugins/homeassistant --workspace plugins/ics-calendar --workspace plugins/llmvision --workspace plugins/outlook-calendar --workspace plugins/outlook-mail --workspace plugins/outlook-work-calendar --workspace plugins/package-tracking --workspace plugins/spotify --workspace plugins/stock-quotes --workspace plugins/usps-mail",
     "build": "npm run build:framework && npm run build:plugins && node scripts/symlink-python.mjs",
     "test:scripts": "node --test scripts/tests/symlink-python.test.mjs && python3 -m unittest scripts.tests.test_export_artifacts",
     "export:artifacts": "python3 scripts/export_artifacts.py",

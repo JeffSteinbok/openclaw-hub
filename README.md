@@ -18,9 +18,7 @@ That produces self-contained artifacts in `out/export/`, with vendored shared Py
 
 | Plugin | README |
 | --- | --- |
-| config-backup | [`plugins/config-backup/README.md`](plugins/config-backup/README.md) |
 | fastmail | [`plugins/fastmail/README.md`](plugins/fastmail/README.md) |
-| github | [`plugins/github/README.md`](plugins/github/README.md) |
 | homeassistant | [`plugins/homeassistant/README.md`](plugins/homeassistant/README.md) |
 | ics-calendar | [`plugins/ics-calendar/README.md`](plugins/ics-calendar/README.md) |
 | llmvision | [`plugins/llmvision/README.md`](plugins/llmvision/README.md) |

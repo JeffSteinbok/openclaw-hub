@@ -3,18 +3,8 @@
   "artifacts": [
     {
       "kind": "plugin",
-      "name": "config-backup",
-      "version": "1.0.1"
-    },
-    {
-      "kind": "plugin",
       "name": "fastmail",
       "version": "1.0.1"
-    },
-    {
-      "kind": "plugin",
-      "name": "github",
-      "version": "1.5.1"
     },
     {
       "kind": "plugin",
