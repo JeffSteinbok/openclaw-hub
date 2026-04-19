@@ -2,101 +2,110 @@
 
 Public plugins, services, and shared libraries for use in OpenClaw.
 
-These are the public OpenClaw components I use in my own assistant. For the higher-level docs and examples around that assistant, see [`octo-docs`](https://jeffsteinbok.github.io/octo-docs/).
+This repo contains the public pieces I use in my own assistant. If you want the broader docs and examples for that assistant, start with [`octo-docs`](https://jeffsteinbok.github.io/octo-docs/).
 
-## Mail Runtime
+## What's in here? ✨
 
-The core of this repo is the shared **Mail Runtime**:
+There are two main kinds of things here:
 
-- [`libs/python/mail_runtime_core/`](libs/python/mail_runtime_core/README.md) provides the provider-agnostic mail pipeline
-- [`libs/python/mail_action_usps/`](libs/python/mail_action_usps/README.md) provides the USPS action module used by that pipeline
-- [`services/fastmail-sse/`](services/fastmail-sse/README.md) is a FastMail adapter that feeds real-time mail into the shared runtime
+1. a **shared mail runtime** for automated email handling
+2. a set of **stand-alone plugins** for other OpenClaw tasks
 
-The point of the runtime is to separate **where mail comes from** from **what OpenClaw does with it**. A mail source turns provider events into a normalized `MailEnvelope`, the runtime evaluates ordered `mail_rules`, and named actions handle the actual work.
+If you only want the quick summary: the mail runtime is the most integrated system in this repo, and the rest are individual plugins you can browse and use on their own.
 
-At a high level, the flow is:
+## Mail Runtime 📬
 
-1. a source adapter notices new mail
-2. it normalizes that message into a `MailEnvelope`
-3. `mail_runtime_core` evaluates `mail_rules`
-4. matching actions run against the normalized envelope
-5. the adapter dispatches the structured results into notifications, memory updates, or follow-up work
+The **Mail Runtime** is the part of this repo that turns incoming email into useful OpenClaw actions.
 
-### Mail actions
+It is meant for workflows like:
 
-The shared runtime currently revolves around three important mail actions:
+- notifying you when an important email arrives
+- detecting package tracking numbers from shipping emails
+- processing USPS Informed Delivery digests
+- handing off structured results for follow-up or memory
 
-| Action | Where it lives | What it does |
+### What it does
+
+At a high level, the mail runtime:
+
+1. receives a message from some mail source
+2. checks that message against your mail rules
+3. runs one or more named actions
+4. returns structured results such as notifications, tracking updates, or follow-up work
+
+The important thing for a reader is that this gives OpenClaw a reusable **mail automation layer**, instead of each mail integration inventing its own separate logic.
+
+### Main pieces 🧩
+
+| Piece | What it is | Details |
 | --- | --- | --- |
-| `notify_email` | `mail_runtime_core` | Formats and routes a notification for a matching message |
-| `detect_tracking` | `mail_runtime_core` + `package_tracking_core` | Extracts tracking numbers and URLs from mail and routes package-tracking work |
-| `process_usps_digest` | `mail_action_usps` | Downloads and analyzes USPS Informed Delivery digests, applies USPS rules, sends notifications, and writes longer-term memory |
+| 🧠 Mail Runtime Core | The shared rule-and-action engine for mail processing | [`libs/python/mail_runtime_core/README.md`](libs/python/mail_runtime_core/README.md) |
+| 📮 USPS Mail Action | The USPS-specific workflow used for Informed Delivery digests | [`libs/python/mail_action_usps/README.md`](libs/python/mail_action_usps/README.md) |
+| ⚡ FastMail SSE | A live FastMail listener that feeds new mail into the runtime | [`services/fastmail-sse/README.md`](services/fastmail-sse/README.md) |
+| 📦 Package Tracking Core | Shared tracking logic used when mail contains shipment updates | [`libs/python/package_tracking_core/README.md`](libs/python/package_tracking_core/README.md) |
 
-### FastMail SSE
+### Actions you should know about 🎯
 
-[`services/fastmail-sse`](services/fastmail-sse/README.md) is one of the ways to call into the mail runtime. It connects to FastMail's JMAP EventSource stream, turns incoming mail into `MailEnvelope` objects, registers shared and domain mail actions, and then lets the runtime do the rest.
+These are the main actions exposed through the mail runtime:
 
-That makes FastMail SSE the current **live ingestion path** for automated mail handling in this repo, while the runtime stays reusable for future sources such as polling or webhook adapters.
-
-### Runtime companions
-
-Some other pieces in this repo are closely tied to the mail runtime:
-
-- [`libs/python/package_tracking_core/`](libs/python/package_tracking_core/README.md) is the shared tracking engine behind `detect_tracking`
-- [`plugins/package-tracking/`](plugins/package-tracking/README.md) is the interactive OpenClaw tool surface for package tracking
-- [`plugins/usps-mail/`](plugins/usps-mail/README.md) is the manual/operator-facing tool surface over the shared USPS workflow
-
-## What this repo contains
-
-### Mail runtime pieces
-
-| Component | README |
+| Action | What it means |
 | --- | --- |
-| fastmail-sse service | [`services/fastmail-sse/README.md`](services/fastmail-sse/README.md) |
-| mail_action_usps | [`libs/python/mail_action_usps/README.md`](libs/python/mail_action_usps/README.md) |
-| mail_runtime_core | [`libs/python/mail_runtime_core/README.md`](libs/python/mail_runtime_core/README.md) |
-| package_tracking_core | [`libs/python/package_tracking_core/README.md`](libs/python/package_tracking_core/README.md) |
-| package-tracking plugin | [`plugins/package-tracking/README.md`](plugins/package-tracking/README.md) |
-| usps-mail plugin | [`plugins/usps-mail/README.md`](plugins/usps-mail/README.md) |
+| `notify_email` | 🔔 Send a notification for a matching message |
+| `detect_tracking` | 📦 Look for package tracking data in email |
+| `process_usps_digest` | 📮 Process a USPS Informed Delivery digest end to end |
 
-### Independent plugins
+### FastMail SSE ⚡
 
-These plugins are more stand-alone. They do not form part of the shared mail runtime stack above.
+**FastMail SSE** is one of the ways to use the mail runtime in practice.
 
-| Plugin | README |
-| --- | --- |
-| fastmail | [`plugins/fastmail/README.md`](plugins/fastmail/README.md) |
-| homeassistant | [`plugins/homeassistant/README.md`](plugins/homeassistant/README.md) |
-| ics-calendar | [`plugins/ics-calendar/README.md`](plugins/ics-calendar/README.md) |
-| llmvision | [`plugins/llmvision/README.md`](plugins/llmvision/README.md) |
-| outlook-calendar | [`plugins/outlook-calendar/README.md`](plugins/outlook-calendar/README.md) |
-| outlook-mail | [`plugins/outlook-mail/README.md`](plugins/outlook-mail/README.md) |
-| outlook-work-calendar | [`plugins/outlook-work-calendar/README.md`](plugins/outlook-work-calendar/README.md) |
-| spotify | [`plugins/spotify/README.md`](plugins/spotify/README.md) |
-| stock-quotes | [`plugins/stock-quotes/README.md`](plugins/stock-quotes/README.md) |
+It watches FastMail in real time, turns new messages into the shared mail format, and passes them into the runtime. In other words: if the mail runtime is the shared automation brain, FastMail SSE is one of the live inputs that feeds it.
 
-### Shared support libraries
+See [`services/fastmail-sse/README.md`](services/fastmail-sse/README.md) for the FastMail-specific details.
 
-| Library | README |
-| --- | --- |
-| repo_paths | [`libs/python/repo_paths/README.md`](libs/python/repo_paths/README.md) |
+### Interactive companions 🛠️
 
-### Build support
+These pieces sit next to the mail runtime and make it easier to use or inspect:
 
-| Package | README |
-| --- | --- |
-| framework | [`plugins/framework/README.md`](plugins/framework/README.md) |
+| Component | What it is | Details |
+| --- | --- | --- |
+| 📦 `package-tracking` plugin | A direct OpenClaw tool surface for package tracking | [`plugins/package-tracking/README.md`](plugins/package-tracking/README.md) |
+| 📮 `usps-mail` plugin | A manual/operator-facing tool surface for the USPS workflow | [`plugins/usps-mail/README.md`](plugins/usps-mail/README.md) |
 
-## Downloading
+## Independent Plugins 🎛️
 
-Download the **whole release bundle** from the latest GitHub release. The bundle contains the exported plugin and service artifacts together, plus the vendored shared Python libraries they need.
+The rest of the repo is made up of more independent plugins. These are not the shared mail runtime; they are separate OpenClaw capabilities you can look at one by one.
 
-This repo is small enough that shipping one bundle is simpler than publishing and tracking separate per-plugin downloads.
+| Plugin | What it is | Details |
+| --- | --- | --- |
+| ✉️ Fastmail | Send mail, search mail, read inbox items, and work with calendars | [`plugins/fastmail/README.md`](plugins/fastmail/README.md) |
+| 🏠 Home Assistant | Control Home Assistant from OpenClaw | [`plugins/homeassistant/README.md`](plugins/homeassistant/README.md) |
+| 📅 ICS Calendar | Read calendar data from ICS feeds | [`plugins/ics-calendar/README.md`](plugins/ics-calendar/README.md) |
+| 👁️ LLMVision | Vision-oriented tooling for image analysis workflows | [`plugins/llmvision/README.md`](plugins/llmvision/README.md) |
+| 📆 Outlook Calendar | Query Outlook calendar data | [`plugins/outlook-calendar/README.md`](plugins/outlook-calendar/README.md) |
+| 📬 Outlook Mail | Search and read Outlook mail | [`plugins/outlook-mail/README.md`](plugins/outlook-mail/README.md) |
+| 🗓️ Outlook Work Calendar | A work-focused Outlook calendar surface | [`plugins/outlook-work-calendar/README.md`](plugins/outlook-work-calendar/README.md) |
+| 🎵 Spotify | Spotify control and playback tooling | [`plugins/spotify/README.md`](plugins/spotify/README.md) |
+| 📈 Stock Quotes | Quick stock quote lookups | [`plugins/stock-quotes/README.md`](plugins/stock-quotes/README.md) |
 
-## Building locally
+## Shared Support 🧰
+
+Some small shared support packages also live here:
+
+| Package | What it is | Details |
+| --- | --- | --- |
+| 🧭 `repo_paths` | Path/bootstrap helpers used by exported Python-based artifacts | [`libs/python/repo_paths/README.md`](libs/python/repo_paths/README.md) |
+| 🏗️ `framework` | Build support for Python-backed OpenClaw plugins | [`plugins/framework/README.md`](plugins/framework/README.md) |
+
+## Downloading 📦
+
+Download the **whole release bundle** from the latest GitHub release.
+
+This repo is small enough that it is easier to ship one bundle containing the exported public components than to make people choose from a long list of separate downloads.
+
+## Building locally 🛠️
 
 1. Run `npm install`
 2. Run `npm run build`
 3. Run `npm run export:release`
 
-That produces the exported runtime bundle under `out/export/`.
+That produces the exported bundle under `out/export/`.
