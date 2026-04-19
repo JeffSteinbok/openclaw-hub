@@ -2,7 +2,7 @@
   "id": "package-tracking",
   "name": "Package Tracking",
   "description": "Track packages from UPS, FedEx, USPS, and Amazon",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "entry": "dist/index.js",
   "configSchema": {
     "type": "object",

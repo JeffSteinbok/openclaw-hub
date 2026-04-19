@@ -1,0 +1,77 @@
+name: Release Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Optional release tag (defaults to hub-v<release-manifest hubVersion>)
+        required: false
+        type: string
+      release_title:
+        description: Optional release title (defaults to OpenClaw Hub <hubVersion>)
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build mirrored plugins
+        run: npm run build
+
+      - name: Export release artifacts
+        run: npm run export:release
+
+      - name: Package artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p out/release-assets
+          jq -r '.artifacts[] | [.kind, .name, .version] | @tsv' release-manifest.json | while IFS=$'\t' read -r kind name version; do
+            source_dir="out/export/${kind}s/${name}"
+            asset_name="${name}-v${version}.tar.gz"
+            tar -C "$(dirname "$source_dir")" -czf "out/release-assets/${asset_name}" "$(basename "$source_dir")"
+          done
+          cp out/export/manifest.json out/release-assets/export-manifest.json
+          {
+            echo '# Release contents'
+            echo
+            jq -r '.artifacts[] | "- `" + .name + "` (" + .kind + ", v" + .version + ")"' release-manifest.json
+          } > out/release-assets/RELEASE_NOTES.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          hub_version="$(jq -r '.hubVersion' release-manifest.json)"
+          tag_name="${{ inputs.tag_name }}"
+          release_title="${{ inputs.release_title }}"
+          if [ -z "$tag_name" ]; then
+            tag_name="hub-v${hub_version}"
+          fi
+          if [ -z "$release_title" ]; then
+            release_title="OpenClaw Hub ${hub_version}"
+          fi
+          gh release create "$tag_name" out/release-assets/* \
+            --title "$release_title" \
+            --notes-file out/release-assets/RELEASE_NOTES.md

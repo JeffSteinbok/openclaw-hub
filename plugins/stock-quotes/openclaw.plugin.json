@@ -2,7 +2,7 @@
   "id": "stock-quotes",
   "name": "Stock Quotes",
   "description": "Fetch current stock, ETF, and mutual fund quotes",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "entry": "dist/index.js",
   "configSchema": {
     "type": "object",
@@ -10,7 +10,7 @@
     "properties": {}
   },
   "source": {
-    "canonicalRepo": "JeffSteinbok/openclaw",
+    "canonicalRepo": "JeffSteinbok/octo",
     "canonicalPath": "plugins/stock-quotes",
     "mirrors": [
       {

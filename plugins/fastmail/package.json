@@ -15,5 +15,6 @@
       "./dist/index.js"
     ]
   },
-  "name": "fastmail"
+  "name": "fastmail",
+  "version": "1.0.1"
 }

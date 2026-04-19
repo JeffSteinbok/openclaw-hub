@@ -16,5 +16,6 @@
         "path": "plugins/usps-mail"
       }
     ]
-  }
+  },
+  "version": "1.0.1"
 }

@@ -2,7 +2,12 @@ __pycache__/
 *.pyc
 *.pyo
 .env
-dist/
+plugins/*/dist/
+plugins/*/node_modules/
+plugins/framework/dist/
+plugins/framework/node_modules/
 node_modules/
+out/export/
+out/release-assets/
 .DS_Store
 Thumbs.db
