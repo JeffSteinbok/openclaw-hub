@@ -1,8 +1,10 @@
 # OpenClaw Hub
 
-Public source and release repo for the OpenClaw surfaces that can live outside the private [`octo`](https://github.com/JeffSteinbok/octo) monorepo.
+Public plugins, services, and shared libraries for use in OpenClaw.
 
-`openclaw-hub` is **not** a GitHub Pages site. Public documentation lives in [`octo-docs`](https://github.com/JeffSteinbok/octo-docs). This repo is for source browsing and release artifacts.
+These are the public OpenClaw components I use in my own assistant. The source lives here, downloadable artifacts are released here, and the public docs live at [`octo-docs`](https://jeffsteinbok.github.io/octo-docs/).
+
+`openclaw-hub` is **not** a GitHub Pages site. This repo is for source browsing and release artifacts.
 
 ## Canonical source
 
@@ -32,27 +34,27 @@ That produces self-contained artifacts in `out/export/`, with vendored shared Py
 
 ### Plugins
 
-| Plugin | Version | README |
-| --- | --- | --- |
-| config-backup | 1.0.1 | [`plugins/config-backup/README.md`](plugins/config-backup/README.md) |
-| fastmail | 1.0.1 | [`plugins/fastmail/README.md`](plugins/fastmail/README.md) |
-| github | 1.5.1 | [`plugins/github/README.md`](plugins/github/README.md) |
-| homeassistant | 1.0.1 | [`plugins/homeassistant/README.md`](plugins/homeassistant/README.md) |
-| ics-calendar | 1.0.1 | [`plugins/ics-calendar/README.md`](plugins/ics-calendar/README.md) |
-| llmvision | 1.0.1 | [`plugins/llmvision/README.md`](plugins/llmvision/README.md) |
-| outlook-calendar | 1.0.1 | [`plugins/outlook-calendar/README.md`](plugins/outlook-calendar/README.md) |
-| outlook-mail | 1.0.1 | [`plugins/outlook-mail/README.md`](plugins/outlook-mail/README.md) |
-| outlook-work-calendar | 1.0.1 | [`plugins/outlook-work-calendar/README.md`](plugins/outlook-work-calendar/README.md) |
-| package-tracking | 1.0.1 | [`plugins/package-tracking/README.md`](plugins/package-tracking/README.md) |
-| spotify | 1.0.1 | [`plugins/spotify/README.md`](plugins/spotify/README.md) |
-| stock-quotes | 1.0.1 | [`plugins/stock-quotes/README.md`](plugins/stock-quotes/README.md) |
-| usps-mail | 1.0.1 | [`plugins/usps-mail/README.md`](plugins/usps-mail/README.md) |
+| Plugin | README |
+| --- | --- |
+| config-backup | [`plugins/config-backup/README.md`](plugins/config-backup/README.md) |
+| fastmail | [`plugins/fastmail/README.md`](plugins/fastmail/README.md) |
+| github | [`plugins/github/README.md`](plugins/github/README.md) |
+| homeassistant | [`plugins/homeassistant/README.md`](plugins/homeassistant/README.md) |
+| ics-calendar | [`plugins/ics-calendar/README.md`](plugins/ics-calendar/README.md) |
+| llmvision | [`plugins/llmvision/README.md`](plugins/llmvision/README.md) |
+| outlook-calendar | [`plugins/outlook-calendar/README.md`](plugins/outlook-calendar/README.md) |
+| outlook-mail | [`plugins/outlook-mail/README.md`](plugins/outlook-mail/README.md) |
+| outlook-work-calendar | [`plugins/outlook-work-calendar/README.md`](plugins/outlook-work-calendar/README.md) |
+| package-tracking | [`plugins/package-tracking/README.md`](plugins/package-tracking/README.md) |
+| spotify | [`plugins/spotify/README.md`](plugins/spotify/README.md) |
+| stock-quotes | [`plugins/stock-quotes/README.md`](plugins/stock-quotes/README.md) |
+| usps-mail | [`plugins/usps-mail/README.md`](plugins/usps-mail/README.md) |
 
 ### Services
 
-| Service | Version | README |
-| --- | --- | --- |
-| fastmail-sse | 1.0.1 | [`services/fastmail-sse/README.md`](services/fastmail-sse/README.md) |
+| Service | README |
+| --- | --- |
+| fastmail-sse | [`services/fastmail-sse/README.md`](services/fastmail-sse/README.md) |
 
 ### Shared Python libs
 
