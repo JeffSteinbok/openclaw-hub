@@ -1,65 +1,29 @@
 {
   "hubVersion": "2026.4.19",
-  "artifacts": [
-    {
-      "kind": "plugin",
-      "name": "fastmail",
-      "version": "1.0.1"
-    },
-    {
-      "kind": "plugin",
-      "name": "homeassistant",
-      "version": "1.0.1"
-    },
-    {
-      "kind": "plugin",
-      "name": "ics-calendar",
-      "version": "1.0.1"
-    },
-    {
-      "kind": "plugin",
-      "name": "llmvision",
-      "version": "1.0.1"
-    },
-    {
-      "kind": "plugin",
-      "name": "outlook-calendar",
-      "version": "1.0.1"
-    },
-    {
-      "kind": "plugin",
-      "name": "outlook-mail",
-      "version": "1.0.1"
-    },
-    {
-      "kind": "plugin",
-      "name": "outlook-work-calendar",
-      "version": "1.0.1"
-    },
-    {
-      "kind": "plugin",
-      "name": "package-tracking",
-      "version": "1.0.1"
-    },
-    {
-      "kind": "plugin",
-      "name": "spotify",
-      "version": "1.0.1"
-    },
-    {
-      "kind": "plugin",
-      "name": "stock-quotes",
-      "version": "1.0.1"
-    },
-    {
-      "kind": "plugin",
-      "name": "usps-mail",
-      "version": "1.0.1"
-    },
-    {
-      "kind": "service",
-      "name": "fastmail-sse",
-      "version": "1.0.1"
-    }
-  ]
+  "bundleAsset": "openclaw-hub-v2026.4.19.tar.gz",
+  "bundleRoot": "openclaw-hub-v2026.4.19",
+  "includes": {
+    "services": [
+      "fastmail-sse"
+    ],
+    "plugins": [
+      "fastmail",
+      "homeassistant",
+      "ics-calendar",
+      "llmvision",
+      "outlook-calendar",
+      "outlook-mail",
+      "outlook-work-calendar",
+      "package-tracking",
+      "spotify",
+      "stock-quotes",
+      "usps-mail"
+    ],
+    "sharedPython": [
+      "mail_action_usps",
+      "mail_runtime_core",
+      "package_tracking_core",
+      "repo_paths"
+    ]
+  }
 }

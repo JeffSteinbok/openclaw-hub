@@ -46,16 +46,22 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out/release-assets
-          jq -r '.artifacts[] | [.kind, .name, .version] | @tsv' release-manifest.json | while IFS=$'\t' read -r kind name version; do
-            source_dir="out/export/${kind}s/${name}"
-            asset_name="${name}-v${version}.tar.gz"
-            tar -C "$(dirname "$source_dir")" -czf "out/release-assets/${asset_name}" "$(basename "$source_dir")"
-          done
-          cp out/export/manifest.json out/release-assets/export-manifest.json
+          hub_version="$(jq -r '.hubVersion' release-manifest.json)"
+          bundle_root="openclaw-hub-v${hub_version}"
+          bundle_asset="$(jq -r '.bundleAsset' release-manifest.json)"
+          mkdir -p "out/release-assets/${bundle_root}"
+          cp -R out/export/. "out/release-assets/${bundle_root}/"
+          tar -C out/release-assets -czf "out/release-assets/${bundle_asset}" "${bundle_root}"
           {
-            echo '# Release contents'
+            echo '# OpenClaw Hub bundle'
             echo
-            jq -r '.artifacts[] | "- `" + .name + "` (" + .kind + ", v" + .version + ")"' release-manifest.json
+            echo "Download \`${bundle_asset}\` for the full exported OpenClaw Hub bundle."
+            echo
+            echo 'The bundle contains:'
+            echo
+            jq -r '.includes.services[] | "- service: `" + . + "`"' release-manifest.json
+            jq -r '.includes.plugins[] | "- plugin: `" + . + "`"' release-manifest.json
+            jq -r '.includes.sharedPython[] | "- shared library: `" + . + "`"' release-manifest.json
           } > out/release-assets/RELEASE_NOTES.md
 
       - name: Create GitHub release
@@ -72,6 +78,7 @@ jobs:
           if [ -z "$release_title" ]; then
             release_title="OpenClaw Hub ${hub_version}"
           fi
-          gh release create "$tag_name" out/release-assets/* \
+          bundle_asset="$(jq -r '.bundleAsset' release-manifest.json)"
+          gh release create "$tag_name" "out/release-assets/${bundle_asset}" \
             --title "$release_title" \
             --notes-file out/release-assets/RELEASE_NOTES.md
