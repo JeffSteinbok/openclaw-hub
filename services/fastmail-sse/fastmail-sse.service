@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /home/openclaw/git/openclaw/services/fastmail-sse/fastmail-sse.py
+ExecStart=/usr/bin/python3 /home/openclaw/git/openclaw-hub/services/fastmail-sse/fastmail-sse.py
 EnvironmentFile=%h/.openclaw/.env
 Environment=PATH=%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
 Restart=always
