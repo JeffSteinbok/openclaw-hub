@@ -6,3 +6,4 @@
 - added root build/export scripts and copied the Python plugin framework needed to build mirrored plugins in place
 - added `release-manifest.json` plus a GitHub Actions workflow that creates one release with many artifact downloads
 - normalized mirrored plugin metadata and patch-bumped the initial public artifact versions
+- removed the `config-backup` and `github` plugins from the public hub surface
