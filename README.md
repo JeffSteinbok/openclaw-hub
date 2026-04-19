@@ -2,25 +2,7 @@
 
 Public plugins, services, and shared libraries for use in OpenClaw.
 
-These are the public OpenClaw components I use in my own assistant. The source lives here, downloadable artifacts are released here, and the public docs live at [`octo-docs`](https://jeffsteinbok.github.io/octo-docs/).
-
-`openclaw-hub` is **not** a GitHub Pages site. This repo is for source browsing and release artifacts.
-
-## Canonical source
-
-- The private canonical repo is still [`octo`](https://github.com/JeffSteinbok/octo) until cutover.
-- Mirrored plugin manifests keep `source.canonicalRepo` pointed at `JeffSteinbok/octo` while this repo is still a mirror.
-- `release-manifest.json` defines the current multi-asset release set for this repo.
-
-## Relationship to octo-docs
-
-[`octo-docs`](https://github.com/JeffSteinbok/octo-docs) publishes public-facing docs from sanitized bundle data produced in `octo`.
-
-For selected public surfaces, the docs point readers here for browseable source:
-
-- `plugins/*`
-- `services/*`
-- `libs/python/*`
+These are the public OpenClaw components I use in my own assistant. You can learn more about my personal assistant, Octo, here [`octo-docs`](https://jeffsteinbok.github.io/octo-docs/).
 
 ## Building and releasing
 
