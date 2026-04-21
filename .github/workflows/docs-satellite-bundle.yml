@@ -42,10 +42,13 @@ jobs:
           path: out/docs-satellite
 
       - name: Trigger octo-docs generation
-        if: ${{ secrets.OCTO_DOCS_TOKEN != '' }}
         env:
           OCTO_DOCS_TOKEN: ${{ secrets.OCTO_DOCS_TOKEN }}
         run: |
+          if [ -z "${OCTO_DOCS_TOKEN}" ]; then
+            echo "OCTO_DOCS_TOKEN is not set; skipping repository dispatch."
+            exit 0
+          fi
           curl -sS -X POST \
             -H "Authorization: token ${OCTO_DOCS_TOKEN}" \
             -H "Accept: application/vnd.github.v3+json" \
