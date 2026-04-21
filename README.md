@@ -107,5 +107,8 @@ This repo is small enough that it is easier to ship one bundle containing the ex
 1. Run `npm install`
 2. Run `npm run build`
 3. Run `npm run export:release`
+4. Run `npm run build:docs-satellite` if you want the plugin-detail bundle used by `octo-docs`
 
 That produces the exported bundle under `out/export/`.
+
+`npm run build:docs-satellite` writes `out/docs-satellite/`, which is the public plugin-detail bundle consumed by `octo-docs` when a live runtime plugin is sourced from `openclaw-hub`.

@@ -1,0 +1,60 @@
+name: Build Docs Satellite Bundle
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-docs-satellite:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build mirrored plugins
+        run: npm run build
+
+      - name: Build docs satellite bundle
+        run: npm run build:docs-satellite
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-satellite-bundle
+          path: out/docs-satellite
+
+      - name: Trigger octo-docs generation
+        if: ${{ secrets.OCTO_DOCS_TOKEN != '' }}
+        env:
+          OCTO_DOCS_TOKEN: ${{ secrets.OCTO_DOCS_TOKEN }}
+        run: |
+          curl -sS -X POST \
+            -H "Authorization: token ${OCTO_DOCS_TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/JeffSteinbok/octo-docs/dispatches \
+            -d '{
+              "event_type": "bundle-ready",
+              "client_payload": {
+                "hub_artifact_name": "docs-satellite-bundle",
+                "hub_run_id": "${{ github.run_id }}",
+                "regenerate_all": "false"
+              }
+            }'
