@@ -63,3 +63,14 @@ jobs:
             (cd "$dir" && python3 -m unittest discover -s tests -p 'test_*.py' -v) || failed=1
           done
           [ "$failed" -eq 0 ]
+
+      - name: Run library tests
+        run: |
+          set -euo pipefail
+          failed=0
+          for test_file in libs/python/*/tests/test_*.py; do
+            dir="$(dirname "$(dirname "$test_file")")"
+            echo "=== $dir ==="
+            (cd "$dir" && python3 -m unittest discover -s tests -p 'test_*.py' -v) || failed=1
+          done
+          [ "$failed" -eq 0 ]
