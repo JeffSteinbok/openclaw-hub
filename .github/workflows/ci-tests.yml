@@ -1,0 +1,65 @@
+name: CI Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Install Python dependencies
+        run: |
+          for req in plugins/*/requirements.txt; do
+            [ -f "$req" ] && pip install -r "$req"
+          done
+
+      - name: Build
+        run: npm run build
+
+      - name: Run script tests
+        run: npm run test:scripts
+
+      - name: Run plugin tests
+        run: |
+          set -euo pipefail
+          failed=0
+          for test_file in plugins/*/tests/test_*.py; do
+            dir="$(dirname "$(dirname "$test_file")")"
+            echo "=== $dir ==="
+            (cd "$dir" && python3 -m unittest discover -s tests -p 'test_*.py' -v) || failed=1
+          done
+          [ "$failed" -eq 0 ]
+
+      - name: Run service tests
+        run: |
+          set -euo pipefail
+          failed=0
+          for test_file in services/*/tests/test_*.py; do
+            dir="$(dirname "$(dirname "$test_file")")"
+            echo "=== $dir ==="
+            (cd "$dir" && python3 -m unittest discover -s tests -p 'test_*.py' -v) || failed=1
+          done
+          [ "$failed" -eq 0 ]
