@@ -30,8 +30,14 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
+          paths: |
+            libs/python
+            plugins
+            scripts
+            services
 
       - name: Autobuild
+        if: matrix.language != 'python'
         uses: github/codeql-action/autobuild@v3
 
       - name: Perform CodeQL Analysis
