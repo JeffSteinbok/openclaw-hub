@@ -10,7 +10,7 @@
     "@local/openclaw-python-framework": "file:../framework"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "typescript": "^6",
     "@types/node": "^25"
   },
   "openclaw": {
