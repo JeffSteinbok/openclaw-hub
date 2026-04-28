@@ -56,7 +56,7 @@ def _fetch_yahoo_quote(symbol: str) -> dict:
             previous_close = meta.get("chartPreviousClose")
             currency = meta.get("currency", "USD")
             market_state = meta.get("marketState", "REGULAR")
-            timezone = meta.get("exchangeTimezoneName", "America/New_York")
+            tz_name = meta.get("exchangeTimezoneName", "America/New_York")
 
             # Calculate change and percent change
             if current_price is not None and previous_close is not None:
@@ -69,7 +69,7 @@ def _fetch_yahoo_quote(symbol: str) -> dict:
             # Get timestamp
             timestamp = meta.get("regularMarketTime")
             if timestamp:
-                timestamp = datetime.fromtimestamp(timestamp, timezone.utc).isoformat().replace("+00:00", "Z")
+                timestamp = datetime.fromtimestamp(timestamp, timezone.utc).isoformat().replace("+00:00", "Z")  # noqa: DTZ006
 
             return {
                 "symbol": symbol.upper(),
@@ -79,7 +79,7 @@ def _fetch_yahoo_quote(symbol: str) -> dict:
                 "change_percent": round(change_percent, 2) if change_percent is not None else None,
                 "currency": currency,
                 "market_state": market_state,
-                "timezone": timezone,
+                "timezone": tz_name,
                 "timestamp": timestamp,
                 "source": "yahoo_finance",
             }
