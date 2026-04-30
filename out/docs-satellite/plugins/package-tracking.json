@@ -1,0 +1,75 @@
+{
+  "plugin": "package-tracking",
+  "name": "Package Tracking",
+  "summary": "Track packages from UPS, FedEx, USPS, and Amazon",
+  "tools": [
+    {
+      "name": "package_track",
+      "description": "Look up a package by tracking number and return the carrier and tracking URL.",
+      "parameters": {
+        "tracking_number": {
+          "type": "string",
+          "required": true,
+          "description": "Package tracking number (e.g., 1Z999AA10123456784, 940000000000000000000, TBA012345678901US)"
+        },
+        "carrier": {
+          "type": "string",
+          "required": false,
+          "description": "Optional carrier override: UPS, FedEx, USPS, or Amazon"
+        }
+      }
+    },
+    {
+      "name": "package_add",
+      "description": "Save a package to the tracking list, with an optional label.",
+      "parameters": {
+        "tracking_number": {
+          "type": "string",
+          "required": true,
+          "description": "Package tracking number"
+        },
+        "carrier": {
+          "type": "string",
+          "required": false,
+          "description": "Optional carrier override: UPS, FedEx, USPS, or Amazon"
+        },
+        "label": {
+          "type": "string",
+          "required": false,
+          "description": "Optional label/description for the package"
+        }
+      }
+    },
+    {
+      "name": "package_remove",
+      "description": "Remove a saved package from the tracking list.",
+      "parameters": {
+        "tracking_number": {
+          "type": "string",
+          "required": true,
+          "description": "Package tracking number to remove"
+        }
+      }
+    },
+    {
+      "name": "package_list",
+      "description": "List saved packages with carriers, tracking URLs, labels, and added dates."
+    },
+    {
+      "name": "package_scan",
+      "description": "Scan text for package tracking numbers and identify their carriers.",
+      "parameters": {
+        "text": {
+          "type": "string",
+          "required": true,
+          "description": "Text to scan for tracking numbers (e.g., email body)"
+        }
+      }
+    }
+  ],
+  "public_types": [],
+  "examples": [],
+  "limitations": [],
+  "source_url": "https://github.com/JeffSteinbok/openclaw-hub/tree/main/plugins/package-tracking",
+  "origin": "openclaw-hub"
+}

@@ -1,0 +1,108 @@
+{
+  "plugin": "llmvision",
+  "name": "Home Assistant \u2013 LLM Vision",
+  "summary": "Home Assistant LLM Vision integration: analyze camera images with AI, query the vision timeline, and create timeline events.",
+  "tools": [
+    {
+      "name": "llmvision_get_image",
+      "description": "Download a keyframe image from HA LLM Vision media storage. Pass a key_frame path from a timeline event (e.g. /media/llmvision/snapshots/xxx.jpg). Returns the local file path for use with the image or message tools.",
+      "parameters": {
+        "key_frame": {
+          "type": "string",
+          "required": true,
+          "description": "The key_frame path from a timeline event (e.g. /media/llmvision/snapshots/abc123-camera0.jpg)."
+        }
+      }
+    },
+    {
+      "name": "llmvision_timeline_get",
+      "description": "Get events from the LLM Vision timeline (calendar.llm_vision_timeline). Returns a list of AI-generated observation events with timestamps, summaries, and descriptions. Useful for reviewing what the cameras have seen recently.",
+      "parameters": {
+        "start_time": {
+          "type": "string",
+          "required": false,
+          "description": "Start of the query window as ISO 8601 (e.g. '2026-04-09T00:00:00+00:00'). Defaults to now minus days."
+        },
+        "end_time": {
+          "type": "string",
+          "required": false,
+          "description": "End of the query window as ISO 8601. Defaults to now."
+        },
+        "days": {
+          "type": "integer",
+          "required": false,
+          "description": "Number of days to look back when start_time is not set (default: 7)."
+        },
+        "limit": {
+          "type": "integer",
+          "required": false,
+          "description": "Maximum number of events to return (default: 50, max: 200)."
+        }
+      }
+    },
+    {
+      "name": "llmvision_analyze_image",
+      "description": "Trigger an AI image analysis on a Home Assistant camera entity using LLM Vision. Sends the current camera snapshot to the specified AI provider with a custom prompt and returns the AI-generated description. Can optionally store the result in the timeline.",
+      "parameters": {
+        "camera_entity": {
+          "type": "string",
+          "required": true,
+          "description": "Camera entity ID to analyze (e.g. camera.front_door)."
+        },
+        "message": {
+          "type": "string",
+          "required": true,
+          "description": "Prompt / question to send to the AI about the image."
+        },
+        "provider": {
+          "type": "string",
+          "required": true,
+          "description": "LLM Vision provider to use (e.g. 'anthropic', 'openai', 'ollama')."
+        },
+        "model": {
+          "type": "string",
+          "required": false,
+          "description": "Specific model override (optional, uses provider default if omitted)."
+        },
+        "store_in_timeline": {
+          "type": "boolean",
+          "required": false,
+          "description": "Whether to save the result as a timeline event (default: false)."
+        },
+        "expose_images": {
+          "type": "boolean",
+          "required": false,
+          "description": "Whether to expose the captured image in the timeline event."
+        },
+        "generate_title": {
+          "type": "boolean",
+          "required": false,
+          "description": "Whether to auto-generate a title for the timeline event."
+        },
+        "response_format": {
+          "type": "string",
+          "required": false,
+          "description": "Response format from the AI: 'text' (default) or 'json'.",
+          "enum": [
+            "text",
+            "json"
+          ]
+        },
+        "max_tokens": {
+          "type": "integer",
+          "required": false,
+          "description": "Maximum tokens for the AI response."
+        }
+      }
+    },
+    {
+      "name": "llmvision_create_event",
+      "description": "Create a new event in the LLM Vision timeline. Use this to manually log observations or detections with optional camera image, label category, and time range."
+    }
+  ],
+  "public_types": [],
+  "examples": [],
+  "limitations": [],
+  "source_url": "https://github.com/JeffSteinbok/openclaw-hub/tree/main/plugins/llmvision",
+  "origin": "openclaw-hub"
+}

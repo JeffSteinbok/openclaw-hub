@@ -1,0 +1,284 @@
+{
+  "plugin": "fastmail",
+  "name": "FastMail tools",
+  "summary": "Send email and manage calendar events in Fastmail",
+  "tools": [
+    {
+      "name": "fastmail_send",
+      "description": "Send a plain-text email via Fastmail JMAP, with optional file attachments.",
+      "parameters": {
+        "to": {
+          "type": "string",
+          "required": true,
+          "description": "Recipient email address(es)"
+        },
+        "subject": {
+          "type": "string",
+          "required": true,
+          "description": "Email subject line"
+        },
+        "body": {
+          "type": "string",
+          "required": true,
+          "description": "Plain-text email body"
+        },
+        "cc": {
+          "type": "array",
+          "required": false,
+          "description": "CC recipient email address(es)"
+        },
+        "signature": {
+          "type": "string",
+          "required": false,
+          "description": "Signature block appended after body"
+        },
+        "attachment": {
+          "type": "array",
+          "required": false,
+          "description": "File path(s) to attach"
+        }
+      }
+    },
+    {
+      "name": "fastmail_search",
+      "description": "Search emails in Fastmail inbox by keyword, sender, subject, or date range via JMAP.",
+      "parameters": {
+        "account_id": {
+          "type": "string",
+          "required": false,
+          "description": "JMAP account ID (defaults to FASTMAIL_ACCOUNT_ID env)"
+        },
+        "query": {
+          "type": "string",
+          "required": false,
+          "description": "Full-text search query"
+        },
+        "from": {
+          "type": "string",
+          "required": false,
+          "description": "Filter by sender email or domain"
+        },
+        "to": {
+          "type": "string",
+          "required": false,
+          "description": "Filter by recipient"
+        },
+        "subject": {
+          "type": "string",
+          "required": false,
+          "description": "Filter by subject text"
+        },
+        "since": {
+          "type": "string",
+          "required": false,
+          "description": "Emails after this date (YYYY-MM-DD)"
+        },
+        "before": {
+          "type": "string",
+          "required": false,
+          "description": "Emails before this date (YYYY-MM-DD)"
+        },
+        "limit": {
+          "type": "integer",
+          "required": false,
+          "description": "Max results (default 20)"
+        }
+      }
+    },
+    {
+      "name": "fastmail_read",
+      "description": "Read a specific email by its JMAP email ID, returning full headers and body text.",
+      "parameters": {
+        "id": {
+          "type": "string",
+          "required": true,
+          "description": "JMAP email ID to read"
+        },
+        "account_id": {
+          "type": "string",
+          "required": false,
+          "description": "JMAP account ID (defaults to FASTMAIL_ACCOUNT_ID env)"
+        }
+      }
+    },
+    {
+      "name": "fastmail_inbox",
+      "description": "Show recent emails from the Fastmail inbox, optionally filtered to unread only.",
+      "parameters": {
+        "account_id": {
+          "type": "string",
+          "required": false,
+          "description": "JMAP account ID (defaults to FASTMAIL_ACCOUNT_ID env)"
+        },
+        "limit": {
+          "type": "integer",
+          "required": false,
+          "description": "Max emails to show (default 10)"
+        },
+        "unread": {
+          "type": "boolean",
+          "required": false,
+          "description": "Only show unread emails"
+        }
+      }
+    },
+    {
+      "name": "fastmail_meeting",
+      "description": "Create a calendar meeting invite via CalDAV and send iMIP invitations to attendees.",
+      "parameters": {
+        "to": {
+          "type": "string",
+          "required": true,
+          "description": "Attendee email address(es)"
+        },
+        "subject": {
+          "type": "string",
+          "required": true,
+          "description": "Meeting title"
+        },
+        "start": {
+          "type": "string",
+          "required": true,
+          "description": "Start datetime in ISO format (e.g. 2026-03-15T14:00)"
+        },
+        "cc": {
+          "type": "array",
+          "required": false,
+          "description": "CC recipient email address(es)"
+        },
+        "duration": {
+          "type": "string",
+          "required": false,
+          "description": "Duration: '1h', '30m', '1.5h' (default: 1h)"
+        },
+        "location": {
+          "type": "string",
+          "required": false,
+          "description": "Meeting location"
+        },
+        "description": {
+          "type": "string",
+          "required": false,
+          "description": "Meeting description / agenda"
+        },
+        "timezone": {
+          "type": "string",
+          "required": false,
+          "description": "IANA timezone (default: America/Los_Angeles)"
+        },
+        "signature": {
+          "type": "string",
+          "required": false,
+          "description": "Signature block for the invite email"
+        }
+      }
+    },
+    {
+      "name": "fastmail_update_event",
+      "description": "Find a calendar event by UID or text search and update its title, time, location, attendees, or status.",
+      "parameters": {
+        "uid": {
+          "type": "string",
+          "required": false,
+          "description": "Exact event UID to target"
+        },
+        "find": {
+          "type": "string",
+          "required": false,
+          "description": "Free-text search across event title/description"
+        },
+        "new_title": {
+          "type": "string",
+          "required": false,
+          "description": "Replace the event title"
+        },
+        "new_start": {
+          "type": "string",
+          "required": false,
+          "description": "New start time (ISO format)"
+        },
+        "new_duration": {
+          "type": "string",
+          "required": false,
+          "description": "New duration (e.g. '1h', '30m')"
+        },
+        "new_location": {
+          "type": "string",
+          "required": false,
+          "description": "Replace location"
+        },
+        "new_description": {
+          "type": "string",
+          "required": false,
+          "description": "Replace description/notes"
+        },
+        "timezone": {
+          "type": "string",
+          "required": false,
+          "description": "Timezone for --new-start (default: America/Los_Angeles)"
+        },
+        "status": {
+          "type": "string",
+          "required": false,
+          "description": "Update event status",
+          "enum": [
+            "confirmed",
+            "tentative",
+            "cancelled"
+          ]
+        },
+        "add_attendee": {
+          "type": "array",
+          "required": false,
+          "description": "Email(s) to add as attendees"
+        },
+        "remove_attendee": {
+          "type": "array",
+          "required": false,
+          "description": "Email(s) to remove from attendees"
+        },
+        "force": {
+          "type": "boolean",
+          "required": false,
+          "description": "Update all matching events when multiple found"
+        }
+      }
+    },
+    {
+      "name": "fastmail_query_events",
+      "description": "Query calendar events by date range, text, attendee email, or UID. Shows attendee RSVP status.",
+      "parameters": {
+        "after": {
+          "type": "string",
+          "required": false,
+          "description": "Only events starting at or after this date (ISO, e.g. 2026-03-01)"
+        },
+        "before": {
+          "type": "string",
+          "required": false,
+          "description": "Only events starting before this date (ISO, e.g. 2026-04-01)"
+        },
+        "text": {
+          "type": "string",
+          "required": false,
+          "description": "Filter by text match on title/description"
+        },
+        "attendee": {
+          "type": "string",
+          "required": false,
+          "description": "Filter to events including this attendee email"
+        },
+        "uid": {
+          "type": "string",
+          "required": false,
+          "description": "Return the single event with this exact UID"
+        }
+      }
+    }
+  ],
+  "public_types": [],
+  "examples": [],
+  "limitations": [],
+  "source_url": "https://github.com/JeffSteinbok/openclaw-hub/tree/main/plugins/fastmail",
+  "origin": "openclaw-hub"
+}
