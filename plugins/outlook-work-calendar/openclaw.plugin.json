@@ -18,5 +18,8 @@
         "path": "plugins/outlook-work-calendar"
       }
     ]
+  },
+  "activation": {
+    "onStartup": true
   }
 }

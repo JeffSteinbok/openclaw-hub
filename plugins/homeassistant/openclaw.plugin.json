@@ -19,5 +19,8 @@
         "path": "plugins/homeassistant"
       }
     ]
+  },
+  "activation": {
+    "onStartup": true
   }
 }

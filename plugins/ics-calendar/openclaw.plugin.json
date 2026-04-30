@@ -18,5 +18,8 @@
         "path": "plugins/ics-calendar"
       }
     ]
+  },
+  "activation": {
+    "onStartup": true
   }
 }
