@@ -1,7 +1,7 @@
 {
   "id": "opentable",
   "name": "OpenTable",
-  "description": "Check restaurant availability on OpenTable",
+  "description": "Look up restaurants, check availability, and monitor health on OpenTable",
   "version": "1.0.0",
   "entry": "dist/index.js",
   "configSchema": {
