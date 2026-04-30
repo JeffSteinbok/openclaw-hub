@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-04-30T01:05:11.257816Z",
+  "bundle_version": 1,
+  "artifacts": [
+    "plugins\\fastmail.json",
+    "plugins\\homeassistant.json",
+    "plugins\\ics-calendar.json",
+    "plugins\\llmvision.json",
+    "plugins\\opentable.json",
+    "plugins\\outlook-calendar.json",
+    "plugins\\outlook-mail.json",
+    "plugins\\outlook-work-calendar.json",
+    "plugins\\package-tracking.json",
+    "plugins\\spotify.json",
+    "plugins\\stock-quotes.json",
+    "plugins\\usps-mail.json"
+  ]
+}

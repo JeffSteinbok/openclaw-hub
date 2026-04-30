@@ -1,0 +1,101 @@
+{
+  "plugin": "outlook-mail",
+  "name": "Outlook Mail",
+  "summary": "Search and read messages from Outlook inboxes",
+  "tools": [
+    {
+      "name": "outlook_inbox",
+      "description": "List recent messages from the Outlook inbox, or any other mail folder.",
+      "parameters": {
+        "limit": {
+          "type": "integer",
+          "required": false,
+          "description": "Maximum number of messages to return (default 10)."
+        },
+        "unread": {
+          "type": "boolean",
+          "required": false,
+          "description": "Only show unread messages."
+        },
+        "folder": {
+          "type": "string",
+          "required": false,
+          "description": "Mail folder to read (default: inbox). Well-known folder names: inbox, junkemail, deleteditems, sentitems, drafts, outbox, archive, clutter, conflicts, conversationhistory, localfailures, recoverableitemsdeletions, scheduled, searchfolders, serverfailures, syncissues."
+        }
+      }
+    },
+    {
+      "name": "outlook_search",
+      "description": "Search Outlook messages by query text, sender, subject, or date range.",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "required": false,
+          "description": "Full-text search across subject and body."
+        },
+        "from": {
+          "type": "string",
+          "required": false,
+          "description": "Filter by sender email address."
+        },
+        "subject": {
+          "type": "string",
+          "required": false,
+          "description": "Filter by subject (substring match)."
+        },
+        "since": {
+          "type": "string",
+          "required": false,
+          "description": "Only messages received on or after this date (YYYY-MM-DD)."
+        },
+        "before": {
+          "type": "string",
+          "required": false,
+          "description": "Only messages received on or before this date (YYYY-MM-DD)."
+        },
+        "limit": {
+          "type": "integer",
+          "required": false,
+          "description": "Maximum number of results (default 10)."
+        }
+      }
+    },
+    {
+      "name": "outlook_read",
+      "description": "Read a specific Outlook message by its ID, including full body content.",
+      "parameters": {
+        "message_id": {
+          "type": "string",
+          "required": true,
+          "description": "The Microsoft Graph message ID to retrieve."
+        }
+      }
+    },
+    {
+      "name": "outlook_save_attachments",
+      "description": "Download attachments from an Outlook message to a local directory. Also saves the message body as body.html. Useful for processing emails that contain inline images (e.g., USPS Informed Delivery).",
+      "parameters": {
+        "message_id": {
+          "type": "string",
+          "required": true,
+          "description": "The Microsoft Graph message ID."
+        },
+        "output_dir": {
+          "type": "string",
+          "required": true,
+          "description": "Local directory path to save attachments to (created if needed)."
+        },
+        "content_types": {
+          "type": "array",
+          "required": false,
+          "description": "Content type filters (e.g. ['image/*']). Defaults to ['image/*']."
+        }
+      }
+    }
+  ],
+  "public_types": [],
+  "examples": [],
+  "limitations": [],
+  "source_url": "https://github.com/JeffSteinbok/openclaw-hub/tree/main/plugins/outlook-mail",
+  "origin": "openclaw-hub"
+}
