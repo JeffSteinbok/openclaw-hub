@@ -8,6 +8,8 @@ plugins/framework/dist/
 plugins/framework/node_modules/
 node_modules/
 out/export/
+out/docs-satellite/
 out/release-assets/
+.coverage
 .DS_Store
 Thumbs.db
