@@ -155,5 +155,143 @@ class TestHashConfig(unittest.TestCase):
             del os.environ["OPENTABLE_AVAILABILITY_HASH"]
 
 
+# ---------------------------------------------------------------------------
+# Heartbeat
+# ---------------------------------------------------------------------------
+
+from tools import opentable_heartbeat_check, _fail, _send_notification
+
+
+class TestHeartbeatCheck(unittest.TestCase):
+    """opentable_heartbeat_check: lookup + availability validation."""
+
+    @staticmethod
+    def _mock_lookup_session():
+        """Session that returns a successful restaurant lookup."""
+        session = Mock()
+        session._ensure_csrf.return_value = True
+        response = Mock()
+        response.status_code = 200
+        response.text = """
+        <html>
+          <script id="primary-window-vars" type="application/json">
+            {"windowVariables":{"__OT_GA_DATA__":{"cd6":"34339","cd1":"John Howie Steak"}}}
+          </script>
+        </html>
+        """
+        session.session.get.return_value = response
+        session._gql_request.return_value = {
+            "data": {
+                "availability": [
+                    {
+                        "availabilityDays": [
+                            {
+                                "slots": [
+                                    {
+                                        "isAvailable": True,
+                                        "slotHash": "slot-1",
+                                        "timeOffsetMinutes": 0,
+                                        "type": "Standard",
+                                        "attributes": ["indoor"],
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        return session
+
+    def test_success_when_both_pass(self):
+        with patch("opentable_client.HAS_CURL_CFFI", True), \
+             patch("opentable_client._get_session", return_value=self._mock_lookup_session()):
+            result = opentable_heartbeat_check({})
+        self.assertEqual(result["status"], "ok")
+
+    def test_failure_when_lookup_fails(self):
+        session = Mock()
+        session._ensure_csrf.return_value = True
+        response = Mock()
+        response.status_code = 403
+        response.text = ""
+        session.session.get.return_value = response
+        with patch("opentable_client._get_session", return_value=session), \
+             patch("tools._send_notification"):
+            result = opentable_heartbeat_check({})
+        self.assertEqual(result["status"], "error")
+
+    def test_failure_when_availability_fails(self):
+        session = self._mock_lookup_session()
+        session._gql_request.return_value = {"error": "stale hash"}
+        with patch("opentable_client.HAS_CURL_CFFI", True), \
+             patch("opentable_client._get_session", return_value=session), \
+             patch("tools._send_notification"):
+            result = opentable_heartbeat_check({})
+        self.assertEqual(result["status"], "error")
+        self.assertIn("hash", result["message"].lower())
+
+    def test_failure_sends_notification(self):
+        session = Mock()
+        session._ensure_csrf.return_value = True
+        response = Mock()
+        response.status_code = 500
+        response.text = ""
+        session.session.get.return_value = response
+        with patch("opentable_client._get_session", return_value=session), \
+             patch("tools._send_notification") as mock_notify:
+            opentable_heartbeat_check({})
+        mock_notify.assert_called_once()
+
+    def test_success_does_not_send_notification(self):
+        with patch("opentable_client.HAS_CURL_CFFI", True), \
+             patch("opentable_client._get_session", return_value=self._mock_lookup_session()), \
+             patch("tools._send_notification") as mock_notify:
+            opentable_heartbeat_check({})
+        mock_notify.assert_not_called()
+
+
+class TestFail(unittest.TestCase):
+    """_fail returns a structured error dict."""
+
+    def test_returns_error_status(self):
+        result = _fail("Something went wrong")
+        self.assertEqual(result["status"], "error")
+
+    def test_notify_false_does_not_call_send(self):
+        with patch("tools._send_notification") as mock_notify:
+            _fail("msg", notify=False)
+        mock_notify.assert_not_called()
+
+    def test_notify_true_calls_send(self):
+        with patch("tools._send_notification") as mock_notify:
+            _fail("msg", notify=True)
+        mock_notify.assert_called_once()
+
+
+class TestSendNotification(unittest.TestCase):
+    """_send_notification delegates to subprocess.run."""
+
+    def test_sends_via_subprocess(self):
+        with patch("tools.subprocess.run") as mock_run:
+            _send_notification("Test alert")
+        mock_run.assert_called_once()
+
+    def test_exception_does_not_propagate(self):
+        with patch("tools.subprocess.run", side_effect=Exception("broken")):
+            _send_notification("Test alert")
+
+
+class TestManifest(unittest.TestCase):
+    """manifest() includes all three tools."""
+
+    def test_manifest_has_all_tools(self):
+        import tools
+        names = {t["name"] for t in tools.manifest()["tools"]}
+        self.assertIn("opentable_lookup", names)
+        self.assertIn("opentable_availability", names)
+        self.assertIn("opentable_heartbeat_check", names)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

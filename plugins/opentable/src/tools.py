@@ -2,12 +2,16 @@
 
 import json
 import os
+import subprocess
 import sys
 
 # Ensure sibling modules are importable
 sys.path.insert(0, os.path.dirname(__file__))
 
 from opentable_client import get_restaurant_id, check_availability
+
+# Heartbeat constants
+_HEARTBEAT_SLUG = "john-howie-steak-bellevue"
 
 
 def opentable_lookup(args: dict) -> dict:
@@ -28,6 +32,50 @@ def opentable_availability(args: dict) -> dict:
     party_size = args.get("party_size", 2)
     time = args.get("time", "19:00").strip()
     return check_availability(restaurant_id, date, party_size, time)
+
+
+def opentable_heartbeat_check(args: dict) -> dict:
+    """Run the OpenTable health check — verifies both lookup and availability."""
+    from datetime import datetime, timedelta
+
+    # Step 1: verify slug lookup
+    lookup = get_restaurant_id(_HEARTBEAT_SLUG)
+    if "error" in lookup:
+        return _fail(f"Lookup failed: {lookup['error']}", notify=True)
+
+    rid = lookup.get("restaurant_id")
+    if not rid:
+        return _fail("Lookup returned no restaurant_id", notify=True)
+
+    # Step 2: verify availability query (uses the persisted query hash)
+    test_date = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+    avail = check_availability(rid, test_date, party_size=2, time="19:00")
+    if "error" in avail:
+        return _fail(f"Availability check failed (hash may be stale): {avail['error']}", notify=True)
+
+    return {"status": "ok", "message": "OpenTable heartbeat passed (lookup + availability)."}
+
+
+def _fail(error: str, *, notify: bool = False) -> dict:
+    """Return a failure result and optionally send a notification."""
+    if notify:
+        _send_notification(f"\u26a0\ufe0f OpenTable heartbeat FAILED. {error}")
+    return {"status": "error", "message": error}
+
+
+def _send_notification(message: str) -> None:
+    """Send an alert via `openclaw message send` using env-configured channel."""
+    channel = os.environ.get("NOTIFY_CHANNEL", "discord")
+    target = os.environ.get("NOTIFY_TARGET")
+
+    cmd = ["openclaw", "message", "send", "--channel", channel, "--message", message]
+    if target:
+        cmd.extend(["--target", target])
+
+    try:
+        subprocess.run(cmd, capture_output=True, timeout=30)
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +130,18 @@ TOOLS = {
             "required": ["restaurant_id", "date"],
         },
         "handler": opentable_availability,
+    },
+    "opentable_heartbeat_check": {
+        "description": (
+            "Check whether the OpenTable integration is healthy. "
+            "Verifies both restaurant lookup and availability queries."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        "handler": opentable_heartbeat_check,
     },
 }
 
