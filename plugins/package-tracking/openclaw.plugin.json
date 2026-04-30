@@ -18,5 +18,8 @@
         "path": "plugins/package-tracking"
       }
     ]
+  },
+  "activation": {
+    "onStartup": true
   }
 }

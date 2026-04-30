@@ -19,5 +19,8 @@
         "path": "plugins/llmvision"
       }
     ]
+  },
+  "activation": {
+    "onStartup": true
   }
 }

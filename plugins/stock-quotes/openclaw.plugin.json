@@ -18,5 +18,8 @@
         "path": "plugins/stock-quotes"
       }
     ]
+  },
+  "activation": {
+    "onStartup": true
   }
 }
