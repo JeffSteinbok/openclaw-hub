@@ -15,7 +15,7 @@ Home Assistant LLM Vision integration for Octo. This plugin exposes Python-backe
 
 ```json
 {
-  "server": "http://192.168.1.76:8123",
+  "server": "http://192.168.1.123:8123",
   "token": "your_long_lived_access_token"
 }
 ```
@@ -36,7 +36,7 @@ Set credentials in `plugins.entries["llmvision"].config`:
       "llmvision": {
         "enabled": true,
         "config": {
-          "server": "http://192.168.1.76:8123",
+          "server": "http://192.168.1.123:8123",
           "token": "your_long_lived_access_token"
         }
       }
