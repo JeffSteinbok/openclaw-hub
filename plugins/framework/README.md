@@ -11,7 +11,7 @@ OpenClaw Agent → Plugin (index.ts) → createPythonPlugin → Python (tools.py
 1. `createPythonPlugin` spawns `python3 tools.py` with `{"method": "manifest"}` on stdin
 2. Python returns a list of tools (name, description, input schema)
 3. Each tool is registered with the OpenClaw agent
-4. On tool call, spawns Python again with `{"method": "call", "tool": "name", "args": {...}}`
+4. On tool call, spawns Python again with `{"method": "call", "tool": "name", "args": {...}, "plugin_config": {...}}`
 5. Python handler runs, returns JSON result on stdout
 
 ## Usage
@@ -42,7 +42,7 @@ TOOLS = {
 def manifest():
     return {"tools": [{"name": k, "description": v["description"], "input_schema": v["input_schema"]} for k, v in TOOLS.items()]}
 
-def call(tool, args):
+def call(tool, args, plugin_config=None):
     return TOOLS[tool]["handler"](args)
 
 def main():
@@ -50,7 +50,7 @@ def main():
     if payload["method"] == "manifest":
         print(json.dumps(manifest()))
     elif payload["method"] == "call":
-        print(json.dumps(call(payload["tool"], payload["args"])))
+        print(json.dumps(call(payload["tool"], payload["args"], payload.get("plugin_config"))))
 
 if __name__ == "__main__":
     main()
@@ -78,3 +78,4 @@ my-plugin/
 
 - `api` — OpenClaw plugin API (provides `registerTool`)
 - `options.script` — `URL` pointing to the Python tools.py file
+- Python call payloads include `plugin_config`, populated from `api.pluginConfig`

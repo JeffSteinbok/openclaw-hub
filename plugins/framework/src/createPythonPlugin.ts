@@ -71,6 +71,7 @@ interface Manifest {
 
 interface PluginApi {
   registerTool: (tool: unknown, opts?: unknown) => void;
+  pluginConfig?: unknown;
 }
 
 /**
@@ -113,6 +114,7 @@ export function createPythonPlugin(
           method: "call",
           tool: toolName,
           args: params,
+          plugin_config: api.pluginConfig ?? {},
         });
 
         return {

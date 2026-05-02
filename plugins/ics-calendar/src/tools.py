@@ -19,17 +19,17 @@ TOOLS = {
                     "description": "Number of days ahead to fetch (default 7)",
                     "default": 7,
                 },
+                "calendar_id": {
+                    "type": "string",
+                    "description": "Configured calendar id from plugin config",
+                },
                 "url": {
                     "type": "string",
-                    "description": "Direct ICS URL to fetch",
-                },
-                "env_var": {
-                    "type": "string",
-                    "description": "Environment variable name holding the ICS URL (e.g. CALENDAR_TRIPIT_ICS_URL)",
+                    "description": "Direct ICS URL override for one-off fetches",
                 },
                 "label": {
                     "type": "string",
-                    "description": "Display name for this calendar in output (e.g. 'Nicole', 'TripIt', 'Family')",
+                    "description": "Optional display label when using a direct URL override",
                 },
             },
             "additionalProperties": False,
@@ -39,31 +39,67 @@ TOOLS = {
 }
 
 
-def handle_fetch(args):
+def _configured_calendars(plugin_config):
+    if not isinstance(plugin_config, dict):
+        return {}
+
+    raw_calendars = plugin_config.get("calendars")
+    if not isinstance(raw_calendars, list):
+        return {}
+
+    calendars = {}
+    for raw_calendar in raw_calendars:
+        if not isinstance(raw_calendar, dict):
+            continue
+        calendar_id = raw_calendar.get("id")
+        url = raw_calendar.get("url")
+        if not isinstance(calendar_id, str) or not calendar_id.strip():
+            continue
+        if not isinstance(url, str) or not url.strip():
+            continue
+        label = raw_calendar.get("label")
+        calendars[calendar_id.strip()] = {
+            "url": url.strip(),
+            "label": label.strip() if isinstance(label, str) and label.strip() else None,
+        }
+    return calendars
+
+
+def _title_case_calendar_id(calendar_id):
+    return calendar_id.replace("_", " ").replace("-", " ").title()
+
+
+def handle_fetch(args, plugin_config=None):
     days = args.get("days", 7)
     url = args.get("url")
-    env_var = args.get("env_var", "CALENDAR_NICOLE_ICS_URL")
     label = args.get("label")
+    calendar_id = args.get("calendar_id")
 
     start_dt = datetime.now()
     end_dt = start_dt + timedelta(days=days)
     start_str = start_dt.strftime("%Y-%m-%d")
     end_str = end_dt.strftime("%Y-%m-%d")
 
-    if not url:
-        url = os.environ.get(env_var)
+    if url:
+        url = url.strip()
         if not url:
-            return {"error": f"{env_var} is not set"}
-
-    if not label:
-        if url and args.get("url"):
+            return {"error": "url must not be empty"}
+        if not label:
             label = "ICS Feed"
-        else:
-            label = env_var.replace("CALENDAR_", "").replace("_ICS_URL", "").replace("_", " ").title()
+        source_name = "direct url"
+    else:
+        if not isinstance(calendar_id, str) or not calendar_id.strip():
+            return {"error": "calendar_id is required unless url is provided"}
+        calendar_id = calendar_id.strip()
+        calendar = _configured_calendars(plugin_config).get(calendar_id)
+        if not calendar:
+            return {"error": f"Unknown calendar_id '{calendar_id}'"}
+        url = calendar["url"]
+        label = calendar.get("label") or _title_case_calendar_id(calendar_id)
+        source_name = f"calendar_id '{calendar_id}'"
 
     ics = fetch_ics(url)
     if not ics:
-        source_name = "direct url" if args.get("url") else env_var
         return {"error": f"Could not fetch ICS feed ({source_name})"}
 
     events = parse_events(ics, start_dt, end_dt)
@@ -76,7 +112,10 @@ def handle_fetch(args):
         loc = e.get("LOCATION", "No location")
         formatted += f"  📅 {subject}\n     Time: {start} → {end}\n     Location: {loc}\n\n"
 
-    return {"text": formatted, "event_count": len(events), "events": events}
+    result = {"text": formatted, "event_count": len(events), "events": events}
+    if calendar_id:
+        result["calendar_id"] = calendar_id
+    return result
 
 
 TOOLS["ics_calendar_fetch"]["handler"] = handle_fetch
@@ -97,8 +136,8 @@ def manifest():
     }
 
 
-def call(tool, args):
-    return TOOLS[tool]["handler"](args)
+def call(tool, args, plugin_config=None):
+    return TOOLS[tool]["handler"](args, plugin_config)
 
 
 def main():
@@ -106,7 +145,7 @@ def main():
     if payload["method"] == "manifest":
         print(json.dumps(manifest()))
     elif payload["method"] == "call":
-        print(json.dumps(call(payload["tool"], payload["args"])))
+        print(json.dumps(call(payload["tool"], payload["args"], payload.get("plugin_config"))))
 
 
 if __name__ == "__main__":

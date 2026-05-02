@@ -31,9 +31,16 @@ Connects OpenClaw to your Withings health devices. Fetches body measurements, ac
 
 Add to `~/.openclaw/.env`:
 
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `WITHINGS_CLIENT_ID` | Yes | Withings OAuth app client ID |
+| `WITHINGS_CLIENT_SECRET` | Yes | Withings OAuth app client secret |
+| `WITHINGS_REDIRECT_URI` | Yes | OAuth redirect URI registered with the Withings app |
+
 ```
 WITHINGS_CLIENT_ID=your_app_id_here
 WITHINGS_CLIENT_SECRET=your_client_secret_here
+WITHINGS_REDIRECT_URI=http://localhost:18789/plugins/withings/oauth/callback
 ```
 
 ### 3. Enable the plugin

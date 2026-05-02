@@ -7,7 +7,34 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "calendars": {
+        "type": "array",
+        "description": "Configured ICS feeds available by id",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Stable calendar identifier used by tool calls"
+            },
+            "label": {
+              "type": "string",
+              "description": "Friendly display name used in output"
+            },
+            "url": {
+              "type": "string",
+              "description": "Published ICS feed URL"
+            }
+          },
+          "required": [
+            "id",
+            "url"
+          ]
+        }
+      }
+    }
   },
   "source": {
     "canonicalRepo": "JeffSteinbok/octo",
