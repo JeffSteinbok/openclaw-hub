@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a docs-satellite bundle for public plugin detail pages."""
+"""Build a docs-satellite bundle for public plugin, service, and shared-lib pages."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLUGINS_DIR = REPO_ROOT / "plugins"
+SERVICES_DIR = REPO_ROOT / "services"
+LIBS_DIR = REPO_ROOT / "libs" / "python"
 RELEASE_MANIFEST_PATH = REPO_ROOT / "release-manifest.json"
 OUT_DIR = REPO_ROOT / "out" / "docs-satellite"
 
@@ -26,6 +28,20 @@ def _load_release_plugins() -> list[str]:
     includes = manifest.get("includes") or {}
     plugins = includes.get("plugins") or []
     return [plugin_id for plugin_id in plugins if isinstance(plugin_id, str)]
+
+
+def _load_release_services() -> list[str]:
+    manifest = _load_json(RELEASE_MANIFEST_PATH)
+    includes = manifest.get("includes") or {}
+    services = includes.get("services") or []
+    return [service_id for service_id in services if isinstance(service_id, str)]
+
+
+def _load_release_shared_python() -> list[str]:
+    manifest = _load_json(RELEASE_MANIFEST_PATH)
+    includes = manifest.get("includes") or {}
+    shared_python = includes.get("sharedPython") or []
+    return [library for library in shared_python if isinstance(library, str)]
 
 
 def _parse_tools_static(plugin_dir: Path) -> list[dict]:
@@ -145,6 +161,123 @@ def _normalise_parameters(schema: dict | None) -> dict[str, dict]:
     return parameters
 
 
+def _extract_sections(lines: list[str]) -> dict[str, str]:
+    sections: dict[str, str] = {}
+    current_heading = ""
+    current_lines: list[str] = []
+    for line in lines:
+        if line.startswith("## "):
+            if current_heading:
+                sections[current_heading] = "\n".join(current_lines).strip()
+            current_heading = line[3:].strip()
+            current_lines = []
+        elif current_heading:
+            current_lines.append(line.rstrip())
+    if current_heading:
+        sections[current_heading] = "\n".join(current_lines).strip()
+    return sections
+
+
+def _extract_bullet_section(lines: list[str], heading: str) -> list[str]:
+    items: list[str] = []
+    in_section = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped == f"## {heading}" or stripped == f"### {heading}":
+            in_section = True
+            continue
+        if in_section:
+            if stripped.startswith("#"):
+                break
+            if stripped.startswith("- "):
+                items.append(stripped[2:].strip())
+    return items
+
+
+def _extract_env_table(lines: list[str]) -> list[dict]:
+    env_vars: list[dict] = []
+    in_table = False
+    header_seen = False
+    for line in lines:
+        stripped = line.strip()
+        if "Variable" in stripped and "Description" in stripped and "|" in stripped:
+            in_table = True
+            header_seen = False
+            continue
+        if in_table:
+            if stripped.startswith("|") and set(stripped.replace("|", "").strip()) <= {"-", " ", ":"}:
+                header_seen = True
+                continue
+            if header_seen and stripped.startswith("|"):
+                cols = [c.strip().strip("`") for c in stripped.split("|")[1:-1]]
+                if len(cols) >= 3:
+                    env_vars.append({
+                        "name": cols[0],
+                        "required": cols[1].lower().startswith("yes"),
+                        "description": cols[2],
+                    })
+            elif not stripped.startswith("|"):
+                in_table = False
+    return env_vars
+
+
+def _parse_markdown(path: Path) -> dict:
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    title = ""
+    desc_start = 0
+    for idx, line in enumerate(lines):
+        stripped = line.strip().lstrip("#").strip()
+        if stripped:
+            title = stripped
+            desc_start = idx + 1
+            break
+
+    desc_lines: list[str] = []
+    for line in lines[desc_start:]:
+        stripped = line.strip()
+        if not stripped:
+            if desc_lines:
+                break
+            continue
+        desc_lines.append(stripped)
+
+    return {
+        "name": title,
+        "summary": " ".join(desc_lines),
+        "sections": _extract_sections(lines),
+        "lines": lines,
+        "content": text.strip(),
+    }
+
+
+def _module_docstring(path: Path) -> str:
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    return ast.get_docstring(tree) or ""
+
+
+def _module_exports(path: Path) -> list[str]:
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == "__all__":
+                if isinstance(node.value, (ast.List, ast.Tuple)):
+                    values: list[str] = []
+                    for elt in node.value.elts:
+                        if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                            values.append(elt.value)
+                    return values
+    return []
+
+
 def summarise_plugin(plugin_id: str) -> dict:
     plugin_dir = PLUGINS_DIR / plugin_id
     manifest = _load_json(plugin_dir / "openclaw.plugin.json")
@@ -174,15 +307,123 @@ def summarise_plugin(plugin_id: str) -> dict:
     }
 
 
+def summarise_service(service_id: str) -> dict:
+    service_dir = SERVICES_DIR / service_id
+    parsed = _parse_markdown(service_dir / "README.md")
+    lines = parsed["lines"]
+    return {
+        "service": service_id,
+        "name": parsed["name"] or service_id,
+        "summary": parsed["summary"],
+        "features": _extract_bullet_section(lines, "Features"),
+        "env_vars": _extract_env_table(lines),
+        "sections": parsed["sections"],
+        "source_url": f"https://github.com/JeffSteinbok/openclaw-hub/tree/main/services/{service_id}",
+        "origin": "openclaw-hub",
+    }
+
+
+def _summarise_library(library_id: str) -> dict:
+    lib_dir = LIBS_DIR / library_id
+    parsed = _parse_markdown(lib_dir / "README.md") if (lib_dir / "README.md").exists() else None
+    py_files = sorted(path for path in lib_dir.glob("*.py") if path.name != "__init__.py")
+    return {
+        "library": library_id,
+        "language": "python",
+        "name": (parsed or {}).get("name") or library_id,
+        "summary": (parsed or {}).get("summary") or _module_docstring(lib_dir / "__init__.py"),
+        "exports": _module_exports(lib_dir / "__init__.py"),
+        "modules": [
+            {
+                "name": path.stem,
+                "summary": _module_docstring(path),
+                "path": f"libs/python/{library_id}/{path.name}",
+            }
+            for path in py_files
+        ],
+        "paths": {
+            "package": f"libs/python/{library_id}",
+            "init": f"libs/python/{library_id}/__init__.py",
+        },
+        "readme": f"libs/python/{library_id}/README.md" if (lib_dir / "README.md").exists() else None,
+        "sections": (parsed or {}).get("sections", {}),
+        "content": (parsed or {}).get("content", ""),
+        "source_url": f"https://github.com/JeffSteinbok/openclaw-hub/tree/main/libs/python/{library_id}",
+        "origin": "openclaw-hub",
+    }
+
+
+def summarise_shared_python() -> tuple[dict, list[dict]]:
+    parsed = _parse_markdown(LIBS_DIR / "README.md") if (LIBS_DIR / "README.md").exists() else {
+        "name": "Shared Python libs",
+        "summary": "",
+        "sections": {},
+    }
+    libraries: list[dict] = []
+    for library_id in _load_release_shared_python():
+        detail = _summarise_library(library_id)
+        libraries.append(
+            {
+                "id": detail["library"],
+                "name": detail["name"],
+                "description": detail["summary"],
+                "language": detail["language"],
+            }
+        )
+    index = {
+        "group": "shared-python-libs",
+        "name": parsed["name"] or "Shared Python libs",
+        "summary": parsed["summary"],
+        "language": "python",
+        "dependency_rules": _extract_bullet_section(parsed.get("lines", []), "Dependency direction"),
+        "sections": parsed["sections"],
+        "libraries": libraries,
+        "source_url": "https://github.com/JeffSteinbok/openclaw-hub/tree/main/libs/python",
+        "origin": "openclaw-hub",
+    }
+    return index, [_summarise_library(library["id"]) for library in libraries]
+
+
 def build_docs_satellite(out_dir: Path = OUT_DIR) -> dict:
     plugins_dir = out_dir / "plugins"
+    services_dir = out_dir / "services"
+    libs_dir = out_dir / "libs"
     plugins_dir.mkdir(parents=True, exist_ok=True)
+    services_dir.mkdir(parents=True, exist_ok=True)
+    libs_dir.mkdir(parents=True, exist_ok=True)
     artifacts: list[str] = []
 
     for plugin_id in _load_release_plugins():
         summary = summarise_plugin(plugin_id)
         out_path = plugins_dir / f"{plugin_id}.json"
         out_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        artifacts.append(str(out_path.relative_to(out_dir)))
+
+    services_index: list[dict] = []
+    for service_id in _load_release_services():
+        summary = summarise_service(service_id)
+        services_index.append(
+            {
+                "id": service_id,
+                "name": summary["name"],
+                "description": summary["summary"],
+            }
+        )
+        out_path = services_dir / f"{service_id}.json"
+        out_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+        artifacts.append(str(out_path.relative_to(out_dir)))
+
+    services_index_path = out_dir / "services.json"
+    services_index_path.write_text(json.dumps({"services": services_index}, indent=2) + "\n", encoding="utf-8")
+    artifacts.append(str(services_index_path.relative_to(out_dir)))
+
+    libs_index, libs_details = summarise_shared_python()
+    libs_index_path = out_dir / "libs.json"
+    libs_index_path.write_text(json.dumps(libs_index, indent=2) + "\n", encoding="utf-8")
+    artifacts.append(str(libs_index_path.relative_to(out_dir)))
+    for detail in libs_details:
+        out_path = libs_dir / f"{detail['library']}.json"
+        out_path.write_text(json.dumps(detail, indent=2) + "\n", encoding="utf-8")
         artifacts.append(str(out_path.relative_to(out_dir)))
 
     manifest = {
@@ -199,7 +440,7 @@ def main() -> None:
         for path in sorted(OUT_DIR.rglob("*.json")):
             path.unlink()
     manifest = build_docs_satellite()
-    print(f"Built docs satellite bundle with {len(manifest['artifacts'])} plugin chunk(s).", file=sys.stderr)
+    print(f"Built docs satellite bundle with {len(manifest['artifacts'])} artifact(s).", file=sys.stderr)
 
 
 if __name__ == "__main__":
