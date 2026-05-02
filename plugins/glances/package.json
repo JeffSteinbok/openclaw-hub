@@ -1,0 +1,21 @@
+{
+  "name": "glances",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc && ln -sf ../src/tools.py dist/tools.py"
+  },
+  "dependencies": {
+    "@local/openclaw-python-framework": "file:../framework"
+  },
+  "devDependencies": {
+    "typescript": "^6",
+    "@types/node": "^25"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  }
+}
