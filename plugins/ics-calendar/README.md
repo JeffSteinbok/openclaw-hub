@@ -21,9 +21,9 @@ Set calendars in `plugins.entries["ics-calendar"].config`:
         "config": {
           "calendars": [
             {
-              "id": "nicole",
-              "label": "Nicole",
-              "url": "${CALENDAR_NICOLE_ICS_URL}"
+              "id": "personal",
+              "label": "Personal",
+              "url": "${CALENDAR_PERSONAL_ICS_URL}"
             },
             {
               "id": "family",
@@ -31,9 +31,9 @@ Set calendars in `plugins.entries["ics-calendar"].config`:
               "url": "${CALENDAR_FAMILY_ICS_URL}"
             },
             {
-              "id": "tripit",
-              "label": "TripIt",
-              "url": "${CALENDAR_TRIPIT_ICS_URL}"
+              "id": "travel",
+              "label": "Travel",
+              "url": "${CALENDAR_TRAVEL_ICS_URL}"
             }
           ]
         }
