@@ -32,6 +32,27 @@ Control playback, search the catalog, and manage playlists from OpenClaw. The pl
 | `clientSecret` | string | Yes | Spotify app client secret |
 | `redirectUri` | string | No | OAuth redirect URI (default: `http://127.0.0.1:8888/callback`) |
 
+## Example config
+
+Set credentials in `plugins.entries["spotify"].config`:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "spotify": {
+        "enabled": true,
+        "config": {
+          "clientId": "your_spotify_client_id",
+          "clientSecret": "your_spotify_client_secret",
+          "redirectUri": "http://127.0.0.1:8888/callback"
+        }
+      }
+    }
+  }
+}
+```
+
 ## Setup
 
 1. Create a Spotify app at https://developer.spotify.com/dashboard

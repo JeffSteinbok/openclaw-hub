@@ -46,6 +46,35 @@ Use Fastmail for outbound email, inbox lookups, and calendar automation from Ope
 | `caldavPassword` | string | No | CalDAV password / app password (required for calendar tools) |
 | `caldavCalendarPath` | string | No | CalDAV calendar collection path |
 
+## Example config
+
+Set credentials in `plugins.entries["fastmail"].config`:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "fastmail": {
+        "enabled": true,
+        "config": {
+          "accountId": "u12345678",
+          "jmapToken": "fmu1-...",
+          "fromEmail": "you@fastmail.com",
+          "fromName": "OpenClaw Assistant",
+          "identityId": "id-...",
+          "draftsId": "mb-...",
+          "sentId": "mb-...",
+          "caldavUrl": "https://caldav.fastmail.com/dav/calendars",
+          "caldavUsername": "you@fastmail.com",
+          "caldavPassword": "app-password",
+          "caldavCalendarPath": "/dav/calendars/user/you@fastmail.com/Default/"
+        }
+      }
+    }
+  }
+}
+```
+
 ## Notes
 
 - Uses JMAP for email operations and CalDAV for calendar.

@@ -26,6 +26,27 @@ Look up OpenTable restaurant IDs, check booking availability, and monitor integr
 | `notifyChannel` | string | No | Notification channel for heartbeat alerts (default: `discord`) |
 | `notifyTarget` | string | No | Notification target for heartbeat alerts |
 
+## Example config
+
+Set options in `plugins.entries["opentable"].config`:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "opentable": {
+        "enabled": true,
+        "config": {
+          "availabilityHash": "b2d05a06...",
+          "notifyChannel": "discord",
+          "notifyTarget": "jeff-dm"
+        }
+      }
+    }
+  }
+}
+```
+
 ## Notes
 
 - Two-step workflow: first `opentable_lookup` to get the restaurant ID from a URL slug, then `opentable_availability` with date/time/party size.
