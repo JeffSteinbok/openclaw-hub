@@ -87,6 +87,7 @@ The rest of the repo is made up of more independent plugins. These are not the s
 | 🗓️ Outlook Work Calendar | A work-focused Outlook calendar surface | [`plugins/outlook-work-calendar/README.md`](plugins/outlook-work-calendar/README.md) |
 | 🎵 Spotify | Spotify control and playback tooling | [`plugins/spotify/README.md`](plugins/spotify/README.md) |
 | 📈 Stock Quotes | Quick stock quote lookups | [`plugins/stock-quotes/README.md`](plugins/stock-quotes/README.md) |
+| ❤️ Withings | Read health metrics from Withings devices and services | [`plugins/withings/README.md`](plugins/withings/README.md) |
 
 ## Shared Support 🧰
 
