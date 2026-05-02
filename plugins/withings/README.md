@@ -14,6 +14,35 @@ Connects OpenClaw to your Withings health devices. Fetches body measurements, ac
 | `withings_get_sleep` | Sleep duration, REM, deep, light, sleep score, snoring |
 | `withings_get_heart` | Heart rate and ECG records with AFib classification |
 
+## Example config
+
+Set Withings under `plugins.entries["withings"].config`:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "withings": {
+        "enabled": true,
+        "config": {
+          "clientId": "${WITHINGS_CLIENT_ID}",
+          "clientSecret": "${WITHINGS_CLIENT_SECRET}",
+          "redirectUri": "${WITHINGS_REDIRECT_URI}"
+        }
+      }
+    }
+  }
+}
+```
+
+## Configuration Schema
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `clientId` | string | Optional | Withings OAuth2 App Client ID |
+| `clientSecret` | string | Optional | Withings OAuth2 App Client Secret |
+| `redirectUri` | string | Optional | OAuth redirect URI registered with the Withings developer app |
+
 ## Setup
 
 ### 1. Create a Withings developer app
@@ -45,12 +74,22 @@ WITHINGS_REDIRECT_URI=http://localhost:18789/plugins/withings/oauth/callback
 
 ### 3. Enable the plugin
 
-In `openclaw.json`:
+Use the configuration shown above in `openclaw.json`:
 
 ```json
-"withings": {
-  "enabled": true,
-  "config": {}
+{
+  "plugins": {
+    "entries": {
+      "withings": {
+        "enabled": true,
+        "config": {
+          "clientId": "${WITHINGS_CLIENT_ID}",
+          "clientSecret": "${WITHINGS_CLIENT_SECRET}",
+          "redirectUri": "${WITHINGS_REDIRECT_URI}"
+        }
+      }
+    }
+  }
 }
 ```
 

@@ -32,6 +32,15 @@ class BuildDocsSatelliteTests(unittest.TestCase):
                         "id": "demo",
                         "name": "Demo Plugin",
                         "description": "Demo summary.",
+                        "configSchema": {
+                            "type": "object",
+                            "properties": {
+                                "demo": {
+                                    "type": "boolean",
+                                    "description": "Demo toggle",
+                                }
+                            },
+                        },
                         "setup": {
                             "providers": [
                                 {
@@ -49,7 +58,7 @@ class BuildDocsSatelliteTests(unittest.TestCase):
             )
             _write(
                 plugins_dir / "demo" / "README.md",
-                "# Demo Plugin\n\nDemo summary.\n\n## Configuration\n\n```json\n{\"demo\": true}\n```\n\n## Environment Variables\n\n| Variable | Description |\n|----------|-------------|\n| `DEMO_API_KEY` | Demo API key |\n",
+                "# Demo Plugin\n\nDemo summary.\n\n## Example config\n\n```json\n{\"demo\": true}\n```\n\n## Environment Variables\n\n| Variable | Description |\n|----------|-------------|\n| `DEMO_API_KEY` | Demo API key |\n",
             )
             _write(
                 services_dir / "fastmail-sse" / "README.md",
@@ -98,6 +107,7 @@ class BuildDocsSatelliteTests(unittest.TestCase):
             self.assertEqual(plugin_payload["plugin"], "demo")
             self.assertEqual(plugin_payload["name"], "Demo Plugin")
             self.assertEqual(plugin_payload["configuration"], '```json\n{"demo": true}\n```')
+            self.assertEqual(plugin_payload["config_schema"]["type"], "object")
             self.assertEqual(
                 plugin_payload["env_vars"],
                 [{"name": "DEMO_API_KEY", "description": "Demo API key"}],
@@ -128,6 +138,15 @@ class BuildDocsSatelliteTests(unittest.TestCase):
                         "id": "demo",
                         "name": "Demo Plugin",
                         "description": "Demo summary.",
+                        "configSchema": {
+                            "type": "object",
+                            "properties": {
+                                "demo": {
+                                    "type": "boolean",
+                                    "description": "Demo toggle",
+                                }
+                            },
+                        },
                         "setup": {
                             "providers": [
                                 {
