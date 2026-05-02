@@ -366,6 +366,8 @@ def summarise_plugin(plugin_id: str) -> dict:
     manifest = _load_json(plugin_dir / "openclaw.plugin.json")
     raw_tools = _call_manifest(plugin_dir)
     env_vars = _declared_env_vars(manifest, plugin_dir)
+    parsed_readme = _parse_markdown(plugin_dir / "README.md") if (plugin_dir / "README.md").exists() else {"sections": {}}
+    configuration = parsed_readme.get("sections", {}).get("Configuration", "")
 
     tools = []
     for tool in raw_tools:
@@ -382,6 +384,7 @@ def summarise_plugin(plugin_id: str) -> dict:
         "plugin": plugin_id,
         "name": manifest.get("name", plugin_id),
         "summary": manifest.get("description", ""),
+        "configuration": configuration,
         "env_vars": env_vars,
         "tools": tools,
         "public_types": [],
