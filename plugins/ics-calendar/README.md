@@ -6,7 +6,7 @@ Fetch upcoming events from published ICS calendar feeds, including personal, fam
 
 | Tool | Description |
 |------|-------------|
-| `ics_calendar_fetch` | Fetch upcoming events from a configured ICS calendar feed |
+| [`ics_calendar_fetch`](#tool-ics_calendar_fetch) | Fetch upcoming events from a configured ICS calendar feed |
 
 ## Configuration Schema
 
@@ -55,6 +55,8 @@ Set calendars in `plugins.entries["ics-calendar"].config`:
 Use `${...}` interpolation if you want the actual feed URLs to come from `.env`.
 
 ## Tool Parameters
+
+<a id="tool-ics_calendar_fetch"></a>
 
 ### `ics_calendar_fetch`
 
