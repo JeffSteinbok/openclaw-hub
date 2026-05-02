@@ -45,6 +45,15 @@ Set calendars in `plugins.entries["ics-calendar"].config`:
 
 Use `${...}` interpolation if you want the actual feed URLs to come from `.env`.
 
+## Configuration Schema
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `calendars` | array<object> | Optional | Configured ICS feeds available by id |
+| `calendars[].id` | string | Required | Stable calendar identifier used by tool calls |
+| `calendars[].label` | string | Optional | Friendly display name used in output |
+| `calendars[].url` | string | Required | Published ICS feed URL |
+
 ## Tool Parameters
 
 ### `ics_calendar_fetch`
