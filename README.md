@@ -75,6 +75,8 @@ These pieces sit next to the mail runtime and make it easier to use or inspect:
 
 The rest of the repo is made up of more independent plugins. These are not the shared mail runtime; they are separate OpenClaw capabilities you can look at one by one.
 
+Plugin README conventions live in [`PLUGIN_README_SHAPE.md`](PLUGIN_README_SHAPE.md).
+
 | Plugin | What it is | Details |
 | --- | --- | --- |
 | ✉️ Fastmail | Send mail, search mail, read inbox items, and work with calendars | [`plugins/fastmail/README.md`](plugins/fastmail/README.md) |
