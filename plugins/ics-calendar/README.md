@@ -8,7 +8,16 @@ Fetch upcoming events from published ICS calendar feeds, including personal, fam
 |------|-------------|
 | `ics_calendar_fetch` | Fetch upcoming events from a configured ICS calendar feed |
 
-## Configuration
+## Configuration Schema
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `calendars` | array<object> | Optional | Configured ICS feeds available by id |
+| `calendars[].id` | string | Required | Stable calendar identifier used by tool calls |
+| `calendars[].label` | string | Optional | Friendly display name used in output |
+| `calendars[].url` | string | Required | Published ICS feed URL |
+
+## Example config
 
 Set calendars in `plugins.entries["ics-calendar"].config`:
 
@@ -44,15 +53,6 @@ Set calendars in `plugins.entries["ics-calendar"].config`:
 ```
 
 Use `${...}` interpolation if you want the actual feed URLs to come from `.env`.
-
-## Configuration Schema
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `calendars` | array<object> | Optional | Configured ICS feeds available by id |
-| `calendars[].id` | string | Required | Stable calendar identifier used by tool calls |
-| `calendars[].label` | string | Optional | Friendly display name used in output |
-| `calendars[].url` | string | Required | Published ICS feed URL |
 
 ## Tool Parameters
 
