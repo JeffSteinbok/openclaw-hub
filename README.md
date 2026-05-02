@@ -91,6 +91,12 @@ Plugin README conventions live in [`PLUGIN_README_SHAPE.md`](PLUGIN_README_SHAPE
 | 📈 Stock Quotes | Quick stock quote lookups | [`plugins/stock-quotes/README.md`](plugins/stock-quotes/README.md) |
 | ❤️ Withings | Read health metrics from Withings devices and services | [`plugins/withings/README.md`](plugins/withings/README.md) |
 
+### Third-party plugins we use
+
+| Plugin | What it is | Link |
+| --- | --- | --- |
+| 🍽️ Restaurant CLI | Reservation booking via Resy, OpenTable, Tock, and other providers | [omarshahine/restaurant-cli](https://github.com/omarshahine/restaurant-cli) |
+
 ## Shared Support 🧰
 
 Some small shared support packages also live here:
