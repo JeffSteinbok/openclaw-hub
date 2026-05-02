@@ -13,15 +13,6 @@
       "notifyTarget": { "type": "string", "description": "Notification target for heartbeat alerts" }
     }
   },
-  "setup": {
-    "providers": [
-      {
-        "id": "opentable",
-        "authMethods": ["public"],
-        "envVars": ["OPENTABLE_AVAILABILITY_HASH", "NOTIFY_CHANNEL", "NOTIFY_TARGET"]
-      }
-    ]
-  },
   "activation": {
     "onStartup": true
   }

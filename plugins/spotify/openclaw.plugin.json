@@ -11,15 +11,6 @@
       "redirectUri": { "type": "string", "description": "Spotify OAuth redirect URI", "default": "http://127.0.0.1:8888/callback" }
     }
   },
-  "setup": {
-    "providers": [
-      {
-        "id": "spotify",
-        "authMethods": ["oauth2"],
-        "envVars": ["SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "SPOTIFY_REDIRECT_URI"]
-      }
-    ]
-  },
   "source": {
     "canonicalRepo": "JeffSteinbok/octo",
     "canonicalPath": "plugins/spotify",

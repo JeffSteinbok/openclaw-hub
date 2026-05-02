@@ -13,15 +13,6 @@
       "token": { "type": "string", "description": "Home Assistant long-lived access token" }
     }
   },
-  "setup": {
-    "providers": [
-      {
-        "id": "llmvision",
-        "authMethods": ["token"],
-        "envVars": ["HASS_SERVER", "HASS_TOKEN"]
-      }
-    ]
-  },
   "source": {
     "canonicalRepo": "JeffSteinbok/octo",
     "canonicalPath": "plugins/llmvision",

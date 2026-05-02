@@ -19,27 +19,6 @@
       "caldavCalendarPath": { "type": "string", "description": "CalDAV calendar path" }
     }
   },
-  "setup": {
-    "providers": [
-      {
-        "id": "fastmail",
-        "authMethods": ["jmap", "caldav"],
-        "envVars": [
-          "FASTMAIL_ACCOUNT_ID",
-          "FASTMAIL_JMAP_TOKEN",
-          "FASTMAIL_FROM_EMAIL",
-          "FASTMAIL_FROM_NAME",
-          "FASTMAIL_IDENTITY_ID",
-          "FASTMAIL_DRAFTS_ID",
-          "FASTMAIL_SENT_ID",
-          "FASTMAIL_CALDAV_URL",
-          "FASTMAIL_CALDAV_USERNAME",
-          "FASTMAIL_CALDAV_PASSWORD",
-          "FASTMAIL_CALDAV_CALENDAR_PATH"
-        ]
-      }
-    ]
-  },
   "source": {
     "canonicalRepo": "JeffSteinbok/octo",
     "canonicalPath": "plugins/fastmail",
