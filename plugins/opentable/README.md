@@ -10,28 +10,34 @@ Look up OpenTable restaurant IDs, check booking availability, and monitor integr
 | `opentable_availability` | Check real-time availability; returns time slots with booking URLs |
 | `opentable_heartbeat_check` | Verify the OpenTable integration is healthy (lookup + availability) |
 
-## Environment Variables
+## Configuration Schema
 
-| Variable | Description |
-|----------|-------------|
-| `OPENTABLE_AVAILABILITY_HASH` | API hash required for availability requests |
-| `NOTIFY_CHANNEL` | Notification channel for heartbeat alerts (default: `discord`) |
-| `NOTIFY_TARGET` | Notification target (e.g. webhook URL) |
+```json
+{
+  "availabilityHash": "b2d05a06...",
+  "notifyChannel": "discord",
+  "notifyTarget": "jeff-dm"
+}
+```
+
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `availabilityHash` | string | No | Persisted-query hash for OpenTable availability GraphQL (has built-in default) |
+| `notifyChannel` | string | No | Notification channel for heartbeat alerts (default: `discord`) |
+| `notifyTarget` | string | No | Notification target for heartbeat alerts |
 
 ## Notes
 
 - Two-step workflow: first `opentable_lookup` to get the restaurant ID from a URL slug, then `opentable_availability` with date/time/party size.
 - Python dependencies: `requests>=2.28.0`, `curl_cffi>=0.7.0`.
-- `opentable_availability` and the preferred `opentable_lookup` path both use a browser-impersonated session via `curl_cffi` because OpenTable may block plain scripted page fetches.
-- `OPENTABLE_AVAILABILITY_HASH` only affects the availability GraphQL call. If slug lookup fails with `403`, that is a separate restaurant-page access issue, not necessarily a bad hash.
+- Uses a browser-impersonated session via `curl_cffi` to bypass OpenTable's bot protection.
+- `availabilityHash` only affects the availability GraphQL call. If slug lookup fails with `403`, that is a separate restaurant-page access issue.
 - `opentable_heartbeat_check` verifies both lookup and availability paths, so a stale hash will be caught.
 
-## Plugin Structure
+## Development
 
-```
-openclaw.plugin.json
-src/tools.py
-src/opentable_client.py
-requirements.txt
-tests/
+### Build
+
+```bash
+npm run build --workspace=plugins/opentable
 ```

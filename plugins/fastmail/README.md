@@ -14,36 +14,49 @@ Use Fastmail for outbound email, inbox lookups, and calendar automation from Ope
 | `fastmail_update_event` | Find and update a calendar event by UID or text search |
 | `fastmail_query_events` | Query calendar events by date range, text, attendee, or UID |
 
-## Environment Variables
+## Configuration Schema
 
-| Variable | Description |
-|----------|-------------|
-| `FASTMAIL_ACCOUNT_ID` | JMAP account identifier |
-| `FASTMAIL_JMAP_TOKEN` | JMAP API authentication token |
-| `FASTMAIL_FROM_EMAIL` | Sender email address (required) |
-| `FASTMAIL_FROM_NAME` | Sender display name (default: "OpenClaw Assistant") |
-| `FASTMAIL_IDENTITY_ID` | JMAP identity ID for sending |
-| `FASTMAIL_DRAFTS_ID` | JMAP mailbox ID for drafts |
-| `FASTMAIL_SENT_ID` | JMAP mailbox ID for sent mail |
-| `FASTMAIL_CALDAV_URL` | CalDAV server URL |
-| `FASTMAIL_CALDAV_USERNAME` | CalDAV username |
-| `FASTMAIL_CALDAV_PASSWORD` | CalDAV password |
-| `FASTMAIL_CALDAV_CALENDAR_PATH` | CalDAV calendar path |
+```json
+{
+  "accountId": "u12345678",
+  "jmapToken": "fmu1-...",
+  "fromEmail": "you@fastmail.com",
+  "fromName": "OpenClaw Assistant",
+  "identityId": "id-...",
+  "draftsId": "mb-...",
+  "sentId": "mb-...",
+  "caldavUrl": "https://caldav.fastmail.com/dav/calendars",
+  "caldavUsername": "you@fastmail.com",
+  "caldavPassword": "app-password",
+  "caldavCalendarPath": "/dav/calendars/user/you@fastmail.com/Default/"
+}
+```
+
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `accountId` | string | Yes | JMAP account identifier |
+| `jmapToken` | string | Yes | JMAP API authentication token |
+| `fromEmail` | string | Yes | Sender email address |
+| `fromName` | string | No | Sender display name (default: "OpenClaw Assistant") |
+| `identityId` | string | Yes | JMAP identity ID for email submission |
+| `draftsId` | string | Yes | JMAP mailbox ID for drafts |
+| `sentId` | string | Yes | JMAP mailbox ID for sent mail |
+| `caldavUrl` | string | No | CalDAV server URL (required for calendar tools) |
+| `caldavUsername` | string | No | CalDAV username (required for calendar tools) |
+| `caldavPassword` | string | No | CalDAV password / app password (required for calendar tools) |
+| `caldavCalendarPath` | string | No | CalDAV calendar collection path |
 
 ## Notes
 
 - Uses JMAP for email operations and CalDAV for calendar.
 - CalDAV server handles iMIP invite delivery automatically — no manual MIME sending needed.
 - `fastmail_meeting` always adds the configured sender as an attendee.
-- Sends email from the configured `FASTMAIL_FROM_EMAIL`.
+- Calendar tools (`fastmail_meeting`, `fastmail_update_event`, `fastmail_query_events`) require the CalDAV keys to be configured.
 
-## Plugin Structure
+## Development
 
-```
-openclaw.plugin.json
-src/tools.py
-src/fastmail.py
-src/fastmail_search.py
-src/caldav_client.py
-tests/
+### Build
+
+```bash
+npm run build --workspace=plugins/fastmail
 ```

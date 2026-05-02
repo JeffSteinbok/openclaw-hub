@@ -17,21 +17,30 @@ Use Home Assistant as the control plane for the house. This plugin lets the agen
 | `hass_camera_snapshot` | Take a snapshot from a Home Assistant camera |
 | `hass_logbook` | Get Home Assistant logbook entries with optional filters |
 
-## Environment Variables
+## Configuration Schema
 
-| Variable | Description |
-|----------|-------------|
-| `HASS_SERVER` | Home Assistant server URL |
-| `HASS_TOKEN` | Home Assistant long-lived access token |
+```json
+{
+  "server": "http://192.168.1.76:8123",
+  "token": "your_long_lived_access_token"
+}
+```
+
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `server` | string | Yes | Home Assistant server URL |
+| `token` | string | Yes | Home Assistant long-lived access token |
 
 ## Notes
 
 - Primary interface for all home automation tasks.
 - Covers lights, locks, alarm, cameras, scenes, and more.
+- Camera names are hardcoded in `tools.py` — edit `CAMERAS` dict to match your setup.
 
-## Plugin Structure
+## Development
 
-```
-openclaw.plugin.json
-src/tools.py
+### Build
+
+```bash
+npm run build --workspace=plugins/homeassistant
 ```

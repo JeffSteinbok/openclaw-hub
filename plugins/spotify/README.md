@@ -16,40 +16,35 @@ Control playback, search the catalog, and manage playlists from OpenClaw. The pl
 | `spotify_get_playlists` | List the user's playlists |
 | `spotify_get_devices` | List available Spotify Connect devices |
 
-## Environment Variables
+## Configuration Schema
 
-| Variable | Description |
-|----------|-------------|
-| `SPOTIFY_CLIENT_ID` | Spotify app client ID |
-| `SPOTIFY_CLIENT_SECRET` | Spotify app client secret |
-| `SPOTIFY_REDIRECT_URI` | OAuth redirect URI (default: `http://127.0.0.1:8888/callback`) |
+```json
+{
+  "clientId": "your_spotify_client_id",
+  "clientSecret": "your_spotify_client_secret",
+  "redirectUri": "http://127.0.0.1:8888/callback"
+}
+```
 
-These should be set in `~/.openclaw/.env` alongside other secrets.
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `clientId` | string | Yes | Spotify app client ID |
+| `clientSecret` | string | Yes | Spotify app client secret |
+| `redirectUri` | string | No | OAuth redirect URI (default: `http://127.0.0.1:8888/callback`) |
 
 ## Setup
 
 1. Create a Spotify app at https://developer.spotify.com/dashboard
 2. Set the redirect URI to `http://127.0.0.1:8888/callback`
-3. Add `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` to `~/.openclaw/.env`
+3. Add `clientId` and `clientSecret` to the plugin config
 4. On first use, spotipy will prompt for a one-time browser authorization. After that, refresh tokens are cached at `~/.openclaw/.spotify_token_cache`.
 
 **Requires Spotify Premium** for playback control endpoints.
 
 ## Python Dependencies
 
-The `spotipy` package must be installed in the Python environment:
-
 ```
 pip install spotipy
-```
-
-## Plugin Structure
-
-```
-openclaw.plugin.json
-src/index.ts
-src/tools.py
-src/spotify_client.py
 ```
 
 ## Notes
