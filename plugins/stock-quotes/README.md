@@ -2,6 +2,8 @@
 
 Fetch current quotes for stocks, ETFs, and mutual funds. The plugin supports both single-symbol lookups and batch requests, which makes it useful for quick price checks as well as portfolio snapshots.
 
+**Pure TypeScript implementation** — no Python runtime required.
+
 ## Tools
 
 | Tool | Description |
@@ -13,24 +15,26 @@ Fetch current quotes for stocks, ETFs, and mutual funds. The plugin supports bot
 
 Successful quotes include the symbol, current price, previous close, absolute and percent change, currency, market state, timestamp, and source. Batch requests return a `quotes` array plus an `errors` array for any symbols that could not be fetched.
 
-## Configuration
+## Configuration Schema
+
+```json
+{
+  "finnhubApiKey": "your-finnhub-api-key"
+}
+```
+
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `finnhubApiKey` | string | No | Finnhub API key for premium data |
 
 ### Default behavior
 
-The plugin works out of the box with no configuration. It can fetch stocks, ETFs, and mutual funds without requiring an API key.
-
-### Optional environment variables
-
-| Variable | Description |
-|----------|-------------|
-| `FINNHUB_API_KEY` | Optional Finnhub API key |
-
-If `FINNHUB_API_KEY` is set, the plugin will try Finnhub first and fall back automatically when needed.
+The plugin works out of the box with no configuration. It fetches stocks, ETFs, and mutual funds from Yahoo Finance without requiring an API key. If `finnhubApiKey` is configured, the plugin tries Finnhub first and falls back to Yahoo Finance automatically.
 
 ## Notes
 
 - Mutual funds may return the latest available NAV rather than an intraday market price.
-- Batch requests keep successful quotes even when some symbols fail.
+- Batch requests fetch all symbols in parallel for speed.
 - Missing or invalid symbols are returned as explicit errors rather than being silently dropped.
 
 ## Development
@@ -39,10 +43,4 @@ If `FINNHUB_API_KEY` is set, the plugin will try Finnhub first and fall back aut
 
 ```bash
 npm run build --workspace=plugins/stock-quotes
-```
-
-### Test
-
-```bash
-python3 plugins/stock-quotes/tests/test_tools.py
 ```

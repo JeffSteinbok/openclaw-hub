@@ -13,6 +13,9 @@ from opentable_client import get_restaurant_id, check_availability
 # Heartbeat constants
 _HEARTBEAT_SLUG = "john-howie-steak-bellevue"
 
+# Module-level config set by call() before dispatching
+_plugin_config: dict | None = None
+
 
 def opentable_lookup(args: dict) -> dict:
     """Look up a restaurant by its OpenTable URL slug to get its numeric ID."""
@@ -31,7 +34,7 @@ def opentable_availability(args: dict) -> dict:
 
     party_size = args.get("party_size", 2)
     time = args.get("time", "19:00").strip()
-    return check_availability(restaurant_id, date, party_size, time)
+    return check_availability(restaurant_id, date, party_size, time, plugin_config=_plugin_config)
 
 
 def opentable_heartbeat_check(args: dict) -> dict:
@@ -49,7 +52,7 @@ def opentable_heartbeat_check(args: dict) -> dict:
 
     # Step 2: verify availability query (uses the persisted query hash)
     test_date = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
-    avail = check_availability(rid, test_date, party_size=2, time="19:00")
+    avail = check_availability(rid, test_date, party_size=2, time="19:00", plugin_config=_plugin_config)
     if "error" in avail:
         return _fail(f"Availability check failed (hash may be stale): {avail['error']}", notify=True)
 
@@ -64,9 +67,10 @@ def _fail(error: str, *, notify: bool = False) -> dict:
 
 
 def _send_notification(message: str) -> None:
-    """Send an alert via `openclaw message send` using env-configured channel."""
-    channel = os.environ.get("NOTIFY_CHANNEL", "discord")
-    target = os.environ.get("NOTIFY_TARGET")
+    """Send an alert via `openclaw message send` using config or env-configured channel."""
+    cfg = _plugin_config or {}
+    channel = cfg.get("notifyChannel") or os.environ.get("NOTIFY_CHANNEL", "discord")
+    target = cfg.get("notifyTarget") or os.environ.get("NOTIFY_TARGET")
 
     cmd = ["openclaw", "message", "send", "--channel", channel, "--message", message]
     if target:
@@ -159,7 +163,9 @@ def manifest():
     }
 
 
-def call(tool: str, args: dict):
+def call(tool: str, args: dict, plugin_config: dict | None = None):
+    global _plugin_config
+    _plugin_config = plugin_config
     return TOOLS[tool]["handler"](args)
 
 
@@ -169,7 +175,7 @@ def main():
     if method == "manifest":
         print(json.dumps(manifest()))
     elif method == "call":
-        print(json.dumps(call(payload["tool"], payload.get("args", {}))))
+        print(json.dumps(call(payload["tool"], payload.get("args", {}), payload.get("plugin_config"))))
 
 
 if __name__ == "__main__":

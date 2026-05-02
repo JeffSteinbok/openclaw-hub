@@ -1,13 +1,10 @@
 {
   "name": "stock-quotes",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc"
-  },
-  "dependencies": {
-    "@local/openclaw-python-framework": "file:../framework"
   },
   "devDependencies": {
     "typescript": "^6",

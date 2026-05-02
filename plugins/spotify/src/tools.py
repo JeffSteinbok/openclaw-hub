@@ -13,6 +13,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from spotify_client import get_client
 
+# Module-level config set by call() before dispatching to handlers
+_plugin_config: dict | None = None
+
 
 # ---------------------------------------------------------------------------
 # Handlers
@@ -21,7 +24,7 @@ from spotify_client import get_client
 def handle_now_playing(args: dict) -> dict:
     """Get the currently playing track or episode."""
     try:
-        sp = get_client()
+        sp = get_client(_plugin_config)
         current = sp.current_playback()
 
         if not current or not current.get("item"):
@@ -62,7 +65,7 @@ def handle_now_playing(args: dict) -> dict:
 def handle_play(args: dict) -> dict:
     """Start or resume playback."""
     try:
-        sp = get_client()
+        sp = get_client(_plugin_config)
         kwargs = {}
 
         device_id = args.get("device_id")
@@ -87,7 +90,7 @@ def handle_play(args: dict) -> dict:
 def handle_pause(args: dict) -> dict:
     """Pause playback."""
     try:
-        sp = get_client()
+        sp = get_client(_plugin_config)
         device_id = args.get("device_id")
         sp.pause_playback(device_id=device_id)
         return {"status": "ok"}
@@ -98,7 +101,7 @@ def handle_pause(args: dict) -> dict:
 def handle_next(args: dict) -> dict:
     """Skip to the next track."""
     try:
-        sp = get_client()
+        sp = get_client(_plugin_config)
         device_id = args.get("device_id")
         sp.next_track(device_id=device_id)
         return {"status": "ok"}
@@ -109,7 +112,7 @@ def handle_next(args: dict) -> dict:
 def handle_previous(args: dict) -> dict:
     """Go back to the previous track."""
     try:
-        sp = get_client()
+        sp = get_client(_plugin_config)
         device_id = args.get("device_id")
         sp.previous_track(device_id=device_id)
         return {"status": "ok"}
@@ -127,7 +130,7 @@ def handle_search(args: dict) -> dict:
         search_type = args.get("type", "track")
         limit = min(args.get("limit", 10), 50)
 
-        sp = get_client()
+        sp = get_client(_plugin_config)
         results = sp.search(q=query, type=search_type, limit=limit)
 
         formatted = []
@@ -168,7 +171,7 @@ def handle_add_to_playlist(args: dict) -> dict:
         if not playlist_id or not track_uri:
             return {"error": "playlist_id and track_uri are required"}
 
-        sp = get_client()
+        sp = get_client(_plugin_config)
         sp.playlist_add_items(playlist_id, [track_uri])
         return {"status": "ok"}
     except Exception as e:
@@ -180,7 +183,7 @@ def handle_get_playlists(args: dict) -> dict:
     try:
         limit = min(args.get("limit", 20), 50)
 
-        sp = get_client()
+        sp = get_client(_plugin_config)
         results = sp.current_user_playlists(limit=limit)
 
         playlists = []
@@ -201,7 +204,7 @@ def handle_get_playlists(args: dict) -> dict:
 def handle_get_devices(args: dict) -> dict:
     """List available Spotify Connect devices."""
     try:
-        sp = get_client()
+        sp = get_client(_plugin_config)
         results = sp.devices()
 
         devices = []
@@ -376,7 +379,9 @@ def manifest():
     }
 
 
-def call(tool: str, args: dict):
+def call(tool: str, args: dict, plugin_config: dict | None = None):
+    global _plugin_config
+    _plugin_config = plugin_config
     return TOOLS[tool]["handler"](args)
 
 
@@ -386,7 +391,7 @@ def main():
     if method == "manifest":
         print(json.dumps(manifest()))
     elif method == "call":
-        print(json.dumps(call(payload["tool"], payload.get("args", {}))))
+        print(json.dumps(call(payload["tool"], payload.get("args", {}), payload.get("plugin_config"))))
     else:
         print(json.dumps({"error": f"Unknown method: {method}"}))
 

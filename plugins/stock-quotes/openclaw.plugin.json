@@ -7,7 +7,18 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "finnhubApiKey": { "type": "string", "description": "Optional Finnhub API key" }
+    }
+  },
+  "setup": {
+    "providers": [
+      {
+        "id": "stock-quotes",
+        "authMethods": ["apiKey"],
+        "envVars": ["FINNHUB_API_KEY"]
+      }
+    ]
   },
   "source": {
     "canonicalRepo": "JeffSteinbok/octo",

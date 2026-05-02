@@ -19,13 +19,13 @@ SCOPES = " ".join([
 ])
 
 
-def get_client() -> spotipy.Spotify:
+def get_client(plugin_config: dict | None = None) -> spotipy.Spotify:
     """Return an authenticated Spotify client.
 
-    Expects these environment variables:
-        SPOTIFY_CLIENT_ID
-        SPOTIFY_CLIENT_SECRET
-        SPOTIFY_REDIRECT_URI  (default: http://127.0.0.1:8888/callback)
+    Reads credentials from plugin_config (preferred) or environment variables:
+        clientId / SPOTIFY_CLIENT_ID
+        clientSecret / SPOTIFY_CLIENT_SECRET
+        redirectUri / SPOTIFY_REDIRECT_URI  (default: http://127.0.0.1:8888/callback)
 
     Token cache is stored at ~/.openclaw/.spotify_token_cache
     """
@@ -33,9 +33,10 @@ def get_client() -> spotipy.Spotify:
     os.makedirs(cache_dir, exist_ok=True)
     cache_path = os.path.join(cache_dir, ".spotify_token_cache")
 
-    client_id = os.environ.get("SPOTIFY_CLIENT_ID")
-    client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
-    redirect_uri = os.environ.get("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
+    cfg = plugin_config or {}
+    client_id = cfg.get("clientId") or os.environ.get("SPOTIFY_CLIENT_ID")
+    client_secret = cfg.get("clientSecret") or os.environ.get("SPOTIFY_CLIENT_SECRET")
+    redirect_uri = cfg.get("redirectUri") or os.environ.get("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
 
     if not client_id or not client_secret:
         raise RuntimeError(

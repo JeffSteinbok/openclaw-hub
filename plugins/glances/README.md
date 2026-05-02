@@ -6,21 +6,70 @@ Read live system metrics from a Glances server. This plugin focuses on the commo
 
 | Tool | Description |
 |------|-------------|
-| `glances_summary_get` | Get a compact summary with CPU, memory, uptime, and one filesystem |
-| `glances_cpu_get` | Get current CPU metrics, optionally including per-core usage |
-| `glances_memory_get` | Get current memory usage metrics |
-| `glances_disk_get` | Get filesystem usage metrics for one mount point |
-| `glances_endpoint_get` | Fetch a raw JSON payload from a specific `/api/3/` endpoint |
+| [`glances_summary_get`](#tool-glances_summary_get) | Get a compact summary with CPU, memory, uptime, and one filesystem |
+| [`glances_cpu_get`](#tool-glances_cpu_get) | Get current CPU metrics, optionally including per-core usage |
+| [`glances_memory_get`](#tool-glances_memory_get) | Get current memory usage metrics |
+| [`glances_disk_get`](#tool-glances_disk_get) | Get filesystem usage metrics for one mount point |
+| [`glances_endpoint_get`](#tool-glances_endpoint_get) | Fetch a raw JSON payload from a specific `/api/3/` endpoint |
 
-## Configuration
+## Configuration Schema
 
-The plugin uses a configurable Glances base URL:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | Optional | Base URL for the Glances web server |
 
-| Field | Description |
-|-------|-------------|
-| `url` | Base URL for the Glances web server, e.g. `http://127.0.0.1:61208` |
+## Example config
+
+Set Glances under `plugins.entries["glances"].config`:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "glances": {
+        "enabled": true,
+        "config": {
+          "url": "http://127.0.0.1:61208"
+        }
+      }
+    }
+  }
+}
+```
 
 If omitted, the plugin defaults to `http://127.0.0.1:61208`.
+
+## Tool Parameters
+
+<a id="tool-glances_summary_get"></a>
+
+### `glances_summary_get`
+
+- `mount_point` — optional filesystem mount point to summarize (default `/`)
+
+<a id="tool-glances_cpu_get"></a>
+
+### `glances_cpu_get`
+
+- `include_percpu` — optional flag to include per-core CPU usage
+
+<a id="tool-glances_memory_get"></a>
+
+### `glances_memory_get`
+
+- No parameters
+
+<a id="tool-glances_disk_get"></a>
+
+### `glances_disk_get`
+
+- `mount_point` — optional filesystem mount point to query (default `/`)
+
+<a id="tool-glances_endpoint_get"></a>
+
+### `glances_endpoint_get`
+
+- `path` — required Glances API path beginning with `/api/3/`
 
 ## Notes
 

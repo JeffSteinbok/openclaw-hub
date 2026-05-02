@@ -33,15 +33,23 @@ import fastmail_search  # noqa: E402
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _configure_fastmail_globals():
-    """Populate fastmail.py module-level globals from environment variables."""
-    fastmail.ACCOUNT_ID = os.environ.get("FASTMAIL_ACCOUNT_ID", "")
-    fastmail.IDENTITY_ID = os.environ.get("FASTMAIL_IDENTITY_ID", "")
-    fastmail.DRAFTS_ID = os.environ.get("FASTMAIL_DRAFTS_ID", "")
-    fastmail.SENT_ID = os.environ.get("FASTMAIL_SENT_ID", "")
-    fastmail.CALDAV_URL = os.environ.get("FASTMAIL_CALDAV_URL", "")
-    fastmail.CALDAV_USERNAME = os.environ.get("FASTMAIL_CALDAV_USERNAME", "")
-    fastmail.CALDAV_CALENDAR_PATH = os.environ.get("FASTMAIL_CALDAV_CALENDAR_PATH", "")
+def _configure_fastmail_globals(plugin_config: dict | None = None):
+    """Populate fastmail.py module-level globals from plugin_config (preferred) or environment."""
+    cfg = plugin_config or {}
+    fastmail.ACCOUNT_ID = cfg.get("accountId") or os.environ.get("FASTMAIL_ACCOUNT_ID", "")
+    fastmail.IDENTITY_ID = cfg.get("identityId") or os.environ.get("FASTMAIL_IDENTITY_ID", "")
+    fastmail.FROM_EMAIL = cfg.get("fromEmail") or os.environ.get("FASTMAIL_FROM_EMAIL", "")
+    fastmail.FROM_NAME = cfg.get("fromName") or os.environ.get("FASTMAIL_FROM_NAME", "OpenClaw Assistant")
+    fastmail.DRAFTS_ID = cfg.get("draftsId") or os.environ.get("FASTMAIL_DRAFTS_ID", "")
+    fastmail.SENT_ID = cfg.get("sentId") or os.environ.get("FASTMAIL_SENT_ID", "")
+    fastmail.CALDAV_URL = cfg.get("caldavUrl") or os.environ.get("FASTMAIL_CALDAV_URL", "")
+    fastmail.CALDAV_USERNAME = cfg.get("caldavUsername") or os.environ.get("FASTMAIL_CALDAV_USERNAME", "")
+    fastmail.CALDAV_PASSWORD = cfg.get("caldavPassword") or os.environ.get("FASTMAIL_CALDAV_PASSWORD", "")
+    fastmail.CALDAV_CALENDAR_PATH = cfg.get("caldavCalendarPath") or os.environ.get("FASTMAIL_CALDAV_CALENDAR_PATH", "")
+    # Set JMAP token if provided via config
+    jmap_token = cfg.get("jmapToken")
+    if jmap_token:
+        os.environ["FASTMAIL_JMAP_TOKEN"] = jmap_token
     if fastmail.ACCOUNT_ID:
         fastmail.UPLOAD_URL = f"https://api.fastmail.com/jmap/upload/{fastmail.ACCOUNT_ID}/"
 
@@ -60,9 +68,9 @@ def _capture_output(fn, *args, **kwargs):
 
 # ── Tool handlers ─────────────────────────────────────────────────────────────
 
-def handle_fastmail_send(args: dict) -> dict:
+def handle_fastmail_send(args: dict, plugin_config: dict | None = None) -> dict:
     """Send a plain-text email with optional attachments."""
-    _configure_fastmail_globals()
+    _configure_fastmail_globals(plugin_config)
     ns = SimpleNamespace(
         to=args["to"] if isinstance(args["to"], list) else [args["to"]],
         cc=args.get("cc") or [],
@@ -75,10 +83,10 @@ def handle_fastmail_send(args: dict) -> dict:
     return {"status": "ok", "output": output.strip()}
 
 
-def handle_fastmail_search(args: dict) -> dict:
+def handle_fastmail_search(args: dict, plugin_config: dict | None = None) -> dict:
     """Search emails by keyword, sender, subject, or date range."""
-    _configure_fastmail_globals()
-    account_id = args.get("account_id") or os.environ.get("FASTMAIL_ACCOUNT_ID", "")
+    _configure_fastmail_globals(plugin_config)
+    account_id = args.get("account_id") or fastmail.ACCOUNT_ID
     ns = SimpleNamespace(
         account_id=account_id,
         query=args.get("query"),
@@ -93,10 +101,10 @@ def handle_fastmail_search(args: dict) -> dict:
     return {"status": "ok", "output": output.strip()}
 
 
-def handle_fastmail_read(args: dict) -> dict:
+def handle_fastmail_read(args: dict, plugin_config: dict | None = None) -> dict:
     """Read a specific email by its JMAP ID."""
-    _configure_fastmail_globals()
-    account_id = args.get("account_id") or os.environ.get("FASTMAIL_ACCOUNT_ID", "")
+    _configure_fastmail_globals(plugin_config)
+    account_id = args.get("account_id") or fastmail.ACCOUNT_ID
     ns = SimpleNamespace(
         account_id=account_id,
         id=args["id"],
@@ -105,10 +113,10 @@ def handle_fastmail_read(args: dict) -> dict:
     return {"status": "ok", "output": output.strip()}
 
 
-def handle_fastmail_inbox(args: dict) -> dict:
+def handle_fastmail_inbox(args: dict, plugin_config: dict | None = None) -> dict:
     """Show recent inbox emails, optionally filtered to unread only."""
-    _configure_fastmail_globals()
-    account_id = args.get("account_id") or os.environ.get("FASTMAIL_ACCOUNT_ID", "")
+    _configure_fastmail_globals(plugin_config)
+    account_id = args.get("account_id") or fastmail.ACCOUNT_ID
     ns = SimpleNamespace(
         account_id=account_id,
         limit=args.get("limit", 10),
@@ -118,9 +126,9 @@ def handle_fastmail_inbox(args: dict) -> dict:
     return {"status": "ok", "output": output.strip()}
 
 
-def handle_fastmail_meeting(args: dict) -> dict:
+def handle_fastmail_meeting(args: dict, plugin_config: dict | None = None) -> dict:
     """Create a calendar meeting invite and send it to attendees via CalDAV + iMIP."""
-    _configure_fastmail_globals()
+    _configure_fastmail_globals(plugin_config)
     ns = SimpleNamespace(
         to=args["to"] if isinstance(args["to"], list) else [args["to"]],
         cc=args.get("cc") or [],
@@ -136,9 +144,9 @@ def handle_fastmail_meeting(args: dict) -> dict:
     return {"status": "ok", "output": output.strip()}
 
 
-def handle_fastmail_update_event(args: dict) -> dict:
+def handle_fastmail_update_event(args: dict, plugin_config: dict | None = None) -> dict:
     """Find a calendar event by UID or text search and apply changes."""
-    _configure_fastmail_globals()
+    _configure_fastmail_globals(plugin_config)
     ns = SimpleNamespace(
         uid=args.get("uid"),
         find=args.get("find"),
@@ -157,9 +165,9 @@ def handle_fastmail_update_event(args: dict) -> dict:
     return {"status": "ok", "output": output.strip()}
 
 
-def handle_fastmail_query_events(args: dict) -> dict:
+def handle_fastmail_query_events(args: dict, plugin_config: dict | None = None) -> dict:
     """Query calendar events by date range, text, attendee, or UID."""
-    _configure_fastmail_globals()
+    _configure_fastmail_globals(plugin_config)
     ns = SimpleNamespace(
         after=args.get("after"),
         before=args.get("before"),
@@ -324,11 +332,11 @@ def manifest():
     }
 
 
-def call(tool, args):
+def call(tool, args, plugin_config=None):
     if tool not in TOOLS:
         return {"error": f"Unknown tool: {tool}"}
     try:
-        return TOOLS[tool]["handler"](args)
+        return TOOLS[tool]["handler"](args, plugin_config)
     except SystemExit as e:
         return {"error": str(e)}
     except Exception as e:
@@ -340,7 +348,7 @@ def main():
     if payload["method"] == "manifest":
         print(json.dumps(manifest()))
     elif payload["method"] == "call":
-        result = call(payload["tool"], payload["args"])
+        result = call(payload["tool"], payload["args"], payload.get("plugin_config"))
         print(json.dumps(result))
     else:
         print(json.dumps({"error": f"Unknown method: {payload['method']}"}))

@@ -29,6 +29,14 @@ HASS_SERVER = os.environ.get("HASS_SERVER", "http://192.168.1.76:8123")
 HASS_TOKEN = os.environ.get("HASS_TOKEN", "")
 
 
+def _configure(plugin_config: dict | None = None):
+    """Set module globals from plugin_config, falling back to env."""
+    global HASS_SERVER, HASS_TOKEN
+    if plugin_config:
+        HASS_SERVER = plugin_config.get("server") or HASS_SERVER
+        HASS_TOKEN = plugin_config.get("token") or HASS_TOKEN
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -759,7 +767,8 @@ def manifest():
     }
 
 
-def call(tool, args):
+def call(tool, args, plugin_config=None):
+    _configure(plugin_config)
     if tool not in TOOLS:
         return {"error": f"Unknown tool: {tool}"}
     return TOOLS[tool]["handler"](args)
@@ -770,7 +779,7 @@ def main():
     if payload["method"] == "manifest":
         print(json.dumps(manifest()))
     elif payload["method"] == "call":
-        print(json.dumps(call(payload["tool"], payload["args"])))
+        print(json.dumps(call(payload["tool"], payload["args"], payload.get("plugin_config"))))
 
 
 if __name__ == "__main__":
