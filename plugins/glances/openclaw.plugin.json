@@ -1,0 +1,32 @@
+{
+  "id": "glances",
+  "name": "Glances",
+  "version": "1.0.0",
+  "description": "Read CPU, memory, disk, and summary metrics from a Glances server",
+  "entry": "dist/index.js",
+  "tools": "src/tools.py",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": "Base URL for the Glances web server, e.g. http://127.0.0.1:61208",
+        "default": "http://127.0.0.1:61208"
+      }
+    }
+  },
+  "source": {
+    "canonicalRepo": "JeffSteinbok/octo",
+    "canonicalPath": "plugins/glances",
+    "mirrors": [
+      {
+        "repo": "JeffSteinbok/openclaw-hub",
+        "path": "plugins/glances"
+      }
+    ]
+  },
+  "activation": {
+    "onStartup": true
+  }
+}

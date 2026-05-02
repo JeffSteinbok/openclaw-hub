@@ -78,6 +78,7 @@ The rest of the repo is made up of more independent plugins. These are not the s
 | Plugin | What it is | Details |
 | --- | --- | --- |
 | ✉️ Fastmail | Send mail, search mail, read inbox items, and work with calendars | [`plugins/fastmail/README.md`](plugins/fastmail/README.md) |
+| 📊 Glances | Read live CPU, memory, disk, and summary metrics from a Glances server | [`plugins/glances/README.md`](plugins/glances/README.md) |
 | 🏠 Home Assistant | Control Home Assistant from OpenClaw | [`plugins/homeassistant/README.md`](plugins/homeassistant/README.md) |
 | 📅 ICS Calendar | Read calendar data from ICS feeds | [`plugins/ics-calendar/README.md`](plugins/ics-calendar/README.md) |
 | 👁️ LLMVision | Vision-oriented tooling for image analysis workflows | [`plugins/llmvision/README.md`](plugins/llmvision/README.md) |
@@ -107,8 +108,8 @@ This repo is small enough that it is easier to ship one bundle containing the ex
 1. Run `npm install`
 2. Run `npm run build`
 3. Run `npm run export:release`
-4. Run `npm run build:docs-satellite` if you want the plugin-detail bundle used by `octo-docs`
+4. Run `npm run build:docs-satellite` if you want the public component-detail bundle used by `octo-docs`
 
 That produces the exported bundle under `out/export/`.
 
-`npm run build:docs-satellite` writes `out/docs-satellite/`, which is the public plugin-detail bundle consumed by `octo-docs` when a live runtime plugin is sourced from `openclaw-hub`.
+`npm run build:docs-satellite` writes `out/docs-satellite/`, which is the public component-detail bundle consumed by `octo-docs` when a live runtime plugin, service, or shared Python library is sourced from `openclaw-hub`.
