@@ -154,9 +154,8 @@ END:VCALENDAR"""
 class TestHandleFetch(unittest.TestCase):
     """handle_fetch: argument handling and integration with fetch_ics/parse_events."""
 
-    def test_missing_url_and_missing_env_var_returns_error(self):
-        os.environ.pop("MY_TEST_ICS_URL", None)
-        result = tools.handle_fetch({"env_var": "MY_TEST_ICS_URL"})
+    def test_missing_url_and_missing_calendar_id_returns_error(self):
+        result = tools.handle_fetch({})
         self.assertIn("error", result)
 
     def test_uses_provided_url(self):
@@ -165,28 +164,26 @@ class TestHandleFetch(unittest.TestCase):
         self.assertNotIn("error", result)
         self.assertEqual(result["event_count"], 1)
 
-    def test_uses_env_var_when_no_url(self):
-        os.environ["CALENDAR_TEST_ICS_URL"] = "http://example.com/cal.ics"
-        try:
-            with patch("tools.fetch_ics", return_value=FAKE_ICS):
-                result = tools.handle_fetch({"env_var": "CALENDAR_TEST_ICS_URL", "days": 36500})
-            self.assertNotIn("error", result)
-        finally:
-            del os.environ["CALENDAR_TEST_ICS_URL"]
-
-    def test_defaults_to_nicole_env_var(self):
-        os.environ.pop("CALENDAR_NICOLE_ICS_URL", None)
-        result = tools.handle_fetch({})
-        self.assertIn("error", result)
+    def test_uses_configured_calendar(self):
+        plugin_config = {
+            "calendars": [
+                {"id": "family", "label": "Family", "url": "http://example.com/family.ics"}
+            ]
+        }
+        with patch("tools.fetch_ics", return_value=FAKE_ICS):
+            result = tools.handle_fetch({"calendar_id": "family", "days": 36500}, plugin_config)
+        self.assertNotIn("error", result)
+        self.assertEqual(result["calendar_id"], "family")
 
     def test_fetch_failure_returns_error(self):
-        os.environ["CALENDAR_FAIL_ICS_URL"] = "http://bad.example.com/"
-        try:
-            with patch("tools.fetch_ics", return_value=None):
-                result = tools.handle_fetch({"env_var": "CALENDAR_FAIL_ICS_URL"})
-            self.assertIn("error", result)
-        finally:
-            del os.environ["CALENDAR_FAIL_ICS_URL"]
+        plugin_config = {
+            "calendars": [
+                {"id": "broken", "url": "http://bad.example.com/"}
+            ]
+        }
+        with patch("tools.fetch_ics", return_value=None):
+            result = tools.handle_fetch({"calendar_id": "broken"}, plugin_config)
+        self.assertIn("error", result)
 
     def test_returns_event_list(self):
         with patch("tools.fetch_ics", return_value=FAKE_ICS):
@@ -194,14 +191,25 @@ class TestHandleFetch(unittest.TestCase):
         self.assertIn("events", result)
         self.assertIsInstance(result["events"], list)
 
-    def test_label_derived_from_env_var(self):
-        os.environ["CALENDAR_FAMILY_ICS_URL"] = "http://example.com/family.ics"
-        try:
-            with patch("tools.fetch_ics", return_value=FAKE_ICS):
-                result = tools.handle_fetch({"env_var": "CALENDAR_FAMILY_ICS_URL", "days": 36500})
-            self.assertIn("Family", result["text"])
-        finally:
-            del os.environ["CALENDAR_FAMILY_ICS_URL"]
+    def test_label_derived_from_calendar_id(self):
+        plugin_config = {
+            "calendars": [
+                {"id": "family_trip", "url": "http://example.com/family.ics"}
+            ]
+        }
+        with patch("tools.fetch_ics", return_value=FAKE_ICS):
+            result = tools.handle_fetch({"calendar_id": "family_trip", "days": 36500}, plugin_config)
+        self.assertIn("Family Trip", result["text"])
+
+    def test_configured_label_used_in_output(self):
+        plugin_config = {
+            "calendars": [
+                {"id": "tripit", "label": "TripIt", "url": "http://example.com/tripit.ics"}
+            ]
+        }
+        with patch("tools.fetch_ics", return_value=FAKE_ICS):
+            result = tools.handle_fetch({"calendar_id": "tripit", "days": 36500}, plugin_config)
+        self.assertIn("TripIt", result["text"])
 
     def test_custom_label_used_in_output(self):
         with patch("tools.fetch_ics", return_value=FAKE_ICS):
@@ -211,6 +219,10 @@ class TestHandleFetch(unittest.TestCase):
                 "days": 36500,
             })
         self.assertIn("My Custom Calendar", result["text"])
+
+    def test_unknown_calendar_id_returns_error(self):
+        result = tools.handle_fetch({"calendar_id": "missing"}, {"calendars": []})
+        self.assertIn("error", result)
 
 
 # ---------------------------------------------------------------------------

@@ -23,6 +23,19 @@
       }
     }
   },
+  "setup": {
+    "providers": [
+      {
+        "id": "withings",
+        "authMethods": ["oauth2"],
+        "envVars": [
+          "WITHINGS_CLIENT_ID",
+          "WITHINGS_CLIENT_SECRET",
+          "WITHINGS_REDIRECT_URI"
+        ]
+      }
+    ]
+  },
   "source": {
     "canonicalRepo": "JeffSteinbok/openclaw-hub",
     "canonicalPath": "plugins/withings"

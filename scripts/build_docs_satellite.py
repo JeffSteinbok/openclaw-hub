@@ -198,11 +198,13 @@ def _extract_env_table(lines: list[str]) -> list[dict]:
     env_vars: list[dict] = []
     in_table = False
     header_seen = False
+    headers: list[str] = []
     for line in lines:
         stripped = line.strip()
         if "Variable" in stripped and "Description" in stripped and "|" in stripped:
             in_table = True
             header_seen = False
+            headers = [col.strip().lower() for col in stripped.split("|")[1:-1]]
             continue
         if in_table:
             if stripped.startswith("|") and set(stripped.replace("|", "").strip()) <= {"-", " ", ":"}:
@@ -210,14 +212,95 @@ def _extract_env_table(lines: list[str]) -> list[dict]:
                 continue
             if header_seen and stripped.startswith("|"):
                 cols = [c.strip().strip("`") for c in stripped.split("|")[1:-1]]
-                if len(cols) >= 3:
-                    env_vars.append({
-                        "name": cols[0],
-                        "required": cols[1].lower().startswith("yes"),
-                        "description": cols[2],
-                    })
+                if "variable" not in headers or "description" not in headers:
+                    continue
+                name_index = headers.index("variable")
+                description_index = headers.index("description")
+                if max(name_index, description_index) >= len(cols):
+                    continue
+                entry = {
+                    "name": cols[name_index],
+                    "description": cols[description_index],
+                }
+                if "required" in headers:
+                    required_index = headers.index("required")
+                    if required_index < len(cols):
+                        entry["required"] = cols[required_index].lower().startswith("yes")
+                env_vars.append(entry)
             elif not stripped.startswith("|"):
                 in_table = False
+    return env_vars
+
+
+def _declared_env_var_names(manifest: dict) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+
+    def add(raw_names: object) -> None:
+        if not isinstance(raw_names, list):
+            return
+        for raw_name in raw_names:
+            if not isinstance(raw_name, str):
+                continue
+            name = raw_name.strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            names.append(name)
+
+    setup = manifest.get("setup")
+    if isinstance(setup, dict):
+        providers = setup.get("providers")
+        if isinstance(providers, list):
+            for provider in providers:
+                if isinstance(provider, dict):
+                    add(provider.get("envVars"))
+
+    provider_auth_env_vars = manifest.get("providerAuthEnvVars")
+    if isinstance(provider_auth_env_vars, dict):
+        for raw_names in provider_auth_env_vars.values():
+            add(raw_names)
+
+    channel_env_vars = manifest.get("channelEnvVars")
+    if isinstance(channel_env_vars, dict):
+        for raw_names in channel_env_vars.values():
+            add(raw_names)
+
+    return names
+
+
+def _declared_env_vars(manifest: dict, plugin_dir: Path) -> list[dict]:
+    declared_names = _declared_env_var_names(manifest)
+    if not declared_names:
+        return []
+
+    readme_path = plugin_dir / "README.md"
+    if not readme_path.exists():
+        raise ValueError(f"Plugin {plugin_dir.name} declares env vars but is missing README.md")
+
+    readme_env_vars = _extract_env_table(readme_path.read_text(encoding="utf-8").splitlines())
+    env_by_name = {
+        entry.get("name"): entry
+        for entry in readme_env_vars
+        if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+    }
+    missing = [name for name in declared_names if name not in env_by_name]
+    if missing:
+        missing_str = ", ".join(missing)
+        raise ValueError(
+            f"Plugin {plugin_dir.name} declares env vars missing from README.md Environment Variables table: {missing_str}"
+        )
+
+    env_vars: list[dict] = []
+    for name in declared_names:
+        readme_entry = env_by_name[name]
+        env_entry = {
+            "name": name,
+            "description": readme_entry.get("description", ""),
+        }
+        if "required" in readme_entry:
+            env_entry["required"] = bool(readme_entry["required"])
+        env_vars.append(env_entry)
     return env_vars
 
 
@@ -282,6 +365,7 @@ def summarise_plugin(plugin_id: str) -> dict:
     plugin_dir = PLUGINS_DIR / plugin_id
     manifest = _load_json(plugin_dir / "openclaw.plugin.json")
     raw_tools = _call_manifest(plugin_dir)
+    env_vars = _declared_env_vars(manifest, plugin_dir)
 
     tools = []
     for tool in raw_tools:
@@ -298,6 +382,7 @@ def summarise_plugin(plugin_id: str) -> dict:
         "plugin": plugin_id,
         "name": manifest.get("name", plugin_id),
         "summary": manifest.get("description", ""),
+        "env_vars": env_vars,
         "tools": tools,
         "public_types": [],
         "examples": [],
