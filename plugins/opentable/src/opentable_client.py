@@ -30,8 +30,12 @@ OPENTABLE_BOOKING_BASE = "https://www.opentable.com/booking/experiences-availabi
 _DEFAULT_HASH = "b2d05a06151b3cb21d9dfce4f021303eeba288fac347068b29c1cb66badc46af"
 
 
-def get_availability_hash():
-    """Return the persisted query hash, preferring an env-var override."""
+def get_availability_hash(plugin_config=None):
+    """Return the persisted query hash, preferring plugin_config over env-var override."""
+    if plugin_config:
+        h = (plugin_config.get("availabilityHash") or "").strip()
+        if h:
+            return h
     return os.environ.get("OPENTABLE_AVAILABILITY_HASH", _DEFAULT_HASH)
 
 
@@ -180,7 +184,7 @@ def search_restaurants(query, location, limit=10):
     }
 
 
-def check_availability(restaurant_id, date, party_size=2, time="19:00"):
+def check_availability(restaurant_id, date, party_size=2, time="19:00", plugin_config=None):
     """Check available time slots on OpenTable.
 
     Args:
@@ -188,6 +192,7 @@ def check_availability(restaurant_id, date, party_size=2, time="19:00"):
         date: Date string YYYY-MM-DD
         party_size: Number of guests
         time: Preferred time HH:MM (default 19:00)
+        plugin_config: Optional config dict with availabilityHash
     """
     if not HAS_CURL_CFFI:
         return {"error": "curl_cffi package required for OpenTable. Install with: pip install curl_cffi"}
@@ -201,7 +206,7 @@ def check_availability(restaurant_id, date, party_size=2, time="19:00"):
         "databaseRegion": "NA",
     }
 
-    data = session._gql_request("RestaurantsAvailability", variables, get_availability_hash())
+    data = session._gql_request("RestaurantsAvailability", variables, get_availability_hash(plugin_config))
 
     if "error" in data:
         return data

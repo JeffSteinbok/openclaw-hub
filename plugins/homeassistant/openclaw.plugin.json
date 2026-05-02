@@ -8,7 +8,19 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "server": { "type": "string", "description": "Home Assistant server URL" },
+      "token": { "type": "string", "description": "Home Assistant long-lived access token" }
+    }
+  },
+  "setup": {
+    "providers": [
+      {
+        "id": "homeassistant",
+        "authMethods": ["token"],
+        "envVars": ["HASS_SERVER", "HASS_TOKEN"]
+      }
+    ]
   },
   "source": {
     "canonicalRepo": "JeffSteinbok/octo",

@@ -5,7 +5,40 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "accountId": { "type": "string", "description": "JMAP account identifier" },
+      "jmapToken": { "type": "string", "description": "JMAP API authentication token" },
+      "fromEmail": { "type": "string", "description": "Sender email address" },
+      "fromName": { "type": "string", "description": "Sender display name" },
+      "identityId": { "type": "string", "description": "JMAP identity ID for sending" },
+      "draftsId": { "type": "string", "description": "JMAP mailbox ID for drafts" },
+      "sentId": { "type": "string", "description": "JMAP mailbox ID for sent mail" },
+      "caldavUrl": { "type": "string", "description": "CalDAV server URL" },
+      "caldavUsername": { "type": "string", "description": "CalDAV username" },
+      "caldavPassword": { "type": "string", "description": "CalDAV password" },
+      "caldavCalendarPath": { "type": "string", "description": "CalDAV calendar path" }
+    }
+  },
+  "setup": {
+    "providers": [
+      {
+        "id": "fastmail",
+        "authMethods": ["jmap", "caldav"],
+        "envVars": [
+          "FASTMAIL_ACCOUNT_ID",
+          "FASTMAIL_JMAP_TOKEN",
+          "FASTMAIL_FROM_EMAIL",
+          "FASTMAIL_FROM_NAME",
+          "FASTMAIL_IDENTITY_ID",
+          "FASTMAIL_DRAFTS_ID",
+          "FASTMAIL_SENT_ID",
+          "FASTMAIL_CALDAV_URL",
+          "FASTMAIL_CALDAV_USERNAME",
+          "FASTMAIL_CALDAV_PASSWORD",
+          "FASTMAIL_CALDAV_CALENDAR_PATH"
+        ]
+      }
+    ]
   },
   "source": {
     "canonicalRepo": "JeffSteinbok/octo",

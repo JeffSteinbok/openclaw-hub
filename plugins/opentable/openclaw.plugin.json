@@ -7,7 +7,20 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "availabilityHash": { "type": "string", "description": "Persisted-query hash used for OpenTable availability requests" },
+      "notifyChannel": { "type": "string", "description": "Notification channel for heartbeat alerts", "default": "discord" },
+      "notifyTarget": { "type": "string", "description": "Notification target for heartbeat alerts" }
+    }
+  },
+  "setup": {
+    "providers": [
+      {
+        "id": "opentable",
+        "authMethods": ["public"],
+        "envVars": ["OPENTABLE_AVAILABILITY_HASH", "NOTIFY_CHANNEL", "NOTIFY_TARGET"]
+      }
+    ]
   },
   "activation": {
     "onStartup": true

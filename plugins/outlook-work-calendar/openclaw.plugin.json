@@ -7,7 +7,28 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": "Published Outlook work calendar base URL"
+      },
+      "folderId": {
+        "type": "string",
+        "description": "EWS folder identifier for the published calendar"
+      }
+    }
+  },
+  "setup": {
+    "providers": [
+      {
+        "id": "outlook-work-calendar",
+        "authMethods": ["published-link"],
+        "envVars": [
+          "OUTLOOK_WORK_CALENDAR_URL",
+          "OUTLOOK_WORK_FOLDER_ID"
+        ]
+      }
+    ]
   },
   "source": {
     "canonicalRepo": "JeffSteinbok/octo",

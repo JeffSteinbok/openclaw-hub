@@ -5,7 +5,33 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "clientId": {
+        "type": "string",
+        "description": "Microsoft Graph OAuth2 client ID"
+      },
+      "clientSecret": {
+        "type": "string",
+        "description": "Microsoft Graph OAuth2 client secret"
+      },
+      "refreshToken": {
+        "type": "string",
+        "description": "Microsoft Graph OAuth2 refresh token"
+      }
+    }
+  },
+  "setup": {
+    "providers": [
+      {
+        "id": "outlook-mail",
+        "authMethods": ["oauth2"],
+        "envVars": [
+          "OUTLOOK_CLIENT_ID",
+          "OUTLOOK_CLIENT_SECRET",
+          "OUTLOOK_REFRESH_TOKEN"
+        ]
+      }
+    ]
   },
   "source": {
     "canonicalRepo": "JeffSteinbok/octo",
