@@ -163,7 +163,7 @@ export async function processDigest(
       let info: Record<string, unknown>;
       try {
         const raw = analyzeViaAgent(join(folder, img), visionAgent!);
-        info = { ...validateAnalysis(raw) };
+        info = { ...validateAnalysis(raw as Record<string, unknown>) };
       } catch (e) {
         info = { ...validateAnalysis({}) };
         info.description = `Vision analysis failed: ${String(e).slice(0, 100)}`;
@@ -196,7 +196,7 @@ export async function processDigest(
     Object.values(items),
     { workspaceAgent },
   );
-  let notifications: Array<Record<string, unknown>> = [];
+  let notifications: unknown[] = [];
   if (sendNotifications) {
     notifications = routeAndNotify(dateStr, Object.values(items), {
       dryRun,

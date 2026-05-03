@@ -6,6 +6,7 @@
   "workspaces": [
     "libs/ts/package_tracking_core",
     "libs/ts/mail_runtime_core",
+    "libs/ts/mail_action_usps",
     "plugins/framework",
     "plugins/fastmail",
     "plugins/glances",

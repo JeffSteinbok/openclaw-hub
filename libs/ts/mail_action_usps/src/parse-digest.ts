@@ -177,10 +177,10 @@ export function parseAllDigests(
     // List actual image files
     const dirFiles = readdirSync(dateDirPath).sort();
     const images = dirFiles.filter(
-      (f) => extname(f) === ".jpg" && !f.startsWith("content-"),
+      (f: string) => extname(f) === ".jpg" && !f.startsWith("content-"),
     );
-    const scanImages = images.filter((i) => /^\d{10}-\d{3}\.jpg$/.test(i));
-    const adImages = images.filter((i) => i.startsWith("mailer-"));
+    const scanImages = images.filter((i: string) => /^\d{10}-\d{3}\.jpg$/.test(i));
+    const adImages = images.filter((i: string) => i.startsWith("mailer-"));
 
     allData[name] = {
       ...parsed,
