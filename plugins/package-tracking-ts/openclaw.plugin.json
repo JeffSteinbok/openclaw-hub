@@ -1,0 +1,25 @@
+{
+  "id": "package-tracking",
+  "name": "Package Tracking",
+  "description": "Track packages from UPS, FedEx, USPS, and Amazon",
+  "version": "1.0.0",
+  "entry": "dist/index.js",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "source": {
+    "canonicalRepo": "JeffSteinbok/octo",
+    "canonicalPath": "plugins/package-tracking",
+    "mirrors": [
+      {
+        "repo": "JeffSteinbok/openclaw-hub",
+        "path": "plugins/package-tracking"
+      }
+    ]
+  },
+  "activation": {
+    "onStartup": true
+  }
+}
