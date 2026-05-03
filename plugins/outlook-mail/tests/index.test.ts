@@ -5,13 +5,13 @@ import { EventEmitter } from "node:events";
 afterEach(() => vi.restoreAllMocks());
 
 function mockHttpsSeq(...responses: Array<[string, number]>) {
-  // Register in reverse order since vi.spyOn mockImplementationOnce is LIFO
-  for (const [body, status] of [...responses].reverse()) {
+  const spy = vi.spyOn(https, "request");
+  for (const [body, status] of responses) {
     const res = new EventEmitter() as NodeJS.EventEmitter & { statusCode: number };
     res.statusCode = status;
     const req = new EventEmitter() as NodeJS.EventEmitter & { destroy:()=>void; end:()=>void; write:()=>void };
     req.destroy = vi.fn(); req.end = vi.fn(); req.write = vi.fn();
-    vi.spyOn(https, "request").mockImplementationOnce((_url, _opts, cb) => {
+    spy.mockImplementationOnce((_url, _opts, cb) => {
       if (cb) cb(res as Parameters<typeof cb>[0]);
       setTimeout(() => { res.emit("data", Buffer.from(body)); res.emit("end"); }, 0);
       return req as unknown as ReturnType<typeof https.request>;
