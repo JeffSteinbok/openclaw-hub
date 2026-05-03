@@ -37,18 +37,25 @@ async function loadPlugin(config: Record<string, unknown> = {}) {
   return { entry, api };
 }
 
+// Use a date 2 days from now so it's always in a 30-day window but not 7-day default
+const NEAR_DATE = new Date(Date.now() + 2*86400000);
+const NEAR_DT = `${NEAR_DATE.getFullYear()}${String(NEAR_DATE.getMonth()+1).padStart(2,'0')}${String(NEAR_DATE.getDate()).padStart(2,'0')}T100000`;
+// Use a date 60 days from now — outside any normal test window
+const FAR_DATE = new Date(Date.now() + 60*86400000);
+const FAR_DT = `${FAR_DATE.getFullYear()}${String(FAR_DATE.getMonth()+1).padStart(2,'0')}${String(FAR_DATE.getDate()).padStart(2,'0')}T120000`;
+
 const ICS_BODY = `BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VEVENT
-DTSTART:20260503T100000
-DTEND:20260503T110000
+DTSTART:${NEAR_DT}
+DTEND:${NEAR_DT.replace('T100000','T110000')}
 SUMMARY:Team Standup
 LOCATION:Zoom
 UID:abc123@example.com
 END:VEVENT
 BEGIN:VEVENT
-DTSTART:20260601T120000
-DTEND:20260601T130000
+DTSTART:${FAR_DT}
+DTEND:${FAR_DT.replace('T120000','T130000')}
 SUMMARY:Future Event
 UID:def456@example.com
 END:VEVENT
