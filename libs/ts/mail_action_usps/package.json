@@ -1,0 +1,25 @@
+{
+  "name": "@openclaw/mail-action-usps",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@openclaw/mail-runtime-core": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6",
+    "@types/node": "^25",
+    "vitest": "^2.1.8"
+  }
+}

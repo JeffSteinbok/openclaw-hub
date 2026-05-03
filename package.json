@@ -4,6 +4,8 @@
   "version": "2026.4.19",
   "type": "module",
   "workspaces": [
+    "libs/ts/package_tracking_core",
+    "libs/ts/mail_runtime_core",
     "plugins/framework",
     "plugins/fastmail",
     "plugins/glances",
