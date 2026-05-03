@@ -42,6 +42,19 @@ jobs:
       - name: Run script tests
         run: npm run test:scripts
 
+      - name: Run TypeScript plugin tests
+        run: |
+          set -euo pipefail
+          failed=0
+          for vitest_config in plugins/*/vitest.config.ts; do
+            dir="$(dirname "$vitest_config")"
+            if [ -f "$dir/package.json" ] && grep -q '"test"' "$dir/package.json"; then
+              echo "=== $dir ==="
+              (cd "$dir" && npm test) || failed=1
+            fi
+          done
+          [ "$failed" -eq 0 ]
+
       - name: Run plugin tests
         run: |
           set -euo pipefail

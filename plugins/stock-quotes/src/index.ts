@@ -273,21 +273,4 @@ function createEntry() {
   };
 }
 
-// Use the OpenClaw SDK if available, otherwise export the raw entry.
-let pluginEntry: unknown;
-try {
-  const { createRequire } = await import("node:module");
-  const require = createRequire(import.meta.url);
-  const sdk = require("openclaw/plugin-sdk/plugin-entry") as {
-    definePluginEntry?: (e: unknown) => unknown;
-  };
-  if (typeof sdk.definePluginEntry === "function") {
-    pluginEntry = sdk.definePluginEntry(createEntry());
-  } else {
-    pluginEntry = createEntry();
-  }
-} catch {
-  pluginEntry = createEntry();
-}
-
-export default pluginEntry;
+export { createEntry };
