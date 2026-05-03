@@ -7,6 +7,7 @@
     "libs/ts/package_tracking_core",
     "libs/ts/mail_runtime_core",
     "libs/ts/mail_action_usps",
+    "services/fastmail-sse-ts",
     "plugins/framework",
     "plugins/fastmail",
     "plugins/glances",
@@ -20,7 +21,8 @@
     "plugins/spotify",
     "plugins/stock-quotes",
     "plugins/withings",
-    "plugins/usps-mail"
+    "plugins/usps-mail",
+    "services/fastmail-sse-ts"
   ],
   "scripts": {
     "build:framework": "npm run build --workspace plugins/framework",
