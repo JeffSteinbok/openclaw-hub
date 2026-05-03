@@ -22,7 +22,9 @@
     "plugins/stock-quotes",
     "plugins/withings",
     "plugins/usps-mail",
-    "services/fastmail-sse-ts"
+    "plugins/package-tracking-ts",
+    "plugins/usps-mail-ts",
+    "plugins/fastmail-ts"
   ],
   "scripts": {
     "build:framework": "npm run build --workspace plugins/framework",

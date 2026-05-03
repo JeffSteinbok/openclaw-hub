@@ -1,0 +1,27 @@
+{
+  "name": "@openclaw/plugin-package-tracking-ts",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@openclaw/package-tracking-core": "file:../../libs/ts/package_tracking_core",
+    "@sinclair/typebox": "^0.34.48"
+  },
+  "devDependencies": {
+    "@types/node": "^25",
+    "typescript": "^6",
+    "vitest": "^2.1.8"
+  },
+  "peerDependencies": {
+    "openclaw": "^2026.4.23"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  }
+}
