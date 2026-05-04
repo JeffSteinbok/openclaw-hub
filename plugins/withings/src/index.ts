@@ -61,7 +61,7 @@ async function getAccessToken(clientId: string, clientSecret: string): Promise<s
   if (!tokens.access_token) throw new Error("No Withings account linked. Use withings_auth_url to start OAuth.");
   const now = Date.now()/1000;
   if (Number(tokens.expires_at??0) - 60 < now) {
-    const body = new URLSearchParams({action:"refreshaccesstoken",grant_type:"refresh_token",client_id:clientId,client_secret:clientSecret,refresh_token:String(tokens.refresh_token)}).toString();
+    const body = new URLSearchParams({action:"requesttoken",grant_type:"refresh_token",client_id:clientId,client_secret:clientSecret,refresh_token:String(tokens.refresh_token)}).toString();
     const res = await httpPost(TOKEN_URL, body, {"Content-Type":"application/x-www-form-urlencoded"});
     const data = JSON.parse(res.body);
     if (data.status !== 0) throw new Error(`Token refresh failed: ${JSON.stringify(data)}`);
