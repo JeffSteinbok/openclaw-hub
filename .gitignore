@@ -13,3 +13,7 @@ out/release-assets/
 .coverage
 .DS_Store
 Thumbs.db
+
+# Vitest compiled config artifacts
+vitest.config.js
+vitest.config.d.ts

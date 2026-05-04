@@ -152,6 +152,7 @@ export interface TrackedPackage {
   url: string;
   label: string;
   added_at: string;
+  [key: string]: unknown;
 }
 
 function getStoragePath(): string {

@@ -2,6 +2,8 @@
   "id": "fastmail",
   "name": "FastMail tools",
   "description": "Send email and manage calendar events in Fastmail",
+  "version": "1.0.0",
+  "entry": "./dist/adapter.js",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -19,17 +21,6 @@
       "caldavCalendarPath": { "type": "string", "description": "CalDAV calendar path" }
     }
   },
-  "source": {
-    "canonicalRepo": "JeffSteinbok/octo",
-    "canonicalPath": "plugins/fastmail",
-    "mirrors": [
-      {
-        "repo": "JeffSteinbok/openclaw-hub",
-        "path": "plugins/fastmail"
-      }
-    ]
-  },
-  "version": "1.0.1",
   "activation": {
     "onStartup": true
   }

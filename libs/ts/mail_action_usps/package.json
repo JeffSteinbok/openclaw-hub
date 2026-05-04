@@ -2,20 +2,20 @@
   "name": "@openclaw/mail-action-usps",
   "version": "1.0.0",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "types": "src/index.ts",
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "import": "./src/index.ts"
-    },
-    "./memory": {
-      "types": "./src/memory.ts",
-      "import": "./src/memory.ts"
+      "import": "./dist/index.js"
     },
     "./rules": {
       "types": "./src/rules.ts",
-      "import": "./src/rules.ts"
+      "import": "./dist/rules.js"
+    },
+    "./memory": {
+      "types": "./src/memory.ts",
+      "import": "./dist/memory.js"
     }
   },
   "scripts": {

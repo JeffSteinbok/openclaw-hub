@@ -163,7 +163,7 @@ export async function processDigest(
       let info: Record<string, unknown>;
       try {
         const raw = analyzeViaAgent(join(folder, img), visionAgent!);
-        info = { ...validateAnalysis(raw as Record<string, unknown>) };
+        info = { ...validateAnalysis(raw as unknown as Record<string, unknown>) };
       } catch (e) {
         info = { ...validateAnalysis({}) };
         info.description = `Vision analysis failed: ${String(e).slice(0, 100)}`;

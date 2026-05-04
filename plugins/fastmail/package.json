@@ -1,20 +1,32 @@
 {
+  "name": "@openclaw/plugin-fastmail",
+  "version": "1.0.0",
   "type": "module",
+  "main": "dist/index.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsup",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@local/openclaw-python-framework": "file:../framework"
+    "@sinclair/typebox": "^0.34.48"
   },
   "devDependencies": {
+    "@types/node": "^25",
+    "tsup": "^8.3.0",
     "typescript": "^6",
-    "@types/node": "^25"
+    "vitest": "^2.1.8"
+  },
+  "peerDependencies": {
+    "openclaw": "^2026.4.23"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
   },
   "openclaw": {
     "extensions": [
-      "./dist/index.js"
+      "./dist/adapter.js"
     ]
-  },
-  "name": "fastmail",
-  "version": "1.0.1"
+  }
 }

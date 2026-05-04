@@ -20,12 +20,6 @@
       "stock-quotes",
       "withings",
       "usps-mail"
-    ],
-    "sharedPython": [
-      "mail_action_usps",
-      "mail_runtime_core",
-      "package_tracking_core",
-      "repo_paths"
     ]
   }
 }

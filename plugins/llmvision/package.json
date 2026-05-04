@@ -8,7 +8,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@local/openclaw-python-framework": "file:../framework",
     "@sinclair/typebox": "^0.34.49"
   },
   "devDependencies": {
