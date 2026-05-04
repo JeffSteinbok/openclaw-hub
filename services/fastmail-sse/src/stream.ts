@@ -19,6 +19,31 @@ const PIPELINE_WORKSPACE = join(
   ".openclaw/services/mail-runtime",
 );
 
+// Dedup window: skip emails we've already processed within this TTL (ms).
+const DEDUP_TTL_MS = 60_000;
+const recentlyProcessed = new Map<string, number>();
+
+function markProcessed(emailId: string): void {
+  recentlyProcessed.set(emailId, Date.now());
+}
+
+function wasRecentlyProcessed(emailId: string): boolean {
+  const ts = recentlyProcessed.get(emailId);
+  if (ts == null) return false;
+  if (Date.now() - ts > DEDUP_TTL_MS) {
+    recentlyProcessed.delete(emailId);
+    return false;
+  }
+  return true;
+}
+
+function pruneDedup(): void {
+  const now = Date.now();
+  for (const [id, ts] of recentlyProcessed) {
+    if (now - ts > DEDUP_TTL_MS) recentlyProcessed.delete(id);
+  }
+}
+
 // ── Notify (process single email) ────────────────────────────
 
 async function notify(
@@ -146,7 +171,15 @@ export async function stream(
               oldState,
               config.inboxIds,
             );
-            for (const em of emails) {
+            const fresh = emails.filter((em) => {
+              if (wasRecentlyProcessed(em.id)) {
+                log(`dedup: skipping already-processed email ${em.id.slice(0, 8)}`);
+                return false;
+              }
+              return true;
+            });
+            for (const em of fresh) {
+              markProcessed(em.id);
               await notify(em as Record<string, unknown>, {
                 accountId: acctId,
                 token,
@@ -160,8 +193,9 @@ export async function stream(
             await markAsRead(
               token,
               acctId,
-              emails.map((em) => em.id),
+              fresh.map((em) => em.id),
             );
+            pruneDedup();
           } catch (e) {
             log(`error fetching changes for ${acctId.slice(0, 8)}: ${e}`);
           }

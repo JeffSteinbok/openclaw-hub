@@ -11,6 +11,29 @@ import { executeRules } from "@openclaw/mail-runtime-core";
 import { homedir } from "node:os";
 import { join } from "node:path";
 const PIPELINE_WORKSPACE = join(homedir(), ".openclaw/services/mail-runtime");
+// Dedup window: skip emails we've already processed within this TTL (ms).
+const DEDUP_TTL_MS = 60_000;
+const recentlyProcessed = new Map();
+function markProcessed(emailId) {
+    recentlyProcessed.set(emailId, Date.now());
+}
+function wasRecentlyProcessed(emailId) {
+    const ts = recentlyProcessed.get(emailId);
+    if (ts == null)
+        return false;
+    if (Date.now() - ts > DEDUP_TTL_MS) {
+        recentlyProcessed.delete(emailId);
+        return false;
+    }
+    return true;
+}
+function pruneDedup() {
+    const now = Date.now();
+    for (const [id, ts] of recentlyProcessed) {
+        if (now - ts > DEDUP_TTL_MS)
+            recentlyProcessed.delete(id);
+    }
+}
 // ── Notify (process single email) ────────────────────────────
 async function notify(email, options) {
     const envelope = emailToEnvelope(email, options.accountId);
@@ -87,7 +110,15 @@ export async function stream(token, config) {
                     log(`state change [${acctId.slice(0, 8)}]: ${oldState} → ${newEmailState}`);
                     try {
                         const emails = await fetchNewEmails(token, acctId, oldState, config.inboxIds);
-                        for (const em of emails) {
+                        const fresh = emails.filter((em) => {
+                            if (wasRecentlyProcessed(em.id)) {
+                                log(`dedup: skipping already-processed email ${em.id.slice(0, 8)}`);
+                                return false;
+                            }
+                            return true;
+                        });
+                        for (const em of fresh) {
+                            markProcessed(em.id);
                             await notify(em, {
                                 accountId: acctId,
                                 token,
@@ -98,7 +129,8 @@ export async function stream(token, config) {
                                 notifyTarget: config.notifyTarget,
                             });
                         }
-                        await markAsRead(token, acctId, emails.map((em) => em.id));
+                        await markAsRead(token, acctId, fresh.map((em) => em.id));
+                        pruneDedup();
                     }
                     catch (e) {
                         log(`error fetching changes for ${acctId.slice(0, 8)}: ${e}`);
