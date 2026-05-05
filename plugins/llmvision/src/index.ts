@@ -25,6 +25,19 @@ function httpRequest(method: "GET"|"POST", url: string, headers: Record<string,s
   });
 }
 
+function httpRequestBinary(url: string, headers: Record<string,string>, ms=20_000): Promise<{status:number;buffer:Buffer}> {
+  return new Promise((resolve, reject) => {
+    const mod = url.startsWith("https") ? https : http;
+    const req = mod.request(url, {method:"GET", headers, timeout: ms}, res => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c:Buffer) => chunks.push(c));
+      res.on("end", () => resolve({status: res.statusCode??0, buffer: Buffer.concat(chunks)}));
+    });
+    req.on("error", reject); req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
+    req.end();
+  });
+}
+
 async function haGet(server: string, token: string, path: string, params?: Record<string,string|number>) {
   let url = `${server}${path}`;
   if (params) url += "?" + Object.entries(params).map(([k,v])=>`${k}=${encodeURIComponent(String(v))}`).join("&");
@@ -92,9 +105,9 @@ export function createEntry() {
             const kf = String(p.key_frame??"").trim();
             if (!kf) return fmt({error:"key_frame is required"});
             const haPath = kf.startsWith("/media/") ? "/media/local" + kf.slice(6) : kf;
-            const res = await httpRequest("GET", `${server}${haPath}`, {Authorization:`Bearer ${token}`}, undefined, 15_000);
+            const res = await httpRequestBinary(`${server}${haPath}`, {Authorization:`Bearer ${token}`}, 15_000);
             if (res.status < 200 || res.status >= 300) return fmt({error:`HTTP ${res.status}`});
-            const buf = Buffer.from(res.body, "binary");
+            const buf = res.buffer;
             if (buf.length < 3 || buf[0] !== 0xff || buf[1] !== 0xd8) return fmt({error:"Response is not a valid JPEG"});
             fs.mkdirSync(KEYFRAME_DIR, {recursive:true});
             const filename = kf.split("/").pop()!;
