@@ -140,6 +140,9 @@ That means:
 
 ## USPS rules structure
 
+> **See also:** [`docs/custom-rules.md`](docs/custom-rules.md) — a full guide to writing custom rules, patterns, ordering, and testing.
+
+
 `rules.ts` loads a versioned JSON file from the workspace agent:
 
 `~/.openclaw/agents/<workspace_agent>/workspace/usps-mail/rules.json`
