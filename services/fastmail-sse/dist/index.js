@@ -53,6 +53,25 @@ export async function main() {
         Object.assign(mailboxNames, names);
     }
     registerActions(registry, accountConfig, accountIds, inboxIds, mailboxNames);
+    // Load dynamic action plugins from config
+    const actionPlugins = runtimeConfig.action_plugins ?? [];
+    if (actionPlugins.length > 0) {
+        log(`loading ${actionPlugins.length} external action plugin(s)...`);
+        for (const pluginPath of actionPlugins) {
+            try {
+                const mod = await import(pluginPath);
+                if (typeof mod.register !== "function") {
+                    log(`WARNING: action plugin ${pluginPath} does not export a register() function — skipping`);
+                    continue;
+                }
+                await mod.register(registry);
+                log(`loaded action plugin: ${pluginPath}`);
+            }
+            catch (e) {
+                log(`ERROR: failed to load action plugin ${pluginPath}: ${e}`);
+            }
+        }
+    }
     // Display startup config
     log(`config: channel=${notifyChannel}, target=${notifyTarget.slice(0, 6)}...`);
     log(`monitoring ${accountIds.length} account(s):`);

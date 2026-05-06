@@ -41,6 +41,15 @@ export interface AccountConfig {
 export interface RuntimeConfig {
   accounts: Record<string, AccountConfig>;
   mail_rules?: MailRule[];
+  /**
+   * Paths to external ESM action plugin modules to load at startup.
+   * Each module must export a `register(registry: ActionRegistry)` function.
+   * Paths are resolved as-is (use absolute paths or paths relative to the process cwd).
+   *
+   * @example
+   * "action_plugins": ["/home/user/git/octo/services/mail-actions/dist/index.js"]
+   */
+  action_plugins?: string[];
   [key: string]: unknown;
 }
 

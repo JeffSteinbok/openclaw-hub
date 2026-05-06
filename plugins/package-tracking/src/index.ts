@@ -14,6 +14,8 @@ import {
   removePackage,
   listPackages,
   scanTextForTrackingNumbers,
+  statusRegistry,
+  type CarrierStatusPlugin,
 } from "@openclaw/package-tracking-core";
 
 // ---------------------------------------------------------------------------
@@ -24,6 +26,11 @@ type PluginApi = {
   registerTool: (tool: unknown) => void;
   pluginConfig?: Record<string, unknown>;
 };
+
+interface PackageTrackingConfig {
+  /** Paths to external ESM carrier status provider plugin modules to load at startup. */
+  status_providers?: string[];
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -122,6 +129,26 @@ function handlePackageScan(args: Record<string, unknown>): Record<string, unknow
   };
 }
 
+async function handlePackageStatus(args: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const trackingNumber = ((args.tracking_number as string) ?? "").trim();
+
+  if (!trackingNumber) {
+    return { error: "tracking_number is required" };
+  }
+
+  const carrier = (args.carrier as string | undefined) ?? undefined;
+
+  if (!statusRegistry.hasProviders) {
+    return { error: "No carrier status providers are registered. Configure status_providers in plugin config." };
+  }
+
+  const result = await statusRegistry.getStatus(trackingNumber, carrier);
+  if (!result) {
+    return { error: `No status provider available for tracking number: ${trackingNumber}` };
+  }
+  return result as unknown as Record<string, unknown>;
+}
+
 // ---------------------------------------------------------------------------
 // Plugin entry
 // ---------------------------------------------------------------------------
@@ -131,8 +158,37 @@ function createEntry() {
     id: "package-tracking",
     name: "Package Tracking",
     description: "Track packages from UPS, FedEx, USPS, and Amazon",
-    configSchema: { type: "object" as const, additionalProperties: false, properties: {} },
-    register(api: PluginApi) {
+    configSchema: {
+      type: "object" as const,
+      additionalProperties: false,
+      properties: {
+        status_providers: {
+          type: "array",
+          items: { type: "string" },
+          description: "Paths to external ESM carrier status provider plugin modules",
+        },
+      },
+    },
+    async register(api: PluginApi) {
+      // Load external carrier status provider plugins
+      const config = (api.pluginConfig ?? {}) as PackageTrackingConfig;
+      const statusProviders = config.status_providers ?? [];
+      if (statusProviders.length > 0) {
+        for (const pluginPath of statusProviders) {
+          try {
+            const mod = await import(pluginPath) as CarrierStatusPlugin;
+            if (typeof mod.register !== "function") {
+              console.warn(`[package-tracking] status provider ${pluginPath} does not export register() — skipping`);
+              continue;
+            }
+            await mod.register(statusRegistry);
+            console.log(`[package-tracking] loaded carrier status provider: ${pluginPath}`);
+          } catch (e) {
+            console.error(`[package-tracking] failed to load status provider ${pluginPath}: ${e}`);
+          }
+        }
+      }
+
       api.registerTool({
         name: "package_track",
         label: "Track Package",
@@ -214,6 +270,26 @@ function createEntry() {
         }),
         execute(_toolCallId: string, params: Record<string, unknown>) {
           return formatResult(handlePackageScan(params));
+        },
+      });
+
+      api.registerTool({
+        name: "get_package_status",
+        label: "Get Package Status",
+        description:
+          "Get live carrier status for a tracking number. Requires a carrier status provider to be configured via status_providers.",
+        parameters: Type.Object({
+          tracking_number: Type.String({
+            description: "Package tracking number to check status for",
+          }),
+          carrier: Type.Optional(
+            Type.String({
+              description: "Optional carrier override: UPS, FedEx, USPS, or Amazon",
+            }),
+          ),
+        }),
+        async execute(_toolCallId: string, params: Record<string, unknown>) {
+          return formatResult(await handlePackageStatus(params));
         },
       });
     },

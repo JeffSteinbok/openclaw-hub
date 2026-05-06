@@ -2,7 +2,7 @@
  * Main entry point — loads config, registers actions, starts SSE stream.
  */
 
-import { ActionRegistry } from "@openclaw/mail-runtime-core";
+import { ActionRegistry, type ActionPlugin } from "@openclaw/mail-runtime-core";
 import {
   log,
   requireEnv,
@@ -75,6 +75,25 @@ export async function main(): Promise<void> {
   }
 
   registerActions(registry, accountConfig, accountIds, inboxIds, mailboxNames);
+
+  // Load dynamic action plugins from config
+  const actionPlugins = runtimeConfig.action_plugins ?? [];
+  if (actionPlugins.length > 0) {
+    log(`loading ${actionPlugins.length} external action plugin(s)...`);
+    for (const pluginPath of actionPlugins) {
+      try {
+        const mod = await import(pluginPath) as ActionPlugin;
+        if (typeof mod.register !== "function") {
+          log(`WARNING: action plugin ${pluginPath} does not export a register() function — skipping`);
+          continue;
+        }
+        await mod.register(registry);
+        log(`loaded action plugin: ${pluginPath}`);
+      } catch (e) {
+        log(`ERROR: failed to load action plugin ${pluginPath}: ${e}`);
+      }
+    }
+  }
 
   // Display startup config
   log(`config: channel=${notifyChannel}, target=${notifyTarget.slice(0, 6)}...`);

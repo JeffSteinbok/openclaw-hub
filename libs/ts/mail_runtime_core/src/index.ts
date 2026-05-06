@@ -5,6 +5,7 @@ export {
   type MailProviderClient,
   type ActionContext,
   type RegisteredAction,
+  type ActionPlugin,
   ActionRegistry,
   normalizeAction,
   ruleMatches,

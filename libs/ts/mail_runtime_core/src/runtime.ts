@@ -82,6 +82,25 @@ export function normalizeAction(
 }
 
 // ---------------------------------------------------------------------------
+// ActionPlugin
+// ---------------------------------------------------------------------------
+
+/**
+ * Interface for external action plugin modules loaded dynamically at startup.
+ * Any ESM module exporting a `register` function satisfies this interface.
+ *
+ * @example
+ * // my-action-plugin/src/index.ts
+ * import type { ActionPlugin, ActionRegistry } from '@openclaw/mail-runtime-core';
+ * export const register: ActionPlugin['register'] = (registry) => {
+ *   registry.register('my_custom_action', async (ctx, params) => { ... });
+ * };
+ */
+export interface ActionPlugin {
+  register(registry: ActionRegistry): void | Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
 // ActionRegistry
 // ---------------------------------------------------------------------------
 

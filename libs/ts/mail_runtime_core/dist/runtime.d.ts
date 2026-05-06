@@ -51,6 +51,20 @@ export interface RegisteredAction {
     attachment_request: Record<string, unknown> | null;
 }
 export declare function normalizeAction(action: string | Record<string, unknown>): [string, Record<string, unknown>];
+/**
+ * Interface for external action plugin modules loaded dynamically at startup.
+ * Any ESM module exporting a `register` function satisfies this interface.
+ *
+ * @example
+ * // my-action-plugin/src/index.ts
+ * import type { ActionPlugin, ActionRegistry } from '@openclaw/mail-runtime-core';
+ * export const register: ActionPlugin['register'] = (registry) => {
+ *   registry.register('my_custom_action', async (ctx, params) => { ... });
+ * };
+ */
+export interface ActionPlugin {
+    register(registry: ActionRegistry): void | Promise<void>;
+}
 export declare class ActionRegistry {
     private _actions;
     register(name: string, handler: RegisteredAction["handler"], options?: {

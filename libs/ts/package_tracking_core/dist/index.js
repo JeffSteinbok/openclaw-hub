@@ -383,3 +383,51 @@ export async function fetchNarvarTracking(url) {
     }
     return results;
 }
+/**
+ * Registry that holds all registered carrier status providers.
+ *
+ * Built-in providers can be added at startup; external providers are loaded
+ * from `status_providers` paths in the plugin config.
+ */
+export class StatusProviderRegistry {
+    _providers = [];
+    /**
+     * Register a carrier status provider.
+     * Later registrations take priority when multiple providers match a carrier.
+     */
+    register(provider) {
+        this._providers.unshift(provider); // latest wins
+    }
+    /**
+     * Find the first provider that handles the given carrier and return live status.
+     * Returns `null` when no provider is registered for the carrier.
+     */
+    async getStatus(trackingNumber, carrier) {
+        const resolvedCarrier = carrier ?? detectCarrier(trackingNumber) ?? "Unknown";
+        const carrierLower = resolvedCarrier.toLowerCase();
+        for (const provider of this._providers) {
+            const handles = provider.carriers.includes("*") ||
+                provider.carriers.some((c) => c.toLowerCase() === carrierLower);
+            if (!handles)
+                continue;
+            try {
+                const result = await provider.getStatus(trackingNumber, resolvedCarrier);
+                if (result !== null)
+                    return result;
+            }
+            catch {
+                // provider failed — try next
+            }
+        }
+        return null;
+    }
+    /** Returns true if at least one provider is registered. */
+    get hasProviders() {
+        return this._providers.length > 0;
+    }
+}
+/**
+ * Shared singleton status registry.
+ * Plugins import and register against this instance.
+ */
+export const statusRegistry = new StatusProviderRegistry();
