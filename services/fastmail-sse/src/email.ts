@@ -2,7 +2,7 @@
  * Email body extraction and envelope conversion.
  */
 
-import type { MailEnvelope } from "@openclaw/mail-runtime-core";
+import type { AuthResults, MailEnvelope } from "@openclaw/mail-runtime-core";
 import type { JmapEmail } from "./jmap.js";
 
 // ── Body extraction ──────────────────────────────────────────
@@ -54,6 +54,36 @@ export function getEmailBodyHtml(
   return "";
 }
 
+// ── Auth results parsing ──────────────────────────────────────
+
+/**
+ * Parse an Authentication-Results header value and extract DKIM, SPF, and DMARC outcomes.
+ *
+ * Header format (RFC 8601):
+ *   Authentication-Results: mx.example.com;
+ *     dkim=pass header.i=@example.com;
+ *     spf=pass smtp.mailfrom=example.com;
+ *     dmarc=pass
+ */
+export function parseAuthResults(raw: string | null | undefined): AuthResults | undefined {
+  if (!raw) return undefined;
+  const text = raw.trim();
+
+  function extractResult(proto: string): string | undefined {
+    // Match "proto=<result>" possibly preceded by whitespace, newline, or semicolon
+    const match = text.match(new RegExp(`(?:^|[;\\n])\\s*${proto}=([a-zA-Z0-9-]+)`, "i"));
+    return match ? match[1].toLowerCase() : undefined;
+  }
+
+  const dkim = extractResult("dkim");
+  const spf = extractResult("spf");
+  const dmarc = extractResult("dmarc");
+
+  if (!dkim && !spf && !dmarc) return undefined;
+
+  return { dkim, spf, dmarc, raw: text };
+}
+
 // ── Envelope conversion ──────────────────────────────────────
 
 export function emailToEnvelope(
@@ -71,6 +101,10 @@ export function emailToEnvelope(
   const hasAttachments = !!(blobId && (htmlBody || "").includes("cid:"));
   const rawSubject = (email["subject"] as string) ?? "(no subject)";
 
+  // JMAP returns header pseudo-properties with the key matching the property name
+  const authHeader = email["header:Authentication-Results:asText"] as string | undefined;
+  const authResults = parseAuthResults(authHeader);
+
   return {
     message_id: (email["id"] as string) ?? "",
     provider: "fastmail",
@@ -83,6 +117,7 @@ export function emailToEnvelope(
     body_text: getEmailBodyText(email),
     body_html: htmlBody,
     has_attachments: hasAttachments,
+    auth_results: authResults,
     raw: email as Record<string, unknown>,
   };
 }

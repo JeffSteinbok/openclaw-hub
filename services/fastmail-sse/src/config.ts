@@ -29,6 +29,7 @@ export const EMAIL_PROPS = [
   "htmlBody",
   "bodyValues",
   "blobId",
+  "header:Authentication-Results:asText",
 ];
 
 // ── Types ────────────────────────────────────────────────────

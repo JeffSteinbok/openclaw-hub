@@ -1,5 +1,6 @@
 export {
   type AttachmentMeta,
+  type AuthResults,
   type MailEnvelope,
   type ActionResult,
   type MailProviderClient,
