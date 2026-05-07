@@ -158,6 +158,7 @@ function createEntry() {
     id: "package-tracking",
     name: "Package Tracking",
     description: "Track packages from UPS, FedEx, USPS, and Amazon",
+    contracts: { tools: ["package_list", "package_add", "package_remove", "package_track", "package_scan"] },
     configSchema: {
       type: "object" as const,
       additionalProperties: false,
@@ -169,24 +170,28 @@ function createEntry() {
         },
       },
     },
-    async register(api: PluginApi) {
-      // Load external carrier status provider plugins
+    register(api: PluginApi) {
+      // Load external carrier status provider plugins (deferred to avoid async during register)
       const config = (api.pluginConfig ?? {}) as PackageTrackingConfig;
       const statusProviders = config.status_providers ?? [];
       if (statusProviders.length > 0) {
-        for (const pluginPath of statusProviders) {
-          try {
-            const mod = await import(pluginPath) as CarrierStatusPlugin;
-            if (typeof mod.register !== "function") {
-              console.warn(`[package-tracking] status provider ${pluginPath} does not export register() — skipping`);
-              continue;
+        setImmediate(() => {
+          void (async () => {
+            for (const pluginPath of statusProviders) {
+              try {
+                const mod = await import(pluginPath) as CarrierStatusPlugin;
+                if (typeof mod.register !== "function") {
+                  console.warn(`[package-tracking] status provider ${pluginPath} does not export register() — skipping`);
+                  continue;
+                }
+                await mod.register(statusRegistry);
+                console.log(`[package-tracking] loaded carrier status provider: ${pluginPath}`);
+              } catch (e) {
+                console.error(`[package-tracking] failed to load status provider ${pluginPath}: ${e}`);
+              }
             }
-            await mod.register(statusRegistry);
-            console.log(`[package-tracking] loaded carrier status provider: ${pluginPath}`);
-          } catch (e) {
-            console.error(`[package-tracking] failed to load status provider ${pluginPath}: ${e}`);
-          }
-        }
+          })();
+        });
       }
 
       api.registerTool({

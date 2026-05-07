@@ -127,8 +127,30 @@ export function ruleMatches(envelope, rule) {
                 if (Boolean(expected) !== Boolean(envelope.has_attachments))
                     return false;
                 break;
+            case "dkim_pass": {
+                const dkimResult = (envelope.auth_results?.dkim ?? "none").toLowerCase();
+                const wantPass = Boolean(expected);
+                if (wantPass !== (dkimResult === "pass"))
+                    return false;
+                break;
+            }
+            case "spf_pass": {
+                const spfResult = (envelope.auth_results?.spf ?? "none").toLowerCase();
+                const wantPass = Boolean(expected);
+                if (wantPass !== (spfResult === "pass"))
+                    return false;
+                break;
+            }
+            case "dmarc_pass": {
+                const dmarcResult = (envelope.auth_results?.dmarc ?? "none").toLowerCase();
+                const wantPass = Boolean(expected);
+                if (wantPass !== (dmarcResult === "pass"))
+                    return false;
+                break;
+            }
             default:
                 throw new Error(`Unsupported mail rule condition: ${key}`);
+                break;
         }
     }
     return true;

@@ -23,12 +23,15 @@ export const RECONNECT_DELAY = 10;
 export const EMAIL_PROPS = [
   "id",
   "from",
+  "to",
+  "cc",
   "subject",
   "receivedAt",
   "textBody",
   "htmlBody",
   "bodyValues",
   "blobId",
+  "header:Authentication-Results:asText",
 ];
 
 // ── Types ────────────────────────────────────────────────────

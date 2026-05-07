@@ -232,6 +232,7 @@ function createEntry() {
     id: "glances",
     name: "Glances",
     description: "Read CPU, memory, disk, and summary metrics from a Glances server",
+    contracts: { tools: ["glances_summary_get", "glances_cpu_get", "glances_memory_get", "glances_disk_get", "glances_endpoint_get"] },
     configSchema,
     register(api: PluginApi) {
       const getBaseUrl = () =>

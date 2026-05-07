@@ -1,134 +1,79 @@
-# OpenClaw Hub
+# 🦞❤️🐙 OpenClaw Hub
 
 [![CI Tests](https://github.com/JeffSteinbok/openclaw-hub/actions/workflows/ci-tests.yml/badge.svg)](https://github.com/JeffSteinbok/openclaw-hub/actions/workflows/ci-tests.yml)
 [![Build Docs Satellite Bundle](https://github.com/JeffSteinbok/openclaw-hub/actions/workflows/docs-satellite-bundle.yml/badge.svg)](https://github.com/JeffSteinbok/openclaw-hub/actions/workflows/docs-satellite-bundle.yml)
 
-Public plugins, services, and shared libraries for use in OpenClaw.
+Public plugins, services, and shared libraries for [OpenClaw](https://jeffsteinbok.github.io/octo-docs/). This repo contains the public pieces I use in my own assistant.
 
-This repo contains the public pieces I use in my own assistant. If you want the broader docs and examples for that assistant, start with [`octo-docs`](https://jeffsteinbok.github.io/octo-docs/).
+**Contents:** [Using](#using) · [Plugins](#plugins) · [Mail Runtime](#mail-runtime) · [Development](#development)
 
-## What's in here? ✨
+---
 
-There are two main kinds of things here:
+## Using
 
-1. a **shared mail runtime** for automated email handling
-2. a set of **stand-alone plugins** for other OpenClaw tasks
+Clone or download this repo, then install plugins:
 
-If you only want the quick summary: the mail runtime is the most integrated system in this repo, and the rest are individual plugins you can browse and use on their own.
+```bash
+openclaw plugin install ./plugins/spotify
+openclaw plugin install ./plugins/homeassistant
+```
 
-## Mail Runtime 📬
+This registers them in `~/.openclaw/plugins/installs.json`. You can also use `file:` references in `openclaw.json`:
 
-The **Mail Runtime** is the part of this repo that turns incoming email into useful OpenClaw actions.
+```json
+{
+  "plugins": [
+    "file:./path/to/openclaw-hub/plugins/spotify",
+    "file:./path/to/openclaw-hub/plugins/glances"
+  ]
+}
+```
 
-It is meant for workflows like:
+Services like `fastmail-sse` run as separate processes (typically systemd user services) — see each service's README.
 
-- notifying you when an important email arrives
-- detecting package tracking numbers from shipping emails
-- processing USPS Informed Delivery digests
-- handing off structured results for follow-up or memory
+---
 
-### What it does
+## Plugins
 
-At a high level, the mail runtime:
+| | Plugin | Description |
+|---|--------|-------------|
+| ✉️ | [Fastmail](plugins/fastmail/) | Send/search/read mail, work with calendars |
+| 📊 | [Glances](plugins/glances/) | Live CPU, memory, disk metrics from a Glances server |
+| 🏠 | [Home Assistant](plugins/homeassistant/) | Control devices, query state, inspect activity |
+| 📄 | [HTML to PDF](plugins/html-to-pdf/) | Convert HTML files to PDF via Chromium headless |
+| 📅 | [ICS Calendar](plugins/ics-calendar/) | Read events from ICS feeds |
+| 👁️ | [LLMVision](plugins/llmvision/) | Image analysis workflows |
+| 📝 | [Markdown to HTML](plugins/md-to-html/) | Convert extended Markdown to styled HTML |
+| 📆 | [Outlook Calendar](plugins/outlook-calendar/) | Query Outlook calendar data |
+| 📬 | [Outlook Mail](plugins/outlook-mail/) | Search and read Outlook mail |
+| 🗓️ | [Outlook Work Calendar](plugins/outlook-work-calendar/) | Work-focused Outlook calendar |
+| 📦 | [Package Tracking](plugins/package-tracking/) | Track any package by carrier + number; auto-detect from email for UPS, FedEx, USPS |
+| 🎵 | [Spotify](plugins/spotify/) | Playback control and search |
+| 📈 | [Stock Quotes](plugins/stock-quotes/) | Quick stock quote lookups |
+| 📮 | [USPS Mail](plugins/usps-mail/) | Operator-facing USPS Informed Delivery tools |
+| ❤️ | [Withings](plugins/withings/) | Health metrics from Withings devices |
 
-1. receives a message from some mail source
-2. checks that message against your mail rules
-3. runs one or more named actions
-4. returns structured results such as notifications, tracking updates, or follow-up work
+Plugin conventions: [`PLUGIN_README_SHAPE.md`](PLUGIN_README_SHAPE.md)
 
-The important thing for a reader is that this gives OpenClaw a reusable **mail automation layer**, instead of each mail integration inventing its own separate logic.
+---
 
-### Main pieces 🧩
+## Mail Runtime
 
-| Piece | What it is | Details |
-| --- | --- | --- |
-| 🧠 Mail Runtime Core | The shared rule-and-action engine for mail processing | [`libs/python/mail_runtime_core/README.md`](libs/python/mail_runtime_core/README.md) |
-| 📮 USPS Mail Action | The USPS-specific workflow used for Informed Delivery digests | [`libs/python/mail_action_usps/README.md`](libs/python/mail_action_usps/README.md) |
-| ⚡ FastMail SSE | A live FastMail listener that feeds new mail into the runtime | [`services/fastmail-sse/README.md`](services/fastmail-sse/README.md) |
-| 📦 Package Tracking Core | Shared tracking logic used when mail contains shipment updates | [`libs/python/package_tracking_core/README.md`](libs/python/package_tracking_core/README.md) |
+A shared, provider-agnostic **mail automation layer**. Incoming mail is normalized into a `MailEnvelope`, matched against declarative rules, and dispatched to named actions that return structured results.
 
-### Actions you should know about 🎯
+| Component | Purpose |
+|-----------|---------|
+| 🧠 [Mail Runtime Core](libs/ts/mail_runtime_core/) | Rule engine, action registry, result dispatch |
+| 📮 [USPS Mail Action](libs/ts/mail_action_usps/) | USPS Informed Delivery digest processing |
+| 📦 [Package Tracking Core](libs/ts/package_tracking_core/) | Carrier detection, tracking URLs, storage |
+| ⚡ [FastMail SSE](services/fastmail-sse/) | Live FastMail listener that feeds the runtime |
 
-These are the main actions exposed through the mail runtime:
+**Built-in actions:** `notify_email` · `detect_tracking` · `process_usps_digest`
 
-| Action | What it means |
-| --- | --- |
-| `notify_email` | 🔔 Send a notification for a matching message |
-| `detect_tracking` | 📦 Look for package tracking data in email |
-| `process_usps_digest` | 📮 Process a USPS Informed Delivery digest end to end |
+The runtime is pluggable — you can register custom actions. See [Mail Runtime Core](libs/ts/mail_runtime_core/) for the action plugin interface.
 
-### FastMail SSE ⚡
+---
 
-**FastMail SSE** is one of the ways to use the mail runtime in practice.
+## Development
 
-It watches FastMail in real time, turns new messages into the shared mail format, and passes them into the runtime. In other words: if the mail runtime is the shared automation brain, FastMail SSE is one of the live inputs that feeds it.
-
-See [`services/fastmail-sse/README.md`](services/fastmail-sse/README.md) for the FastMail-specific details.
-
-### Interactive companions 🛠️
-
-These pieces sit next to the mail runtime and make it easier to use or inspect:
-
-| Component | What it is | Details |
-| --- | --- | --- |
-| 📦 `package-tracking` plugin | A direct OpenClaw tool surface for package tracking | [`plugins/package-tracking/README.md`](plugins/package-tracking/README.md) |
-| 📮 `usps-mail` plugin | A manual/operator-facing tool surface for the USPS workflow | [`plugins/usps-mail/README.md`](plugins/usps-mail/README.md) |
-
-## Independent Plugins 🎛️
-
-The rest of the repo is made up of more independent plugins. These are not the shared mail runtime; they are separate OpenClaw capabilities you can look at one by one.
-
-Plugin README conventions live in [`PLUGIN_README_SHAPE.md`](PLUGIN_README_SHAPE.md).
-
-| Plugin | What it is | Details |
-| --- | --- | --- |
-| ✉️ Fastmail | Send mail, search mail, read inbox items, and work with calendars | [`plugins/fastmail/README.md`](plugins/fastmail/README.md) |
-| 📊 Glances | Read live CPU, memory, disk, and summary metrics from a Glances server | [`plugins/glances/README.md`](plugins/glances/README.md) |
-| 🏠 Home Assistant | Control Home Assistant from OpenClaw | [`plugins/homeassistant/README.md`](plugins/homeassistant/README.md) |
-| 📅 ICS Calendar | Read calendar data from ICS feeds | [`plugins/ics-calendar/README.md`](plugins/ics-calendar/README.md) |
-| 👁️ LLMVision | Vision-oriented tooling for image analysis workflows | [`plugins/llmvision/README.md`](plugins/llmvision/README.md) |
-| 📆 Outlook Calendar | Query Outlook calendar data | [`plugins/outlook-calendar/README.md`](plugins/outlook-calendar/README.md) |
-| 📬 Outlook Mail | Search and read Outlook mail | [`plugins/outlook-mail/README.md`](plugins/outlook-mail/README.md) |
-| 🗓️ Outlook Work Calendar | A work-focused Outlook calendar surface | [`plugins/outlook-work-calendar/README.md`](plugins/outlook-work-calendar/README.md) |
-| 🎵 Spotify | Spotify control and playback tooling | [`plugins/spotify/README.md`](plugins/spotify/README.md) |
-| 📈 Stock Quotes | Quick stock quote lookups | [`plugins/stock-quotes/README.md`](plugins/stock-quotes/README.md) |
-| ❤️ Withings | Read health metrics from Withings devices and services | [`plugins/withings/README.md`](plugins/withings/README.md) |
-
-### Third-party plugins we use
-
-| Plugin | What it is | Link |
-| --- | --- | --- |
-| 🍽️ Restaurant CLI | Reservation booking via Resy, OpenTable, Tock, and other providers | [omarshahine/restaurant-cli](https://github.com/omarshahine/restaurant-cli) |
-
-## Shared Libraries 🧰
-
-Shared TypeScript libraries consumed by plugins and services:
-
-| Library | Purpose | Details |
-| --- | --- | --- |
-| `mail_runtime_core` | Rule engine, action registry, result dispatch | [`libs/ts/mail_runtime_core`](libs/ts/mail_runtime_core) |
-| `mail_action_usps` | USPS digest parsing, vision analysis, memory | [`libs/ts/mail_action_usps`](libs/ts/mail_action_usps) |
-| `package_tracking_core` | Carrier detection, tracking URLs, package storage | [`libs/ts/package_tracking_core`](libs/ts/package_tracking_core) |
-
-See [`libs/README.md`](libs/README.md) for architecture details.
-
-## Plugin Architecture 🔌
-
-All plugins are pure TypeScript and follow a consistent adapter pattern. See [`plugins/README.md`](plugins/README.md) for the full architecture guide, including required files and checklist for new plugins.
-
-## Downloading 📦
-
-Download the **whole release bundle** from the latest GitHub release.
-
-This repo is small enough that it is easier to ship one bundle containing the exported public components than to make people choose from a long list of separate downloads.
-
-## Building locally 🛠️
-
-1. Run `npm install`
-2. Run `npm run build`
-3. Run `npm run export:release`
-4. Run `npm run build:docs-satellite` if you want the public component-detail bundle used by `octo-docs`
-
-That produces the exported bundle under `out/export/`.
-
-`npm run build:docs-satellite` writes `out/docs-satellite/`, which is the public component-detail bundle consumed by `octo-docs` when a live runtime plugin, service, or shared library is sourced from `openclaw-hub`.
+See [`DEVELOPMENT.md`](DEVELOPMENT.md) for build instructions, project structure, and how to add new plugins or mail actions.

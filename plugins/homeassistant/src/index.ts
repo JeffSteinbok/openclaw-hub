@@ -30,14 +30,17 @@ function httpRequest(
   headers: Record<string, string>,
   body?: string,
   timeoutMs = 30_000,
-): Promise<{ status: number; body: string }> {
+): Promise<{ status: number; body: string; rawBody: Buffer }> {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith("https") ? https : http;
     const opts = { method, headers, timeout: timeoutMs };
     const req = mod.request(url, opts, (res) => {
-      let data = "";
-      res.on("data", (chunk: Buffer) => (data += chunk));
-      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: data }));
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => {
+        const rawBody = Buffer.concat(chunks);
+        resolve({ status: res.statusCode ?? 0, body: rawBody.toString("utf8"), rawBody });
+      });
     });
     req.on("error", reject);
     req.on("timeout", () => {
@@ -166,7 +169,7 @@ async function cameraSnapshot(
   try {
     const res = await httpRequest("GET", url, { Authorization: `Bearer ${token}` }, undefined, 15_000);
     if (res.status < 200 || res.status >= 300) return null;
-    const buf = Buffer.from(res.body, "binary");
+    const buf = res.rawBody;
     if (buf.length < 3 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
     fs.writeFileSync(filePath, buf);
     return filePath;
@@ -207,8 +210,8 @@ function createEntry() {
     configSchema,
     register(api: PluginApi) {
       const getConfig = () => ({
-        server: ((api.pluginConfig?.server as string) ?? process.env.HASS_SERVER ?? "http://192.168.1.76:8123").replace(/\/+$/, ""),
-        token: (api.pluginConfig?.token as string) ?? process.env.HASS_TOKEN ?? "",
+        server: ((api.pluginConfig?.server as string) ?? "http://192.168.1.76:8123").replace(/\/+$/, ""),
+        token: (api.pluginConfig?.token as string) ?? "",
       });
 
       // hass_state_get

@@ -54,7 +54,7 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/JeffSteinbok/octo-docs/dispatches \
             -d '{
-              "event_type": "bundle-ready",
+              "event_type": "Bundle ready: openclaw-hub",
               "client_payload": {
                 "hub_artifact_name": "docs-satellite-bundle",
                 "hub_run_id": "${{ github.run_id }}",
