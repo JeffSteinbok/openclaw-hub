@@ -10,6 +10,8 @@ node_modules/
 out/export/
 out/docs-satellite/
 out/release-assets/
+libs/ts/*/dist/
+services/*/dist/
 .coverage
 .DS_Store
 Thumbs.db

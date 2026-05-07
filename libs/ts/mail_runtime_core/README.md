@@ -312,6 +312,40 @@ This pattern is useful when one provider exposes richer metadata or special acti
 
 The runtime itself does not send notifications, call agents, or mutate provider state directly. Those side effects are represented as `ActionResult` values and interpreted by the integrating adapter, typically via `result-dispatch.ts` plus service-owned handlers.
 
+## Writing a custom action
+
+Actions are the extension point of the mail runtime. Each action is a function that receives a context and returns structured results.
+
+### ActionPlugin interface
+
+```typescript
+export interface ActionPlugin {
+  register(registry: ActionRegistry): void | Promise<void>;
+}
+```
+
+### Minimal example
+
+```typescript
+import type { ActionPlugin, ActionRegistry } from '@openclaw/mail-runtime-core';
+
+export const register: ActionPlugin['register'] = (registry) => {
+  registry.register('my_custom_action', async (ctx, params) => {
+    const body = await ctx.fetchBody();
+    return [{ kind: 'message', payload: { text: `Got mail: ${ctx.envelope.subject}` } }];
+  });
+};
+```
+
+### How it works
+
+- **Registration**: Actions are registered by the integrating service at startup, before the runtime processes any messages.
+- **Context**: Each action receives an `ActionContext` with `envelope`, `providerClient`, `fetchBody()`, and `downloadAttachments()`.
+- **Results**: Actions return `ActionResult[]` — each result has a `kind` (e.g. `"message"`, `"agent_handoff"`, `"tracking_update"`) and a `payload` object.
+- **Dispatch**: The runtime does not execute side effects itself. Results are dispatched by the adapter (e.g. `result-dispatch.ts` in FastMail SSE).
+
+For a real-world example, see the [`mail_action_usps`](../mail_action_usps) package which registers the USPS digest processing action.
+
 ## Why this split exists
 
 Without the shared runtime, every mail source would need to reimplement:

@@ -357,7 +357,7 @@ def summarise_plugin(plugin_id: str) -> dict:
             tool_entry["parameters"] = parameters
         tools.append(tool_entry)
 
-    return {
+    entry = {
         "plugin": plugin_id,
         "name": manifest.get("name", plugin_id),
         "summary": manifest.get("description", ""),
@@ -371,6 +371,10 @@ def summarise_plugin(plugin_id: str) -> dict:
         "source_url": f"https://github.com/JeffSteinbok/openclaw-hub/tree/main/plugins/{plugin_id}",
         "origin": "openclaw-hub",
     }
+    emoji = manifest.get("emoji")
+    if emoji:
+        entry["emoji"] = emoji
+    return entry
 
 
 def summarise_service(service_id: str) -> dict:

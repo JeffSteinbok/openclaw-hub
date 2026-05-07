@@ -85,6 +85,7 @@ Plugin README conventions live in [`PLUGIN_README_SHAPE.md`](PLUGIN_README_SHAPE
 | ✉️ Fastmail | Send mail, search mail, read inbox items, and work with calendars | [`plugins/fastmail/README.md`](plugins/fastmail/README.md) |
 | 📊 Glances | Read live CPU, memory, disk, and summary metrics from a Glances server | [`plugins/glances/README.md`](plugins/glances/README.md) |
 | 🏠 Home Assistant | Control Home Assistant from OpenClaw | [`plugins/homeassistant/README.md`](plugins/homeassistant/README.md) |
+| 📄 HTML to PDF | Convert HTML files to PDF using Chromium headless | [`plugins/html-to-pdf/README.md`](plugins/html-to-pdf/README.md) |
 | 📅 ICS Calendar | Read calendar data from ICS feeds | [`plugins/ics-calendar/README.md`](plugins/ics-calendar/README.md) |
 | 👁️ LLMVision | Vision-oriented tooling for image analysis workflows | [`plugins/llmvision/README.md`](plugins/llmvision/README.md) |
 | 📆 Outlook Calendar | Query Outlook calendar data | [`plugins/outlook-calendar/README.md`](plugins/outlook-calendar/README.md) |
@@ -93,12 +94,6 @@ Plugin README conventions live in [`PLUGIN_README_SHAPE.md`](PLUGIN_README_SHAPE
 | 🎵 Spotify | Spotify control and playback tooling | [`plugins/spotify/README.md`](plugins/spotify/README.md) |
 | 📈 Stock Quotes | Quick stock quote lookups | [`plugins/stock-quotes/README.md`](plugins/stock-quotes/README.md) |
 | ❤️ Withings | Read health metrics from Withings devices and services | [`plugins/withings/README.md`](plugins/withings/README.md) |
-
-### Third-party plugins we use
-
-| Plugin | What it is | Link |
-| --- | --- | --- |
-| 🍽️ Restaurant CLI | Reservation booking via Resy, OpenTable, Tock, and other providers | [omarshahine/restaurant-cli](https://github.com/omarshahine/restaurant-cli) |
 
 ## Shared Libraries 🧰
 
