@@ -1,6 +1,7 @@
 {
   "id": "html-to-pdf",
   "name": "HTML to PDF",
+  "emoji": "📄",
   "description": "Convert HTML files to PDF using Chromium headless",
   "version": "1.0.0",
   "entry": "./dist/adapter.js",
