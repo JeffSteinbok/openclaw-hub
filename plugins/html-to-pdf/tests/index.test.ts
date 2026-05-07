@@ -63,7 +63,7 @@ describe("html_to_pdf validation", () => {
 // ---------------------------------------------------------------------------
 
 describe("html_to_pdf integration", () => {
-  it("converts a simple HTML file to a non-empty PDF", async (ctx) => {
+  it("converts a simple HTML file to a non-empty PDF", { timeout: 30_000 }, async (ctx) => {
     if (!(await chromiumAvailable())) {
       ctx.skip();
       return;
