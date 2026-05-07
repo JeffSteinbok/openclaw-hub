@@ -17,6 +17,17 @@ export interface AttachmentMeta {
   content_id?: string | null;
 }
 
+export interface AuthResults {
+  /** "pass" | "fail" | "none" — result of DKIM verification */
+  dkim?: string;
+  /** "pass" | "fail" | "none" — result of SPF verification */
+  spf?: string;
+  /** "pass" | "fail" | "none" — result of DMARC verification */
+  dmarc?: string;
+  /** Raw Authentication-Results header value */
+  raw?: string;
+}
+
 export interface MailEnvelope {
   message_id: string;
   provider: string;
@@ -30,6 +41,7 @@ export interface MailEnvelope {
   body_html?: string | null;
   headers?: Record<string, string>;
   has_attachments?: boolean;
+  auth_results?: AuthResults;
   raw?: Record<string, unknown>;
 }
 
@@ -221,8 +233,27 @@ export function ruleMatches(
       case "has_attachments":
         if (Boolean(expected) !== Boolean(envelope.has_attachments)) return false;
         break;
+      case "dkim_pass": {
+        const dkimResult = (envelope.auth_results?.dkim ?? "none").toLowerCase();
+        const wantPass = Boolean(expected);
+        if (wantPass !== (dkimResult === "pass")) return false;
+        break;
+      }
+      case "spf_pass": {
+        const spfResult = (envelope.auth_results?.spf ?? "none").toLowerCase();
+        const wantPass = Boolean(expected);
+        if (wantPass !== (spfResult === "pass")) return false;
+        break;
+      }
+      case "dmarc_pass": {
+        const dmarcResult = (envelope.auth_results?.dmarc ?? "none").toLowerCase();
+        const wantPass = Boolean(expected);
+        if (wantPass !== (dmarcResult === "pass")) return false;
+        break;
+      }
       default:
         throw new Error(`Unsupported mail rule condition: ${key}`);
+        break;
     }
   }
 

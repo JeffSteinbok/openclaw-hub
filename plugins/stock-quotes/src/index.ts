@@ -225,6 +225,7 @@ function createEntry() {
     id: "stock-quotes",
     name: "Stock Quotes",
     description: "Fetch current stock, ETF, and mutual fund quotes",
+    contracts: { tools: ["stock_quote", "stock_quotes"] },
     configSchema,
     register(api: PluginApi) {
       const getFinnhubKey = () =>

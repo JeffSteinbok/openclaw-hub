@@ -1,46 +1,51 @@
-# Mail Runtime Core
+# 📬 Mail Runtime Core
 
-Provider-agnostic mail processing runtime used by OpenClaw's mail pipeline. Lives in `libs/ts/mail_runtime_core/` so services and plugins can share the same core package without treating it as a service.
+Provider-agnostic mail processing runtime used by OpenClaw's mail pipeline. Separates **where mail comes from** from **what OpenClaw does with it** — so any mail source (FastMail, Outlook, webhooks) can share the same rule engine and action handlers.
 
-## Features
+> **Package:** `@openclaw/mail-runtime-core`
+> **Location:** `libs/ts/mail_runtime_core/`
 
-- **MailEnvelope** — Normalized message shape consumed by rules and actions
-- **Rule engine** — Declarative JSON rules with match conditions (sender, subject, domain, regex, attachments, body)
-- **Action registry** — Named action handlers with automatic body fetching and attachment downloading
-- **Provider protocol** — `MailProviderClient` interface that sources implement to plug into the pipeline
-- **Built-in actions** — Shared helpers for `notify_email` and `detect_tracking`
-- **Adapter-registered actions** — Services can register domain actions such as USPS handling via `process_usps_digest`
-- **Result dispatch helper** — Shared routing of `ActionResult` values into adapter-owned side effects
+---
 
-## How provider-agnostic mail works
+## 📑 Table of Contents
 
-The shared runtime separates **where mail comes from** from **what OpenClaw does with it**.
+- [✨ Features](#-features)
+- [🏗️ Architecture](#️-architecture)
+- [📨 MailEnvelope](#-mailenvelope)
+- [🔐 Authentication (DKIM/SPF/DMARC)](#-authentication-dkimspfdmarc)
+- [📋 Rule Engine](#-rule-engine)
+- [⚡ Actions](#-actions)
+- [🔌 Provider Protocol](#-provider-protocol)
+- [🧩 Modules](#-modules)
+- [🛠️ Writing a Custom Action](#️-writing-a-custom-action)
+- [📐 Design Decisions](#-design-decisions)
 
-- A provider-specific adapter translates raw provider events into a `MailEnvelope`
-- The runtime evaluates the same ordered `mail_rules` regardless of provider
-- Named actions run against the normalized envelope, not provider-native payloads
-- If an action needs more provider data later, it asks the adapter through `MailProviderClient`
+---
 
-That means FastMail SSE, an Outlook poller, or a webhook source can all reuse the same rule engine and action handlers as long as they:
+## ✨ Features
 
-1. identify new messages
-2. build a `MailEnvelope`
-3. implement the `MailProviderClient` methods
-4. pass rules + actions into `execute_rules(...)`
+| Feature | Description |
+|---------|-------------|
+| 📨 **MailEnvelope** | Normalized message shape consumed by rules and actions |
+| 📋 **Rule engine** | Declarative JSON rules with match conditions (sender, subject, domain, regex, body, attachments) |
+| ⚡ **Action registry** | Named action handlers with automatic body fetching and attachment downloading |
+| 🔌 **Provider protocol** | `MailProviderClient` interface that sources implement to plug into the pipeline |
+| 🏗️ **Built-in actions** | Shared helpers for `notify_email` and `detect_tracking` |
+| 🔗 **Adapter actions** | Services register domain actions like `process_usps_digest` |
+| 📤 **Result dispatch** | Shared routing of `ActionResult` values into adapter-owned side effects |
 
-## Provider-agnostic flow
+---
+
+## 🏗️ Architecture
 
 ```mermaid
 flowchart LR
-    raw["Provider event / message<br/>(FastMail, Outlook, etc.)"]
-    adapter["Provider adapter"]
-    envelope["MailEnvelope<br/>normalized message"]
-    rules["Shared rule matcher<br/>providers/accounts/mailboxes/match"]
-    actions["Action registry"]
-    notify["Built-in action<br/>notify_email"]
-    track["Built-in action<br/>detect_tracking"]
-    usps["Adapter action<br/>process_usps_digest"]
-    results["ActionResult(s)"]
+    raw["📥 Provider event<br/>(FastMail, Outlook, etc.)"]
+    adapter["🔌 Provider adapter"]
+    envelope["📨 MailEnvelope"]
+    rules["📋 Rule matcher"]
+    actions["⚡ Action registry"]
+    results["📤 ActionResult(s)"]
 
     subgraph provider["Provider-specific surface"]
         fetch["fetch_body(...)"]
@@ -48,278 +53,410 @@ flowchart LR
         download["download_attachments(...)"]
     end
 
-    raw --> adapter --> envelope --> rules --> actions
-    actions --> notify --> results
-    actions --> track --> results
-    actions --> usps --> results
-    notify -. lazy provider access .-> fetch
-    track -. attachment access .-> list
-    usps -. artifact download .-> download
+    raw --> adapter --> envelope --> rules --> actions --> results
+    actions -. lazy provider access .-> fetch
+    actions -. attachment access .-> list
+    actions -. artifact download .-> download
 ```
 
-## Source adapter contract
+### How it works
 
-A mail source stays provider-specific only at the edges:
+1. A **provider adapter** (e.g. FastMail SSE) detects new mail and normalizes it into a `MailEnvelope`
+2. The **rule engine** evaluates `mail_rules` in order — matching on sender, subject, domain, etc.
+3. Matched rules fire **actions** — named handlers registered in the `ActionRegistry`
+4. Actions return **`ActionResult`** values — structured side effects like notifications or agent handoffs
+5. The adapter **dispatches** those results into real-world effects (Discord messages, agent calls, etc.)
 
-| Adapter responsibility | What it does |
-|------|-------------|
-| Detect new mail | Poll, stream, or receive provider events |
-| Normalize message | Map raw provider fields into `MailEnvelope` |
-| Provide lazy access | Implement `MailProviderClient` for body/attachment fetches |
-| Register actions | Wire core actions like `notify_email` and `detect_tracking`, plus named adapter actions like `process_usps_digest` from `mail_action_usps`, into the adapter |
-| Dispatch results | Decide how `ActionResult` values become service/provider side effects |
+> 💡 The runtime never sends notifications or calls agents directly. All side effects flow through `ActionResult` values that the adapter interprets.
 
-In practice, the adapter owns transport, provider APIs, and final side effects; the shared runtime owns matching and reusable action orchestration.
+---
 
-## Related action modules
+## 📨 MailEnvelope
 
-`mail_runtime_core` stays provider-agnostic. Domain workflows such as USPS should live in separate action modules that register against this runtime.
+The stable contract between providers, rules, and actions. Fields are intentionally generic:
 
-- `detect_tracking` — built-in mail action that uses `mail_runtime_core/package-tracking.ts` plus [`package_tracking_core`](../package_tracking_core/README.md)
-- [`mail_action_usps`](../mail_action_usps/README.md) — USPS Informed Delivery action module that registers the named action `process_usps_digest`
+| Field | Type | Description |
+|-------|------|-------------|
+| `provider` | `string` | Source identifier (`"fastmail"`, `"outlook"`) |
+| `account_id` | `string` | Provider account/mailbox owner |
+| `mailbox_id` | `string` | Folder/inbox identifier |
+| `message_id` | `string` | Unique message identifier |
+| `sender_name` | `string` | Display name of sender |
+| `sender_email` | `string` | Email address of sender |
+| `subject` | `string` | Normalized subject line |
+| `body_text` | `string?` | Plain text body (preloaded or fetched lazily) |
+| `body_html` | `string?` | HTML body (preloaded or fetched lazily) |
+| `has_attachments` | `boolean` | Cheap hint for rule matching |
+| `auth_results` | `AuthResults?` | Parsed DKIM/SPF/DMARC from `Authentication-Results` header |
+| `headers` | `Record<string, string>` | Normalized headers |
+| `raw` | `unknown` | Original provider payload for adapter-specific needs |
 
-## Rule actions to know
+> ⚠️ Actions should prefer normalized fields. Only reach into `raw` when truly provider-specific detail is needed.
 
-Two actions are especially important when reading `mail_rules`:
+---
 
-| Action | Kind | What it does |
-|--------|------|---------------|
-| `detect_tracking` | Built-in action | Scans mail for tracking numbers/URLs and routes package-tracking work into `package_tracking_core` |
-| `process_usps_digest` | Adapter-registered action | Hands a USPS digest email off to `mail_action_usps` for the full USPS workflow |
+## 🔐 Authentication (DKIM/SPF/DMARC)
 
-## Key Types
+The envelope carries parsed `Authentication-Results` from the provider, enabling rules to gate actions on email authenticity. This is critical for security — actions like `process_self_email` and `detect_tracking` should only fire on verified senders to prevent spoofing attacks.
 
-| Type | Description |
-|------|-------------|
-| `MailEnvelope` | Normalized message with sender, subject, body, headers, attachments |
-| `ActionContext` | Runtime context passed to action handlers (envelope, provider, workspace) |
-| `ActionResult` | Structured side effect emitted by an action |
-| `MailProviderClient` | Protocol that mail sources implement (fetch body, list/download attachments) |
-| `ActionRegistry` | Registry and executor for named mail actions |
+### `AuthResults` type
 
-## Shared helper modules
+| Field | Values | Description |
+|-------|--------|-------------|
+| `dkim` | `"pass"` / `"fail"` / `"none"` | DKIM signature verification |
+| `spf` | `"pass"` / `"fail"` / `"none"` | SPF sender authorization |
+| `dmarc` | `"pass"` / `"fail"` / `"none"` | DMARC policy evaluation |
+| `raw` | `string` | Full `Authentication-Results` header for debugging |
 
-| Module | Purpose |
-|--------|---------|
-| `runtime.ts` | Core envelope, rules, registry, and `execute_rules(...)` loop |
-| `builtin-actions.ts` | Shared registration/helpers for `notify_email` and `detect_tracking` |
-| `package-tracking.ts` | Mail-envelope adapter over `package_tracking_core` for add/remove flow |
-| `result-dispatch.ts` | Shared dispatcher fed by adapter-owned side-effect handlers |
+### Rule match conditions
 
-### `MailEnvelope`
+| Condition | Type | Description |
+|-----------|------|-------------|
+| `dkim_pass` | `boolean` | Require DKIM pass (`true`) or explicitly match non-pass (`false`) |
+| `spf_pass` | `boolean` | Require SPF pass |
+| `dmarc_pass` | `boolean` | Require DMARC pass |
 
-`MailEnvelope` is the stable contract between providers, rules, and actions. The fields are intentionally generic:
+### Example: only process verified self-emails
 
-| Field | Meaning |
-|------|---------|
-| `provider` | Source identifier such as `fastmail` or `outlook` |
-| `account_id` | Provider account/mailbox owner identifier |
-| `mailbox_id` | Folder/inbox identifier within that provider |
-| `sender_name` / `sender_email` | Canonical sender identity |
-| `subject` | Normalized subject line |
-| `body_text` / `body_html` | Optional body content; can be preloaded or fetched lazily |
-| `has_attachments` | Cheap attachment hint for rule matching |
-| `raw` | Original provider payload for adapter-specific follow-up |
+```json
+{
+  "id": "self-email-command",
+  "match": {
+    "sender_email": "jeff@steinbok.net",
+    "dkim_pass": true,
+    "spf_pass": true
+  },
+  "actions": [{ "name": "process_self_email" }]
+}
+```
 
-An action should prefer the normalized fields first and only reach into `raw` when it truly needs provider-specific detail.
+> 💡 **Why this matters:** Without DKIM/SPF checks, an attacker could forge a `From:` header matching your email address and trigger `process_self_email` — effectively executing arbitrary commands through your assistant. Always gate sensitive actions on authentication.
 
-### `MailProviderClient`
+---
 
-`MailProviderClient` is the escape hatch for provider-specific I/O without polluting the shared runtime:
+## 📋 Rule Engine
 
-- `fetch_body(...)` fills in missing `body_text` / `body_html`
-- `list_attachments(...)` exposes lightweight attachment metadata
-- `download_attachments(...)` materializes filtered artifacts into a workspace directory
-
-This keeps rule evaluation fast while still letting expensive provider calls happen only when an action requests them.
-
-## Rule Matching
-
-Rules are evaluated in order. Each rule can filter by provider, account, mailbox, and a `match` block supporting:
-
-| Condition | Description |
-|-----------|-------------|
-| `sender_email` | Exact sender email match |
-| `sender_domain` | Domain match (including subdomains) |
-| `sender_name_contains` | Substring match on sender name |
-| `subject` | Exact subject match |
-| `subject_contains` | Substring match on subject |
-| `subject_prefix` | Subject starts with value |
-| `subject_regex` | Regex match on subject |
-| `body_contains` | Substring match on body text/HTML |
-| `has_attachments` | Boolean attachment presence check |
-
-By default, processing stops at the first matching rule. Set `"continue": true` on a rule to allow fall-through.
-
-## `mail_rules` shape
-
-The shared runtime expects an ordered list of rule objects. A source adapter decides where that config lives, but the runtime consumes the same structure everywhere.
+### Rule structure
 
 ```json
 {
   "mail_rules": [
     {
-      "id": "rule-id",
-      "providers": ["fastmail"],
-      "accounts": ["<account-id>"],
-      "mailboxes": ["<mailbox-id>"],
+      "id": "shipping-tracking",
+      "accounts": ["u54e940a4"],
       "match": {
-        "sender_domain": "example.com",
-        "subject_contains": ["Invoice", "Receipt"]
+        "sender_domain": ["fedex.com", "ups.com"]
       },
-      "actions": [
-        {"name": "notify_email"}
-      ],
-      "continue": false
+      "actions": [{ "name": "detect_tracking" }],
+      "continue": true
     }
   ]
 }
 ```
 
-Common top-level rule fields:
+### Rule fields
 
-| Field | Meaning |
-|------|---------|
-| `id` | Human-readable rule identifier for logs/debugging |
-| `enabled` | Optional boolean; disabled rules are skipped |
-| `providers` | Optional provider filter such as `fastmail` or `outlook` |
-| `accounts` | Optional provider-account filter |
-| `mailboxes` | Optional mailbox/folder filter |
-| `match` | Declarative condition block |
-| `actions` | Ordered action list to run when the rule matches |
-| `continue` | Keep evaluating later rules after this one |
+| Field | Required | Description |
+|-------|:--------:|-------------|
+| `id` | ✅ | Human-readable identifier for logs/debugging |
+| `enabled` | | Boolean; disabled rules are skipped (default: `true`) |
+| `providers` | | Provider filter (`["fastmail"]`) |
+| `accounts` | | Account filter (`["u54e940a4"]`) |
+| `mailboxes` | | Mailbox/folder filter |
+| `match` | | Declarative condition block (see below) |
+| `actions` | ✅ | Ordered list of actions to execute |
+| `continue` | | Keep evaluating subsequent rules (default: `false` — stop at first match) |
 
-## Action configuration
+### Match conditions
 
-Actions can be declared as either a bare name or a `{name, params}` object:
+All conditions support **single values or arrays** (array = match any):
+
+| Condition | Description | Example |
+|-----------|-------------|---------|
+| `sender_email` | Exact email match | `"noreply@amazon.com"` |
+| `sender_domain` | Domain match (includes subdomains) | `["fedex.com", "ups.com"]` |
+| `sender_name_contains` | Substring match on display name | `"FedEx"` |
+| `subject` | Exact subject match | `"Your order has shipped"` |
+| `subject_contains` | Substring match on subject | `["shipped", "delivered"]` |
+| `subject_prefix` | Subject starts with | `["accepted:", "declined:"]` |
+| `subject_regex` | Regex match on subject | `"Order #\\d+"` |
+| `body_contains` | Substring match on body | `["tracking", "shipment"]` |
+| `has_attachments` | Boolean presence check | `true` |
+| `dkim_pass` | Require DKIM pass (or explicitly non-pass) | `true` |
+| `spf_pass` | Require SPF pass | `true` |
+| `dmarc_pass` | Require DMARC pass | `true` |
+
+### Evaluation order
+
+1. Rules are evaluated **top to bottom**
+2. First matching rule fires its actions
+3. Processing **stops** unless the rule has `"continue": true`
+4. Multiple rules can fire for the same message via `continue`
+
+---
+
+## ⚡ Actions
+
+### Registered actions
+
+| Action | Source | `needs_body` | Description |
+|--------|--------|:---:|-------------|
+| `notify_email` | Built-in | ❌ | Formats envelope into a notification message |
+| `detect_tracking` | Built-in | ✅ | Scans body for tracking numbers/URLs, adds to package tracking |
+| `process_usps_digest` | Library (`mail_action_usps`) | ✅ | USPS Informed Delivery: downloads images, runs vision, sends alerts |
+| `process_amazon_shipment` | External plugin | ✅ | Amazon shipping: extracts order IDs + tracking, hands off to agent |
+| `process_self_email` | External plugin | ✅ | Self-sent email: hands off body as a task to main agent with reply context |
+
+### Action configuration in rules
+
+Actions can be a bare string or an object with params:
 
 ```json
 {
   "actions": [
     "notify_email",
     {
-      "name": "handoff_to_agent",
+      "name": "process_usps_digest",
       "params": {
-        "agent": "main"
+        "agent": "main",
+        "vision_agent": "mail"
       }
     }
   ]
 }
 ```
 
-The shared runtime ships reusable action helpers, but each source adapter still decides which actions it exposes and how result kinds like `message` or `agent_handoff` become real side effects. In practice that means built-in actions such as `notify_email` and `detect_tracking` can sit beside adapter-registered actions such as `process_usps_digest`.
+### Action source types
 
-## Common rule examples
+| Type | How registered | Lifecycle |
+|------|---------------|-----------|
+| **Built-in** | `registerBuiltinActions()` at service startup | Always available |
+| **Library** | Shared library's `register()` export (e.g. `@openclaw/mail-action-usps`) | Imported at startup |
+| **External plugin** | Loaded dynamically from `action_plugins` paths in config | Loaded at startup; adding new paths requires restart |
 
-These examples show the **generic rule structure**. Actual action availability depends on the integrating service.
+> 📦 **External plugins don't need to live in `openclaw-hub`.** Any ESM module that exports a `register(registry)` function can be loaded as an action plugin — it just needs to be reachable by path on the host machine. For example, `process_amazon_shipment` and `process_self_email` live in the private `octo` repo and are loaded at runtime via absolute path in the config. This keeps private/instance-specific actions separate from the shared runtime.
 
-### Catch-all notification after a more specific action
+### ActionResult kinds
+
+Actions emit structured results that adapters dispatch:
+
+| Kind | Meaning | Typical side effect |
+|------|---------|---------------------|
+| `message` | Notification text to send | Discord/Telegram message |
+| `agent_handoff` | Work to delegate to an agent | Agent session created |
+| `tracking_update` | Package tracking change | Package list updated |
+
+---
+
+## 🔌 Provider Protocol
+
+Adapters implement `MailProviderClient` to bridge provider-specific I/O:
+
+| Method | Purpose | When called |
+|--------|---------|-------------|
+| `fetch_body(envelope)` | Fills in `body_text` / `body_html` | When an action declares `needs_body: true` |
+| `list_attachments(envelope)` | Returns lightweight attachment metadata | When action needs attachment info |
+| `download_attachments(envelope, filter, dir)` | Materializes files into a workspace directory | When action needs actual files |
+
+> 💡 This keeps rule evaluation fast — expensive provider calls only happen when an action explicitly needs them.
+
+### Adapter responsibilities
+
+| Responsibility | What it does |
+|----------------|-------------|
+| 🔍 Detect new mail | Poll, stream, or receive provider events |
+| 📨 Normalize message | Map provider fields → `MailEnvelope` |
+| 🔌 Provide lazy access | Implement `MailProviderClient` |
+| ⚡ Register actions | Wire built-in + library + external actions |
+| 📤 Dispatch results | Route `ActionResult` values to real side effects |
+
+---
+
+## 🧩 Modules
+
+| Module | Purpose |
+|--------|---------|
+| `runtime.ts` | Core: envelope types, rule matching, `ActionRegistry`, `executeRules(...)` |
+| `builtin-actions.ts` | Registration helpers for `notify_email` and `detect_tracking` |
+| `package-tracking.ts` | Mail-envelope adapter over `package_tracking_core` |
+| `result-dispatch.ts` | Shared dispatcher for `ActionResult` routing |
+
+---
+
+## 🛠️ Writing a Custom Action
+
+### Plugin interface
+
+```typescript
+export interface ActionPlugin {
+  register(registry: ActionRegistry): void | Promise<void>;
+}
+```
+
+### Minimal example
+
+```typescript
+import type { ActionPlugin, ActionRegistry } from '@openclaw/mail-runtime-core';
+
+export const register: ActionPlugin['register'] = (registry) => {
+  registry.register('my_custom_action', async (ctx, params) => {
+    // Lazy body fetch — only called if you need it
+    const body = await ctx.fetchBody();
+
+    // Do your thing...
+    const summary = `Got mail from ${ctx.envelope.sender_name}: ${ctx.envelope.subject}`;
+
+    // Return structured results
+    return [{ kind: 'message', payload: { text: summary } }];
+  }, { needs_body: true });
+};
+```
+
+### ActionContext
+
+Each action handler receives:
+
+| Property | Description |
+|----------|-------------|
+| `envelope` | The `MailEnvelope` for this message |
+| `providerClient` | `MailProviderClient` for lazy access |
+| `fetchBody()` | Convenience: fetches body into envelope if not already loaded |
+| `downloadAttachments(filter, dir)` | Downloads matching attachments |
+| `logger` | Scoped logging function |
+| `config` | Runtime config object |
+| `workspace` | Filesystem workspace path |
+
+### Loading external action plugins
+
+Add paths to `action_plugins` in your config file:
 
 ```json
 {
-  "mail_rules": [
-    {
-      "id": "detect-tracking",
-      "accounts": ["<account-id>"],
-      "actions": [{"name": "detect_tracking"}],
-      "continue": true
-    },
-    {
-      "id": "notify-all",
-      "accounts": ["<account-id>"],
-      "actions": [{"name": "notify_email"}]
-    }
+  "action_plugins": [
+    "/path/to/my-action-plugin/dist/index.js"
   ]
 }
 ```
 
-Put the more specific rule first and set `"continue": true` if both behaviors should run for the same message.
+The service loads each module at startup and calls its `register()` function. Adding or removing plugin paths requires a service restart.
 
-### USPS digest action
+---
 
-`process_usps_digest` is not a built-in runtime action. It is a **named action registered by the integrating mail source** through `mail_action_usps`.
+## 📐 Design Decisions
 
-```json
-{
-  "mail_rules": [
-    {
-      "id": "usps-digest",
-      "providers": ["fastmail"],
-      "match": {
-        "sender_domain": "usps.com",
-        "subject_contains": ["Informed Delivery"]
-      },
-      "actions": [
-        {"name": "process_usps_digest"}
-      ]
-    }
-  ]
-}
-```
+### Why provider-agnostic?
 
-That action downloads the digest artifacts, runs the USPS workflow, and emits structured results back through the mail adapter.
+Without the shared runtime, every mail source would reimplement:
+- Subject/body matching
+- Rule ordering and fall-through
+- Lazy body fetching
+- Attachment staging
+- Action registration
 
-### Meeting-response notifications only
+The provider-agnostic layer keeps that logic in one place. Adding a new source is an adapter problem, not a pipeline rewrite.
 
-```json
-{
-  "mail_rules": [
-    {
-      "id": "notify-meeting-updates",
-      "accounts": ["<account-id>"],
-      "match": {
-        "subject_prefix": ["accepted:", "declined:", "tentative:"]
-      },
-      "actions": [{"name": "notify_email"}]
-    }
-  ]
-}
-```
+### Why lazy body fetching?
 
-### Provider-specific override plus generic fallback
+Most rules can match on sender/subject alone (cheap metadata). Body fetching is expensive (API call). By deferring body access until an action explicitly requests it, rule evaluation stays fast for the common case.
+
+### Why ActionResult instead of direct side effects?
+
+Decoupling actions from side effects means:
+- Actions are testable in isolation
+- The same action works across different adapters
+- Adapters control their own notification/dispatch mechanisms
+
+---
+
+## 🔗 Related
+
+- [`package_tracking_core`](../package_tracking_core/README.md) — Shared tracking detection, storage, and carrier status
+- [`mail_action_usps`](../mail_action_usps/README.md) — USPS Informed Delivery action module
+- [`fastmail-sse`](../../services/fastmail-sse/README.md) — FastMail provider adapter (primary consumer)
+
+---
+
+## 📝 Rule Examples
+
+### Shipping notification tracking
 
 ```json
 {
-  "mail_rules": [
-    {
-      "id": "usps-fastmail",
-      "providers": ["fastmail"],
-      "match": {
-        "sender_domain": "usps.com",
-        "subject_contains": ["Informed Delivery", "Daily Digest"]
-      },
-      "actions": [{"name": "process_usps_digest"}],
-      "continue": true
-    },
-    {
-      "id": "notify-all",
-      "actions": [{"name": "notify_email"}]
-    }
-  ]
+  "id": "shipping-tracking",
+  "accounts": ["u54e940a4"],
+  "match": {
+    "sender_domain": ["fedex.com", "ups.com", "orders.costco.com"]
+  },
+  "actions": [{ "name": "detect_tracking" }]
 }
 ```
 
-This pattern is useful when one provider exposes richer metadata or special actions, but you still want a generic fallback rule afterwards.
+### Catch-all notification with fall-through
 
-## Action execution model
+```json
+[
+  {
+    "id": "detect-tracking",
+    "accounts": ["u54e940a4"],
+    "actions": [{ "name": "detect_tracking" }],
+    "continue": true
+  },
+  {
+    "id": "notify-all",
+    "accounts": ["u54e940a4"],
+    "actions": [{ "name": "notify_email" }]
+  }
+]
+```
 
-`execute_rules(...)` does four things:
+### USPS digest with agent handoff
 
-1. selects matching rules in order
-2. creates an `ActionContext` for each action
-3. lazily fetches bodies and/or downloads attachments if the action declared those needs
-4. returns collected `ActionResult` values to the source adapter
+```json
+{
+  "id": "usps-digest",
+  "match": {
+    "sender_domain": "usps.com",
+    "subject_contains": ["Informed Delivery", "Daily Digest"]
+  },
+  "actions": [{
+    "name": "process_usps_digest",
+    "params": {
+      "agent": "main",
+      "workspace_agent": "mail",
+      "vision_agent": "mail",
+      "vision_backend": "auto"
+    }
+  }],
+  "continue": true
+}
+```
 
-The runtime itself does not send notifications, call agents, or mutate provider state directly. Those side effects are represented as `ActionResult` values and interpreted by the integrating adapter, typically via `result-dispatch.ts` plus service-owned handlers.
+### Provider-specific override with generic fallback
 
-## Why this split exists
+```json
+[
+  {
+    "id": "usps-fastmail",
+    "providers": ["fastmail"],
+    "match": { "sender_domain": "usps.com" },
+    "actions": [{ "name": "process_usps_digest" }],
+    "continue": true
+  },
+  {
+    "id": "notify-all",
+    "actions": [{ "name": "notify_email" }]
+  }
+]
+```
 
-Without the shared runtime, every mail source would need to reimplement:
+### Meeting response notifications only
 
-- subject/body matching
-- rule ordering and fall-through
-- lazy body fetching
-- attachment staging
-- action registration
-
-The provider-agnostic layer keeps that logic in one place, so adding a new source is mostly an adapter problem instead of a full pipeline rewrite.
+```json
+{
+  "id": "meeting-updates",
+  "match": {
+    "subject_prefix": ["accepted:", "declined:", "tentative:"]
+  },
+  "actions": [{ "name": "notify_email" }]
+}
+```

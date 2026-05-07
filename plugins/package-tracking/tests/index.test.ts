@@ -94,10 +94,11 @@ describe("plugin entry", () => {
     expect(entry.name).toBe("Package Tracking");
   });
 
-  it("registers all 5 tools", async () => {
+  it("registers all 6 tools", async () => {
     const { api } = await loadPlugin();
     const names = Object.keys(api.tools).sort();
     expect(names).toEqual([
+      "get_package_status",
       "package_add",
       "package_list",
       "package_remove",
@@ -108,7 +109,7 @@ describe("plugin entry", () => {
 
   it("tool names match the Python version exactly", async () => {
     const { api } = await loadPlugin();
-    const expected = ["package_track", "package_add", "package_remove", "package_list", "package_scan"];
+    const expected = ["package_track", "package_add", "package_remove", "package_list", "package_scan", "get_package_status"];
     for (const name of expected) {
       expect(api.tools[name]).toBeDefined();
     }

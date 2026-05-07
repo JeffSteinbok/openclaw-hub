@@ -66,8 +66,8 @@ export function createEntry() {
     configSchema,
     register(api: PluginApi) {
       const cfg = () => ({
-        server: ((api.pluginConfig?.server as string)??"").replace(/\/+$/,"") || (process.env.HASS_SERVER??"http://<home-assistant-host>:8123"),
-        token: (api.pluginConfig?.token as string)??process.env.HASS_TOKEN??"",
+        server: ((api.pluginConfig?.server as string)??"").replace(/\/+$/,"") || "http://<home-assistant-host>:8123",
+        token: (api.pluginConfig?.token as string)??"",
       });
 
       api.registerTool({ name:"llmvision_timeline_get", label:"LLM Vision Timeline",

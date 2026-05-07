@@ -1,8 +1,32 @@
-# USPS Mail Action Module
+# 📮 USPS Mail Action Module
 
-Shared USPS Informed Delivery processing used by both the shared mail runtime and the `usps-mail` plugin.
+Shared USPS Informed Delivery processing used by both the [shared mail runtime](../mail_runtime_core/README.md) and the [`usps-mail` plugin](../../../plugins/usps-mail/README.md).
 
 This package is the **implementation layer** for USPS mail handling. It parses a digest, runs scan-image vision, applies local classification rules, updates durable state, routes notifications, and writes long-term mail memory. The plugin is an interactive wrapper around this code, and the shared mail runtime can expose the named USPS action **`process_usps_digest`** by registering `mail_action_usps`.
+
+> **Package:** `@openclaw/mail-action-usps`
+> **Location:** `libs/ts/mail_action_usps/`
+
+---
+
+## 📑 Table of Contents
+
+- [What lives here](#what-lives-here)
+- [End-to-end flow](#end-to-end-flow)
+- [Entry points](#entry-points)
+- [Agent boundaries](#agent-boundaries)
+- [What the pipeline actually does](#what-the-pipeline-actually-does)
+- [Two rule systems, not one](#two-rule-systems-not-one)
+- [USPS rules structure](#usps-rules-structure)
+- [USPS notification config structure](#usps-notification-config-structure)
+- [`process_digest(...)` runtime config](#process_digest-runtime-config)
+- [FastMail companion behavior](#fastmail-companion-behavior)
+- [Plugin companion behavior](#plugin-companion-behavior)
+- [Rule and notification ownership](#rule-and-notification-ownership)
+- [Why this split exists](#why-this-split-exists)
+- [Related](#related)
+
+---
 
 There are **two distinct processing phases** to keep straight:
 
@@ -61,14 +85,14 @@ The important split is:
 
 There are two normal ways into this package:
 
-1. **Automatic mail pipeline:** `mail_action_usps/register.ts` registers `process_usps_digest` with the shared mail runtime, which downloads digest artifacts, calls `process_digest(...)`, then hands a structured summary to another agent for any follow-up that still matters.
-2. **Interactive/manual tooling:** `plugins/usps-mail/src/tools.ts` exposes the same shared runtime functions as OpenClaw tools like `usps_process_digest`, `usps_lookup`, and `usps_rules`.
+1. **Automatic mail pipeline:** `mail_action_usps/register.ts` registers `process_usps_digest` with the [shared mail runtime](../mail_runtime_core/README.md), which downloads digest artifacts, calls `process_digest(...)`, then hands a structured summary to another agent for any follow-up that still matters.
+2. **Interactive/manual tooling:** [`plugins/usps-mail/src/tools.ts`](../../../plugins/usps-mail/src/tools.ts) exposes the same shared runtime functions as OpenClaw tools like `usps_process_digest`, `usps_lookup`, and `usps_rules`.
 
 That split is intentional:
 
 - `libs/ts/mail_action_usps/` owns the USPS workflow itself
-- the shared mail runtime owns action dispatch, while integrating services own provider-specific ingestion
-- `plugins/usps-mail` owns the human/operator-facing tool surface
+- the [shared mail runtime](../mail_runtime_core/README.md) owns action dispatch, while integrating services own provider-specific ingestion
+- [`plugins/usps-mail`](../../../plugins/usps-mail/README.md) owns the human/operator-facing tool surface
 
 ## Agent boundaries
 
@@ -130,7 +154,7 @@ There are two different rule/config layers involved in automatic USPS handling:
 
 | Layer | File | Purpose |
 |------|------|---------|
-| Mail pipeline trigger rules | `~/.openclaw/services/fastmail-sse-config.json` under `mail_rules` | Decide **when** to invoke the `process_usps_digest` action for an email |
+| Mail pipeline trigger rules | [`fastmail-sse-config.json`](../../../services/fastmail-sse/README.md) under `mail_rules` | Decide **when** to invoke the `process_usps_digest` action for an email |
 | USPS classification rules | `~/.openclaw/agents/<workspace_agent>/workspace/usps-mail/rules.json` | Decide **how important** each analyzed mailpiece is after vision |
 
 That means:
@@ -139,6 +163,9 @@ That means:
 - USPS `rules.json` works at the **individual mailpiece image** level
 
 ## USPS rules structure
+
+> **See also:** [`docs/custom-rules.md`](docs/custom-rules.md) — a full guide to writing custom rules, patterns, ordering, and testing.
+
 
 `rules.ts` loads a versioned JSON file from the workspace agent:
 
@@ -279,12 +306,12 @@ The function returns a structured summary with:
 
 When USPS processing runs from the FastMail mail pipeline, the call path is:
 
-`fastmail-sse` email event  
+[`fastmail-sse`](../../../services/fastmail-sse/README.md) email event  
 → shared mail runtime rule match  
 → `process_usps_digest_action(...)`  
 → `mail_action_usps.process_digest(...)`
 
-After that shared USPS work finishes, `services/fastmail-sse/usps_integration.ts` creates an `agent_handoff` result with a structured JSON payload. That handoff tells the downstream agent:
+After that shared USPS work finishes, [`services/fastmail-sse/usps_integration.ts`](../../../services/fastmail-sse/src/usps_integration.ts) creates an `agent_handoff` result with a structured JSON payload. That handoff tells the downstream agent:
 
 - the mail agent already handled scan-image vision work
 - direct USPS notifications were already routed
@@ -295,7 +322,7 @@ So the mail pipeline uses this package for the heavy USPS-specific work first, a
 
 ## Plugin companion behavior
 
-The `usps-mail` plugin does **not** implement a separate USPS system anymore. Its Python entrypoint imports this package directly and exposes companion tools for:
+The [`usps-mail` plugin](../../../plugins/usps-mail/README.md) does **not** implement a separate USPS system anymore. Its Python entrypoint imports this package directly and exposes companion tools for:
 
 - processing a digest folder
 - searching saved USPS history
@@ -323,3 +350,13 @@ This package sits below both the service and plugin layers because USPS processi
 - separate from provider-specific mail ingestion
 
 That makes `libs/ts/mail_action_usps/` the right place for the core workflow, while FastMail and the plugin stay thin adapters around it.
+
+---
+
+## 🔗 Related
+
+- [`mail_runtime_core`](../mail_runtime_core/README.md) — Provider-agnostic rule engine and action registry
+- [`package_tracking_core`](../package_tracking_core/README.md) — Carrier detection and package storage
+- [`fastmail-sse`](../../../services/fastmail-sse/README.md) — FastMail adapter that invokes this action
+- [`usps-mail` plugin](../../../plugins/usps-mail/README.md) — Operator-facing USPS tools (thin wrapper around this lib)
+- [`docs/custom-rules.md`](docs/custom-rules.md) — Full guide to writing USPS classification rules

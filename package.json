@@ -26,8 +26,9 @@
     "plugins/fastmail"
   ],
   "scripts": {
+    "build:libs": "npm run build --workspace libs/ts/package_tracking_core && npm run build --workspace libs/ts/mail_runtime_core && npm run build --workspace libs/ts/mail_action_usps && npm run build --workspace services/fastmail-sse",
     "build:plugins": "npm run build --workspace plugins/fastmail --workspace plugins/glances --workspace plugins/homeassistant --workspace plugins/ics-calendar --workspace plugins/llmvision --workspace plugins/outlook-calendar --workspace plugins/outlook-mail --workspace plugins/outlook-work-calendar --workspace plugins/package-tracking --workspace plugins/spotify --workspace plugins/stock-quotes --workspace plugins/withings --workspace plugins/usps-mail",
-    "build": "npm run build:plugins",
+    "build": "npm run build:libs && npm run build:plugins",
     "build:docs-satellite": "python3 scripts/build_docs_satellite.py",
     "test:scripts": "python3 -m unittest scripts.tests.test_export_artifacts scripts.tests.test_build_docs_satellite",
     "export:artifacts": "python3 scripts/export_artifacts.py",

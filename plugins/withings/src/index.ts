@@ -109,6 +109,7 @@ export function createEntry() {
   return {
     id:"withings", name:"Withings",
     description:"Fetch health data from Withings devices (weight, body composition, heart rate, sleep, activity)",
+    contracts: { tools: ["withings_auth_url", "withings_auth_complete", "withings_auth_status", "withings_tokens", "withings_get_measurements", "withings_get_activity", "withings_get_heart", "withings_get_sleep"] },
     configSchema,
     register(api: PluginApi) {
       const cfg = () => ({

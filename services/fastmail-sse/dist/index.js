@@ -1,8 +1,9 @@
 /**
  * Main entry point — loads config, registers actions, starts SSE stream.
  */
+import { watch } from "node:fs";
 import { ActionRegistry } from "@openclaw/mail-runtime-core";
-import { log, requireEnv, getToken, loadRuntimeConfig, buildPipelineRules, RECONNECT_DELAY, } from "./config.js";
+import { log, requireEnv, getToken, loadRuntimeConfig, buildPipelineRules, CONFIG_FILE, RECONNECT_DELAY, } from "./config.js";
 import { getMailboxNames } from "./jmap.js";
 import { registerActions } from "./actions.js";
 import { stream } from "./stream.js";
@@ -86,6 +87,33 @@ export async function main() {
         .map((mid) => mailboxNames[mid] ?? mid.slice(0, 8))
         .join(", ");
     log(`monitoring ${inboxIds.length} mailbox(es): ${mailboxInfo}`);
+    // ── Config file watcher ──────────────────────────────────────
+    // Watch the config file for changes and hot-reload mail_rules.
+    // Other config (accounts, action_plugins) requires a full restart.
+    let configDebounce = null;
+    let configWatcher;
+    try {
+        configWatcher = watch(CONFIG_FILE, () => {
+            if (configDebounce)
+                clearTimeout(configDebounce);
+            configDebounce = setTimeout(() => {
+                try {
+                    const updated = loadRuntimeConfig();
+                    const newRules = buildPipelineRules(updated);
+                    pipelineRules.length = 0;
+                    pipelineRules.push(...newRules);
+                    log(`config reloaded: ${newRules.length} mail rule(s)`);
+                }
+                catch (e) {
+                    log(`config reload failed (keeping previous rules): ${e}`);
+                }
+            }, 500);
+        });
+        log("config watcher active");
+    }
+    catch (e) {
+        log(`WARNING: could not watch config file: ${e}`);
+    }
     // Main reconnection loop
     while (true) {
         try {
@@ -102,6 +130,7 @@ export async function main() {
         catch (e) {
             if (e instanceof Error &&
                 e.message === "shutdown") {
+                configWatcher?.close();
                 log("shutdown");
                 break;
             }

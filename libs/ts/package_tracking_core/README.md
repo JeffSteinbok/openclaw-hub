@@ -1,6 +1,6 @@
-# Package Tracking Core
+# 📦 Package Tracking Core
 
-Reusable package-tracking logic shared by the mail runtime's built-in `detect_tracking` action and the `package-tracking` plugin. Lives in `libs/ts/package_tracking_core/` so services and plugins can depend on the same implementation without importing plugin source directly.
+Reusable package-tracking logic shared by the mail runtime's built-in [`detect_tracking`](../mail_runtime_core/README.md#-actions) action and the [`package-tracking` plugin](../../../plugins/package-tracking/README.md). Lives in `libs/ts/package_tracking_core/` so services and plugins can depend on the same implementation without importing plugin source directly.
 
 ## Features
 
@@ -26,6 +26,14 @@ Reusable package-tracking logic shared by the mail runtime's built-in `detect_tr
 ## Boundaries
 
 - `package_tracking_core` owns reusable tracking business logic and persistence
-- `mail_runtime_core/package-tracking.ts` adapts mail envelopes into the built-in `detect_tracking` action
-- `plugins/package-tracking` owns the OpenClaw tool schemas and dispatch surface
-- `services/fastmail-sse` consumes the same core through shared mail actions
+- [`mail_runtime_core/package-tracking.ts`](../mail_runtime_core/README.md) adapts mail envelopes into the built-in `detect_tracking` action
+- [`plugins/package-tracking`](../../../plugins/package-tracking/README.md) owns the OpenClaw tool schemas and dispatch surface
+- [`services/fastmail-sse`](../../../services/fastmail-sse/README.md) consumes the same core through shared mail actions
+
+---
+
+## 🔗 Related
+
+- [`mail_runtime_core`](../mail_runtime_core/README.md) — Rule engine that invokes `detect_tracking`
+- [`mail_action_usps`](../mail_action_usps/README.md) — USPS processing (separate from package tracking)
+- [`fastmail-sse`](../../../services/fastmail-sse/README.md) — FastMail adapter that wires tracking into the pipeline
