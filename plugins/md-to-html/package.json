@@ -1,6 +1,9 @@
 {
   "name": "md-to-html",
   "version": "1.0.0",
+  "description": "Convert styled Markdown reports to HTML using a CSS template",
+  "author": "OpenClaw",
+  "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

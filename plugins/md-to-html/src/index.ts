@@ -74,6 +74,8 @@ type Block =
   | { type: "table"; rows: string[][] ; headerRow: boolean; rowHints: (string | null)[] }
   | { type: "fenced"; tag: string; lines: string[] }
   | { type: "directive"; kind: string; content: string }
+  | { type: "ordered-list"; items: string[] }
+  | { type: "raw"; text: string }
   | { type: "blank" };
 
 // ---------------------------------------------------------------------------
@@ -147,7 +149,27 @@ export function parseBlocks(md: string): Block[] {
         quoteLines.push(lines[i].slice(2));
         i++;
       }
-      blocks.push({ type: "blockquote", text: quoteLines.join(" ") });
+      // Check if content has bullet items
+      const hasBullets = quoteLines.some((l) => l.startsWith("- "));
+      if (hasBullets) {
+        const parts: string[] = [];
+        let currentList: string[] = [];
+        for (const ql of quoteLines) {
+          if (ql.startsWith("- ")) {
+            currentList.push(`<li>${renderInline(ql.slice(2))}</li>`);
+          } else {
+            if (currentList.length) {
+              parts.push(`<ul>${currentList.join("")}</ul>`);
+              currentList = [];
+            }
+            parts.push(`<p>${renderInline(ql)}</p>`);
+          }
+        }
+        if (currentList.length) parts.push(`<ul>${currentList.join("")}</ul>`);
+        blocks.push({ type: "blockquote", text: parts.join("") });
+      } else {
+        blocks.push({ type: "blockquote", text: quoteLines.join(" ") });
+      }
       continue;
     }
 
@@ -167,6 +189,24 @@ export function parseBlocks(md: string): Block[] {
     // Blank line
     if (line.trim() === "") {
       blocks.push({ type: "blank" });
+      i++;
+      continue;
+    }
+
+    // Ordered list (1. item, 2. item, etc.)
+    if (/^\d+\.\s/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+\.\s*/, ""));
+        i++;
+      }
+      blocks.push({ type: "ordered-list", items });
+      continue;
+    }
+
+    // Raw HTML pass-through (lines starting with < tag)
+    if (/^<(small|div|aside|figcaption)[\s>]/.test(line)) {
+      blocks.push({ type: "raw", text: line });
       i++;
       continue;
     }
@@ -259,13 +299,26 @@ function renderKpiBlock(lines: string[]): string {
 
 function renderCalloutBlock(tag: string, lines: string[]): string {
   const cssClass = tag; // callout, callout-blue, callout-good
-  const items = lines
-    .filter((l) => l.trim() !== "")
-    .map((l) => {
+  const content: string[] = [];
+  let currentList: string[] = [];
+
+  for (const l of lines) {
+    if (l.trim() === "") continue;
+    if (/^[-*]\s/.test(l)) {
       const text = l.replace(/^[-*]\s*/, "");
-      return `  <li>${renderInline(text)}</li>`;
-    });
-  return `<div class="${cssClass}">\n<ul>\n${items.join("\n")}\n</ul>\n</div>`;
+      currentList.push(`  <li>${renderInline(text)}</li>`);
+    } else {
+      if (currentList.length) {
+        content.push(`<ul>\n${currentList.join("\n")}\n</ul>`);
+        currentList = [];
+      }
+      content.push(`<p>${renderInline(l)}</p>`);
+    }
+  }
+  if (currentList.length) {
+    content.push(`<ul>\n${currentList.join("\n")}\n</ul>`);
+  }
+  return `<div class="${cssClass}">\n${content.join("\n")}\n</div>`;
 }
 
 function renderSvgBlock(lines: string[]): string {
@@ -306,8 +359,14 @@ function renderBlock(block: Block): string {
       return "<hr>";
     case "paragraph":
       return `<p>${renderInline(block.text)}</p>`;
-    case "blockquote":
-      return `<blockquote>${renderInline(block.text)}</blockquote>`;
+    case "raw":
+      return block.text;
+    case "blockquote": {
+      const content = block.text.includes("<ul>") || block.text.includes("<p>")
+        ? block.text
+        : renderInline(block.text);
+      return `<blockquote>${content}</blockquote>`;
+    }
     case "table":
       return renderTableBlock(block);
     case "fenced":
@@ -316,9 +375,16 @@ function renderBlock(block: Block): string {
       if (block.kind === "pb") return '<div class="pb"></div>';
       if (block.kind === "note") return `<p class="note-sm">${renderInline(block.content)}</p>`;
       return "";
+    case "ordered-list":
+      return renderOrderedList(block.items);
     case "blank":
       return "";
   }
+}
+
+function renderOrderedList(items: string[]): string {
+  const listItems = items.map((item) => `  <li>${renderInline(item)}</li>`);
+  return `<ol>\n${listItems.join("\n")}\n</ol>`;
 }
 
 function renderTableBlock(block: Block & { type: "table" }): string {
@@ -327,11 +393,13 @@ function renderTableBlock(block: Block & { type: "table" }): string {
 
   const lines: string[] = ["<table>"];
   let startIdx = 0;
+  let actionCols: Set<number> = new Set();
 
   if (headerRow && rows.length > 0) {
     lines.push("<thead><tr>");
-    for (const cell of rows[0]) {
-      lines.push(`  <th>${renderInline(cell)}</th>`);
+    for (let c = 0; c < rows[0].length; c++) {
+      lines.push(`  <th>${renderInline(rows[0][c])}</th>`);
+      if (/action/i.test(rows[0][c])) actionCols.add(c);
     }
     lines.push("</tr></thead>");
     startIdx = 1;
@@ -341,9 +409,25 @@ function renderTableBlock(block: Block & { type: "table" }): string {
   for (let i = startIdx; i < rows.length; i++) {
     const hint = rowHints[i];
     const classAttr = hint ? ` class="${hint}"` : "";
+    // Phase headers span all columns
+    if (hint === "phase-header") {
+      const colCount = headerRow ? rows[0].length : (rows[i]?.length || 1);
+      const text = rows[i].filter((c) => c.trim() !== "").join(" ");
+      lines.push(`<tr${classAttr}>`);
+      lines.push(`  <td colspan="${colCount}">${renderInline(text).toUpperCase()}</td>`);
+      lines.push("</tr>");
+      continue;
+    }
     lines.push(`<tr${classAttr}>`);
-    for (const cell of rows[i]) {
-      lines.push(`  <td>${renderInline(cell)}</td>`);
+    for (let c = 0; c < rows[i].length; c++) {
+      const isAction = actionCols.has(c);
+      const cellClass = isAction ? ' class="action-q"' : "";
+      let cellContent = renderInline(rows[i][c]);
+      // Convert semicolons to <br> in action columns
+      if (isAction) {
+        cellContent = cellContent.replace(/;\s*/g, "<br>");
+      }
+      lines.push(`  <td${cellClass}>${cellContent}</td>`);
     }
     lines.push("</tr>");
   }
@@ -366,10 +450,38 @@ function renderFencedBlock(tag: string, lines: string[]): string {
 // ---------------------------------------------------------------------------
 
 function renderBlockList(blocks: Block[]): string {
-  return blocks
-    .map(renderBlock)
-    .filter((html) => html !== "")
-    .join("\n");
+  const output: string[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    // TOC: heading "Table of Contents" followed by ordered list → .toc wrapper with two-col
+    if (
+      block.type === "heading" &&
+      /table of contents/i.test(block.text) &&
+      i + 1 < blocks.length
+    ) {
+      // Find the next ordered-list (skip blanks)
+      let j = i + 1;
+      while (j < blocks.length && blocks[j].type === "blank") j++;
+      if (j < blocks.length && blocks[j].type === "ordered-list") {
+        const items = (blocks[j] as { type: "ordered-list"; items: string[] }).items;
+        const mid = Math.ceil(items.length / 2);
+        const leftItems = items.slice(0, mid).map((item) => `    <li>${renderInline(item)}</li>`);
+        const rightItems = items.slice(mid).map((item, idx) => `    <li>${renderInline(item)}</li>`);
+        output.push(`<div class="toc">`);
+        output.push(`<h3>📋 Table of Contents</h3>`);
+        output.push(`<div class="toc-col">`);
+        output.push(`  <ol>\n${leftItems.join("\n")}\n  </ol>`);
+        output.push(`  <ol start="${mid + 1}">\n${rightItems.join("\n")}\n  </ol>`);
+        output.push(`</div>`);
+        output.push(`</div>`);
+        i = j; // skip past the list
+        continue;
+      }
+    }
+    const html = renderBlock(block);
+    if (html !== "") output.push(html);
+  }
+  return output.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -458,6 +570,95 @@ ${bodyHtml}
 }
 
 // ---------------------------------------------------------------------------
+// Syntax reference (returned by md_to_html_syntax tool)
+// ---------------------------------------------------------------------------
+
+const SYNTAX_REFERENCE = `# md_to_html Markdown Syntax
+
+## Fenced Blocks
+
+\`\`\`\`
+\`\`\`kpi
+Label | Value | Sub-label
+\`\`\`
+\`\`\`\`
+→ KPI card row. Each line: label | value | sub-label (sub-label optional).
+
+\`\`\`\`
+\`\`\`callout
+- bullet item
+\`\`\`
+\`\`\`\`
+→ Yellow warning box. Also: \`callout-blue\` (info), \`callout-good\` (green/positive).
+
+\`\`\`\`
+\`\`\`svg
+<svg>...</svg>
+\`\`\`
+\`\`\`\`
+→ SVG passed through verbatim.
+
+\`\`\`\`
+\`\`\`two-col
+### Left
+content...
+---
+### Right
+content...
+\`\`\`
+\`\`\`\`
+→ Two-column layout. Split on \`---\`.
+
+## Table Row Class Hints
+
+Append at end of row: \`<!-- hint -->\`
+
+| Hint | CSS Class | Effect |
+|------|-----------|--------|
+| \`<!-- highlight-row -->\` | .highlight-row | Yellow highlight |
+| \`<!-- phase-header -->\` | .phase-header | Blue phase divider |
+| \`<!-- bucket-header -->\` | .bucket-header | Blue section header |
+| \`<!-- bucket-header-pretax -->\` | .bucket-header-pretax | Amber header |
+| \`<!-- bucket-header-roth -->\` | .bucket-header-roth | Green header |
+| \`<!-- total -->\` | .total | Bold total with top border |
+
+## Action Columns
+
+Columns with "Action" in header: semicolons become line breaks; smaller font applied.
+
+## Inline Hints
+
+| Syntax | Result |
+|--------|--------|
+| \`!!warn!!text\` | Orange warning text |
+| \`!!good!!text\` | Green positive text |
+| \`[ROTH]\` | Green "Roth" badge |
+| \`[PRETAX]\` | Amber "Pre-tax" badge |
+| \`[TAXABLE]\` | Blue "Taxable" badge |
+| \`[TAG:phase]text\` | Blue phase tag |
+| \`[TAG:action]text\` | Amber action tag |
+| \`[TAG:needed]text\` | Red needed tag |
+| \`[TAG:done]text\` | Green done tag |
+| \`[TAG:ok]text\` | Green ok tag |
+
+## Directives
+
+| Syntax | Result |
+|--------|--------|
+| \`<!-- pb -->\` | Page break |
+| \`<!-- note: text -->\` | Small gray note |
+
+## Table of Contents
+
+\`## Table of Contents\` followed by a numbered list → styled two-column TOC box.
+Section links use \`#sN\` matching \`## N. Title\` headings.
+
+## Standard Markdown
+
+\`# H1\`, \`## N. H2\` (→ id="sN"), \`### H3\`, \`**bold**\`, \`_italic_\`, \`[text](url)\`, \`---\`, \`> quote\`, pipe tables, numbered lists.
+`;
+
+// ---------------------------------------------------------------------------
 // Plugin entry
 // ---------------------------------------------------------------------------
 
@@ -473,14 +674,15 @@ function createEntry() {
     id: "md-to-html",
     name: "Markdown to HTML",
     description: "Convert styled Markdown reports to HTML using a CSS template",
-    contracts: { tools: ["md_to_html"] },
+    contracts: { tools: ["md_to_html", "md_to_html_syntax"] },
     register(api: PluginApi) {
       api.registerTool({
         name: "md_to_html",
         label: "Markdown to HTML",
         description:
           "Convert a styled Markdown file to HTML using a CSS template. " +
-          "Supports fenced blocks (kpi, callout, svg, two-col), table row class hints, and inline text transforms.",
+          "Supports fenced blocks (kpi, callout, svg, two-col), table row class hints, and inline text transforms. " +
+          "Call md_to_html_syntax for full syntax reference.",
         parameters: Type.Object({
           input_path: Type.String({
             description: "Absolute path to the Markdown file to render",
@@ -502,6 +704,18 @@ function createEntry() {
           if (!templatePath) return formatResult({ success: false, error: "template_path is required" });
 
           return formatResult(await mdToHtml(inputPath, outputPath, templatePath));
+        },
+      });
+
+      api.registerTool({
+        name: "md_to_html_syntax",
+        label: "Markdown to HTML — Syntax Reference",
+        description:
+          "Returns the full Markdown syntax reference for the md_to_html renderer. " +
+          "Call this to learn what fenced blocks, inline hints, table row hints, and directives are supported.",
+        parameters: Type.Object({}),
+        async execute() {
+          return formatResult(SYNTAX_REFERENCE);
         },
       });
     },
