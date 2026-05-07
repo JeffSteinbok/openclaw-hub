@@ -109,8 +109,57 @@ def _safe_literal_eval_dict(node: ast.expr) -> dict | None:
     return result
 
 
+def _extract_tools_node(plugin_dir: Path) -> list[dict]:
+    """Extract tools from a built TypeScript plugin by running it with a mock API."""
+    adapter = plugin_dir / "dist" / "adapter.js"
+    if not adapter.exists():
+        return []
+    # Node script that loads the plugin entry and captures registerTool calls
+    script = """
+const tools = [];
+const mockApi = {
+    registerTool(t) { tools.push(t); },
+    pluginConfig: {},
+};
+async function run() {
+    const mod = await import(new URL('file://' + process.argv[1]));
+    const entry = mod.default?.default || mod.default;
+    if (typeof entry === 'function') {
+        await entry(mockApi);
+    } else if (entry && typeof entry.register === 'function') {
+        await entry.register(mockApi);
+    } else if (entry && typeof entry.activate === 'function') {
+        await entry.activate(mockApi);
+    }
+    const out = tools.map(t => {
+        const e = { name: t.name || '', description: t.description || '' };
+        const schema = t.parameters || t.inputSchema || t.input_schema;
+        if (schema) e.input_schema = schema;
+        return e;
+    });
+    process.stdout.write(JSON.stringify(out));
+}
+run().catch(() => process.stdout.write('[]'));
+"""
+    try:
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", script, str(adapter.resolve())],
+            capture_output=True, text=True, timeout=10,
+            cwd=str(plugin_dir),
+        )
+        if result.returncode != 0:
+            return []
+        return json.loads(result.stdout) if result.stdout.strip() else []
+    except Exception:
+        return []
+
+
 def _call_manifest(plugin_dir: Path) -> list[dict]:
     tools = _parse_tools_static(plugin_dir)
+    if tools:
+        return tools
+
+    tools = _extract_tools_node(plugin_dir)
     if tools:
         return tools
 
