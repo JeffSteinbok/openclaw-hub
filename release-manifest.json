@@ -10,6 +10,7 @@
       "fastmail",
       "glances",
       "homeassistant",
+      "html-to-pdf",
       "ics-calendar",
       "llmvision",
       "outlook-calendar",
@@ -18,8 +19,8 @@
       "package-tracking",
       "spotify",
       "stock-quotes",
-      "withings",
-      "usps-mail"
+      "usps-mail",
+      "withings"
     ]
   }
 }
