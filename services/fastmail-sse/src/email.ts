@@ -105,6 +105,18 @@ export function emailToEnvelope(
   const authHeader = email["header:Authentication-Results:asText"] as string | undefined;
   const authResults = parseAuthResults(authHeader);
 
+  // Collect to/cc as formatted address strings for reply-all support
+  const toAddresses = (email["to"] as Array<{ name?: string; email?: string }> | undefined) ?? [];
+  const ccAddresses = (email["cc"] as Array<{ name?: string; email?: string }> | undefined) ?? [];
+  const formatAddresses = (addrs: Array<{ name?: string; email?: string }>) =>
+    addrs.map((a) => (a.name ? `${a.name} <${a.email ?? ""}>` : (a.email ?? ""))).join(", ");
+  const toStr = formatAddresses(toAddresses);
+  const ccStr = formatAddresses(ccAddresses);
+  const headers: Record<string, string> = {};
+  if (toStr) headers["to"] = toStr;
+  if (ccStr) headers["cc"] = ccStr;
+  if (authHeader) headers["authentication-results"] = authHeader;
+
   return {
     message_id: (email["id"] as string) ?? "",
     provider: "fastmail",
@@ -118,6 +130,7 @@ export function emailToEnvelope(
     body_html: htmlBody,
     has_attachments: hasAttachments,
     auth_results: authResults,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
     raw: email as Record<string, unknown>,
   };
 }

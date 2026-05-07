@@ -88,6 +88,7 @@ export function createEntry() {
   return {
     id:"spotify", name:"Spotify",
     description:"Control Spotify playback, search music, and manage playlists",
+    contracts: { tools: ["spotify_now_playing", "spotify_play", "spotify_pause", "spotify_next", "spotify_previous", "spotify_search", "spotify_get_devices", "spotify_get_playlists", "spotify_add_to_playlist"] },
     configSchema,
     register(api_: PluginApi) {
       const creds = () => ({

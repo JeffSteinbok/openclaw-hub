@@ -1,0 +1,16 @@
+{
+  "id": "html-to-pdf",
+  "name": "HTML to PDF",
+  "description": "Convert HTML files to PDF using Chromium headless",
+  "version": "1.0.0",
+  "entry": "./dist/adapter.js",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "openclaw": {}
+}

@@ -8,6 +8,16 @@ export interface AttachmentMeta {
     is_inline?: boolean;
     content_id?: string | null;
 }
+export interface AuthResults {
+    /** "pass" | "fail" | "none" — result of DKIM verification */
+    dkim?: string;
+    /** "pass" | "fail" | "none" — result of SPF verification */
+    spf?: string;
+    /** "pass" | "fail" | "none" — result of DMARC verification */
+    dmarc?: string;
+    /** Raw Authentication-Results header value */
+    raw?: string;
+}
 export interface MailEnvelope {
     message_id: string;
     provider: string;
@@ -21,6 +31,7 @@ export interface MailEnvelope {
     body_html?: string | null;
     headers?: Record<string, string>;
     has_attachments?: boolean;
+    auth_results?: AuthResults;
     raw?: Record<string, unknown>;
 }
 export interface ActionResult {
