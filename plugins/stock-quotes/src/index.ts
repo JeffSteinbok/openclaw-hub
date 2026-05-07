@@ -7,6 +7,7 @@
 
 import https from "node:https";
 import http from "node:http";
+import { Type } from "@sinclair/typebox";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,10 +26,10 @@ interface StockQuote {
   source: string;
 }
 
-interface PluginApi {
+type PluginApi = {
   registerTool: (tool: unknown) => void;
   pluginConfig?: Record<string, unknown>;
-}
+};
 
 // ---------------------------------------------------------------------------
 // HTTP helper
@@ -201,18 +202,6 @@ async function getStockQuotes(
 }
 
 // ---------------------------------------------------------------------------
-// TypeBox schema helper (same as framework's toTSchema)
-// ---------------------------------------------------------------------------
-
-function toTSchema(jsonSchema: Record<string, unknown>): unknown {
-  const schema = { ...jsonSchema } as Record<string | symbol, unknown>;
-  schema[Symbol.for("TypeBox.Kind")] = "Object";
-  schema[Symbol.for("TypeBox.Type")] = "Object";
-  if (!schema.properties) schema.properties = {};
-  return schema;
-}
-
-// ---------------------------------------------------------------------------
 // Plugin
 // ---------------------------------------------------------------------------
 
@@ -226,76 +215,62 @@ const configSchema = {
 
 function formatResult(data: unknown) {
   return {
-    content: [{ type: "text", text: typeof data === "string" ? data : JSON.stringify(data) }],
+    content: [{ type: "text" as const, text: typeof data === "string" ? data : JSON.stringify(data) }],
     details: {},
   };
 }
 
-const plugin = {
-  id: "stock-quotes",
-  name: "Stock Quotes",
-  description: "Fetch current stock, ETF, and mutual fund quotes",
-  configSchema,
-  register(api: PluginApi) {
-    const getFinnhubKey = () =>
-      ((api.pluginConfig?.finnhubApiKey as string) ?? "").trim() || undefined;
+function createEntry() {
+  return {
+    id: "stock-quotes",
+    name: "Stock Quotes",
+    description: "Fetch current stock, ETF, and mutual fund quotes",
+    configSchema,
+    register(api: PluginApi) {
+      const getFinnhubKey = () =>
+        ((api.pluginConfig?.finnhubApiKey as string) ?? "").trim() || undefined;
 
-    api.registerTool({
-      name: "stock_quote",
-      label: "Stock Quote",
-      description:
-        "Get the latest quote for a stock, ETF, or mutual fund symbol.",
-      parameters: toTSchema({
-        type: "object",
-        properties: {
-          symbol: {
-            type: "string",
-            description: "Stock ticker symbol (e.g., AAPL, GOOGL, QQQ, FXAIX)",
-          },
+      api.registerTool({
+        name: "stock_quote",
+        label: "Stock Quote",
+        description:
+          "Get the latest quote for a stock, ETF, or mutual fund symbol.",
+        parameters: Type.Object({
+          symbol: Type.String({ description: "Stock ticker symbol (e.g., AAPL, GOOGL, QQQ, FXAIX)" }),
+        }),
+        async execute(_toolCallId: string, params: Record<string, unknown>) {
+          const symbol = ((params.symbol as string) ?? "").trim();
+          if (!symbol) return formatResult({ error: "symbol is required" });
+          return formatResult(await getStockQuote(symbol, getFinnhubKey()));
         },
-        required: ["symbol"],
-        additionalProperties: false,
-      }),
-      async execute(_toolCallId: string, params: Record<string, unknown>) {
-        const symbol = ((params.symbol as string) ?? "").trim();
-        if (!symbol) return formatResult({ error: "symbol is required" });
-        return formatResult(await getStockQuote(symbol, getFinnhubKey()));
-      },
-    });
+      });
 
-    api.registerTool({
-      name: "stock_quotes",
-      label: "Stock Quotes",
-      description:
-        "Get the latest quotes for multiple stock, ETF, or mutual fund symbols.",
-      parameters: toTSchema({
-        type: "object",
-        properties: {
-          symbols: {
-            type: "array",
-            items: { type: "string" },
-            description:
-              "Array of stock ticker symbols (e.g., ['MSFT', 'QQQ', 'FXAIX'])",
+      api.registerTool({
+        name: "stock_quotes",
+        label: "Stock Quotes",
+        description:
+          "Get the latest quotes for multiple stock, ETF, or mutual fund symbols.",
+        parameters: Type.Object({
+          symbols: Type.Array(Type.String(), {
+            description: "Array of stock ticker symbols (e.g., ['MSFT', 'QQQ', 'FXAIX'])",
             minItems: 1,
-          },
-        },
-        required: ["symbols"],
-        additionalProperties: false,
-      }),
-      async execute(_toolCallId: string, params: Record<string, unknown>) {
-        const symbols = params.symbols;
-        if (!Array.isArray(symbols) || symbols.length === 0) {
-          return formatResult({ error: "symbols array is required and must not be empty" });
-        }
-        for (const s of symbols) {
-          if (typeof s !== "string") {
-            return formatResult({ error: "All symbols must be strings" });
+          }),
+        }),
+        async execute(_toolCallId: string, params: Record<string, unknown>) {
+          const symbols = params.symbols;
+          if (!Array.isArray(symbols) || symbols.length === 0) {
+            return formatResult({ error: "symbols array is required and must not be empty" });
           }
-        }
-        return formatResult(await getStockQuotes(symbols as string[], getFinnhubKey()));
-      },
-    });
-  },
-};
+          for (const s of symbols) {
+            if (typeof s !== "string") {
+              return formatResult({ error: "All symbols must be strings" });
+            }
+          }
+          return formatResult(await getStockQuotes(symbols as string[], getFinnhubKey()));
+        },
+      });
+    },
+  };
+}
 
-export default plugin;
+export { createEntry };

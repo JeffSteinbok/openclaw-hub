@@ -13,7 +13,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLUGINS_DIR = REPO_ROOT / "plugins"
 SERVICES_DIR = REPO_ROOT / "services"
-LIBS_DIR = REPO_ROOT / "libs" / "python"
+LIBS_DIR = REPO_ROOT / "libs" / "ts"
 RELEASE_MANIFEST_PATH = REPO_ROOT / "release-manifest.json"
 OUT_DIR = REPO_ROOT / "out" / "docs-satellite"
 
@@ -37,11 +37,14 @@ def _load_release_services() -> list[str]:
     return [service_id for service_id in services if isinstance(service_id, str)]
 
 
-def _load_release_shared_python() -> list[str]:
-    manifest = _load_json(RELEASE_MANIFEST_PATH)
-    includes = manifest.get("includes") or {}
-    shared_python = includes.get("sharedPython") or []
-    return [library for library in shared_python if isinstance(library, str)]
+def _load_release_shared_libs() -> list[str]:
+    """Discover TS libs that have a package.json."""
+    if not LIBS_DIR.exists():
+        return []
+    return sorted(
+        d.name for d in LIBS_DIR.iterdir()
+        if d.is_dir() and (d / "package.json").exists()
+    )
 
 
 def _parse_tools_static(plugin_dir: Path) -> list[dict]:
@@ -334,33 +337,6 @@ def _parse_markdown(path: Path) -> dict:
     }
 
 
-def _module_docstring(path: Path) -> str:
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-    except Exception:
-        return ""
-    return ast.get_docstring(tree) or ""
-
-
-def _module_exports(path: Path) -> list[str]:
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-    except Exception:
-        return []
-    for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == "__all__":
-                if isinstance(node.value, (ast.List, ast.Tuple)):
-                    values: list[str] = []
-                    for elt in node.value.elts:
-                        if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
-                            values.append(elt.value)
-                    return values
-    return []
-
-
 def summarise_plugin(plugin_id: str) -> dict:
     plugin_dir = PLUGINS_DIR / plugin_id
     manifest = _load_json(plugin_dir / "openclaw.plugin.json")
@@ -409,6 +385,7 @@ def summarise_service(service_id: str) -> dict:
         "env_vars": _extract_env_table(lines),
         "sections": parsed["sections"],
         "source_url": f"https://github.com/JeffSteinbok/openclaw-hub/tree/main/services/{service_id}",
+        "docs_url": f"/services/{service_id}",
         "origin": "openclaw-hub",
     }
 
@@ -416,41 +393,43 @@ def summarise_service(service_id: str) -> dict:
 def _summarise_library(library_id: str) -> dict:
     lib_dir = LIBS_DIR / library_id
     parsed = _parse_markdown(lib_dir / "README.md") if (lib_dir / "README.md").exists() else None
-    py_files = sorted(path for path in lib_dir.glob("*.py") if path.name != "__init__.py")
+    src_dir = lib_dir / "src"
+    ts_files = sorted(
+        path for path in src_dir.glob("*.ts") if path.name != "index.ts"
+    ) if src_dir.exists() else []
     return {
         "library": library_id,
-        "language": "python",
+        "language": "typescript",
         "name": (parsed or {}).get("name") or library_id,
-        "summary": (parsed or {}).get("summary") or _module_docstring(lib_dir / "__init__.py"),
-        "exports": _module_exports(lib_dir / "__init__.py"),
+        "summary": (parsed or {}).get("summary") or "",
         "modules": [
             {
                 "name": path.stem,
-                "summary": _module_docstring(path),
-                "path": f"libs/python/{library_id}/{path.name}",
+                "path": f"libs/ts/{library_id}/src/{path.name}",
             }
-            for path in py_files
+            for path in ts_files
         ],
         "paths": {
-            "package": f"libs/python/{library_id}",
-            "init": f"libs/python/{library_id}/__init__.py",
+            "package": f"libs/ts/{library_id}",
+            "entry": f"libs/ts/{library_id}/src/index.ts",
         },
-        "readme": f"libs/python/{library_id}/README.md" if (lib_dir / "README.md").exists() else None,
+        "readme": f"libs/ts/{library_id}/README.md" if (lib_dir / "README.md").exists() else None,
         "sections": (parsed or {}).get("sections", {}),
         "content": (parsed or {}).get("content", ""),
-        "source_url": f"https://github.com/JeffSteinbok/openclaw-hub/tree/main/libs/python/{library_id}",
+        "source_url": f"https://github.com/JeffSteinbok/openclaw-hub/tree/main/libs/ts/{library_id}",
+        "docs_url": f"/libs/{library_id}",
         "origin": "openclaw-hub",
     }
 
 
-def summarise_shared_python() -> tuple[dict, list[dict]]:
+def summarise_shared_libs() -> tuple[dict, list[dict]]:
     parsed = _parse_markdown(LIBS_DIR / "README.md") if (LIBS_DIR / "README.md").exists() else {
-        "name": "Shared Python libs",
+        "name": "Shared TypeScript libs",
         "summary": "",
         "sections": {},
     }
     libraries: list[dict] = []
-    for library_id in _load_release_shared_python():
+    for library_id in _load_release_shared_libs():
         detail = _summarise_library(library_id)
         libraries.append(
             {
@@ -461,14 +440,14 @@ def summarise_shared_python() -> tuple[dict, list[dict]]:
             }
         )
     index = {
-        "group": "shared-python-libs",
-        "name": parsed["name"] or "Shared Python libs",
+        "group": "shared-ts-libs",
+        "name": parsed["name"] or "Shared TypeScript libs",
         "summary": parsed["summary"],
-        "language": "python",
+        "language": "typescript",
         "dependency_rules": _extract_bullet_section(parsed.get("lines", []), "Dependency direction"),
         "sections": parsed["sections"],
         "libraries": libraries,
-        "source_url": "https://github.com/JeffSteinbok/openclaw-hub/tree/main/libs/python",
+        "source_url": "https://github.com/JeffSteinbok/openclaw-hub/tree/main/libs/ts",
         "origin": "openclaw-hub",
     }
     return index, [_summarise_library(library["id"]) for library in libraries]
@@ -507,7 +486,7 @@ def build_docs_satellite(out_dir: Path = OUT_DIR) -> dict:
     services_index_path.write_text(json.dumps({"services": services_index}, indent=2) + "\n", encoding="utf-8")
     artifacts.append(str(services_index_path.relative_to(out_dir)))
 
-    libs_index, libs_details = summarise_shared_python()
+    libs_index, libs_details = summarise_shared_libs()
     libs_index_path = out_dir / "libs.json"
     libs_index_path.write_text(json.dumps(libs_index, indent=2) + "\n", encoding="utf-8")
     artifacts.append(str(libs_index_path.relative_to(out_dir)))

@@ -6,6 +6,14 @@
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
-    "types": ["node"]
-  }
+    "types": [
+      "node"
+    ]
+  },
+  "exclude": [
+    "tests",
+    "vitest.config.ts",
+    "dist",
+    "node_modules"
+  ]
 }

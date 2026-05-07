@@ -2,6 +2,8 @@
   "id": "usps-mail",
   "name": "USPS Mail Analyzer",
   "description": "Analyze USPS Informed Delivery digest emails: parse mailpiece scans, vision-classify, apply rules, write memory, send notifications",
+  "version": "1.0.0",
+  "entry": "./dist/adapter.js",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -17,8 +19,8 @@
       }
     ]
   },
-  "version": "1.0.1",
   "activation": {
     "onStartup": true
-  }
+  },
+  "openclaw": {}
 }

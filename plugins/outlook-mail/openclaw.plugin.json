@@ -24,7 +24,9 @@
     "providers": [
       {
         "id": "outlook-mail",
-        "authMethods": ["oauth2"],
+        "authMethods": [
+          "oauth2"
+        ],
         "envVars": [
           "OUTLOOK_CLIENT_ID",
           "OUTLOOK_CLIENT_SECRET",
@@ -46,5 +48,6 @@
   "version": "1.0.1",
   "activation": {
     "onStartup": true
-  }
+  },
+  "entry": "dist/index.js"
 }

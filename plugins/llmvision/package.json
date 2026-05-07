@@ -4,18 +4,30 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc && ln -sf ../src/tools.py dist/tools.py"
+    "build": "tsup",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@local/openclaw-python-framework": "file:../framework"
+    "@sinclair/typebox": "^0.34.49"
   },
   "devDependencies": {
     "typescript": "^6",
-    "@types/node": "^25"
+    "@types/node": "^25",
+    "tsup": "^8.3.0",
+    "vitest": "^2.1.8"
   },
   "openclaw": {
     "extensions": [
-      "./dist/index.js"
+      "./dist/adapter.js"
     ]
-  }
+  },
+  "peerDependencies": {
+    "openclaw": "^2026.4.23"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "exclude": []
 }

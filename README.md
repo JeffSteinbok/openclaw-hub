@@ -1,5 +1,8 @@
 # OpenClaw Hub
 
+[![CI Tests](https://github.com/JeffSteinbok/openclaw-hub/actions/workflows/ci-tests.yml/badge.svg)](https://github.com/JeffSteinbok/openclaw-hub/actions/workflows/ci-tests.yml)
+[![Build Docs Satellite Bundle](https://github.com/JeffSteinbok/openclaw-hub/actions/workflows/docs-satellite-bundle.yml/badge.svg)](https://github.com/JeffSteinbok/openclaw-hub/actions/workflows/docs-satellite-bundle.yml)
+
 Public plugins, services, and shared libraries for use in OpenClaw.
 
 This repo contains the public pieces I use in my own assistant. If you want the broader docs and examples for that assistant, start with [`octo-docs`](https://jeffsteinbok.github.io/octo-docs/).
@@ -91,14 +94,27 @@ Plugin README conventions live in [`PLUGIN_README_SHAPE.md`](PLUGIN_README_SHAPE
 | 📈 Stock Quotes | Quick stock quote lookups | [`plugins/stock-quotes/README.md`](plugins/stock-quotes/README.md) |
 | ❤️ Withings | Read health metrics from Withings devices and services | [`plugins/withings/README.md`](plugins/withings/README.md) |
 
-## Shared Support 🧰
+### Third-party plugins we use
 
-Some small shared support packages also live here:
-
-| Package | What it is | Details |
+| Plugin | What it is | Link |
 | --- | --- | --- |
-| 🧭 `repo_paths` | Path/bootstrap helpers used by exported Python-based artifacts | [`libs/python/repo_paths/README.md`](libs/python/repo_paths/README.md) |
-| 🏗️ `framework` | Build support for Python-backed OpenClaw plugins | [`plugins/framework/README.md`](plugins/framework/README.md) |
+| 🍽️ Restaurant CLI | Reservation booking via Resy, OpenTable, Tock, and other providers | [omarshahine/restaurant-cli](https://github.com/omarshahine/restaurant-cli) |
+
+## Shared Libraries 🧰
+
+Shared TypeScript libraries consumed by plugins and services:
+
+| Library | Purpose | Details |
+| --- | --- | --- |
+| `mail_runtime_core` | Rule engine, action registry, result dispatch | [`libs/ts/mail_runtime_core`](libs/ts/mail_runtime_core) |
+| `mail_action_usps` | USPS digest parsing, vision analysis, memory | [`libs/ts/mail_action_usps`](libs/ts/mail_action_usps) |
+| `package_tracking_core` | Carrier detection, tracking URLs, package storage | [`libs/ts/package_tracking_core`](libs/ts/package_tracking_core) |
+
+See [`libs/README.md`](libs/README.md) for architecture details.
+
+## Plugin Architecture 🔌
+
+All plugins are pure TypeScript and follow a consistent adapter pattern. See [`plugins/README.md`](plugins/README.md) for the full architecture guide, including required files and checklist for new plugins.
 
 ## Downloading 📦
 
@@ -115,4 +131,4 @@ This repo is small enough that it is easier to ship one bundle containing the ex
 
 That produces the exported bundle under `out/export/`.
 
-`npm run build:docs-satellite` writes `out/docs-satellite/`, which is the public component-detail bundle consumed by `octo-docs` when a live runtime plugin, service, or shared Python library is sourced from `openclaw-hub`.
+`npm run build:docs-satellite` writes `out/docs-satellite/`, which is the public component-detail bundle consumed by `octo-docs` when a live runtime plugin, service, or shared library is sourced from `openclaw-hub`.

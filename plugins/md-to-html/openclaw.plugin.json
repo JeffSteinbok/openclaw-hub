@@ -1,0 +1,18 @@
+{
+  "id": "md-to-html",
+  "name": "Markdown to HTML",
+  "emoji": "📝",
+  "description": "Convert styled Markdown reports to HTML using a CSS template",
+  "version": "1.0.0",
+  "entry": "./dist/adapter.js",
+  "tools": ["md_to_html", "md_to_html_syntax"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "openclaw": {}
+}
