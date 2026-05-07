@@ -111,10 +111,23 @@ def _safe_literal_eval_dict(node: ast.expr) -> dict | None:
 
 def _extract_tools_node(plugin_dir: Path) -> list[dict]:
     """Extract tools from a built TypeScript plugin by running it with a mock API."""
-    adapter = plugin_dir / "dist" / "adapter.js"
-    if not adapter.exists():
+    candidates = []
+    manifest_path = plugin_dir / "openclaw.plugin.json"
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            candidates.append(plugin_dir / manifest.get("entry", "dist/adapter.js"))
+        except Exception:
+            pass
+    candidates.append(plugin_dir / "dist" / "adapter.js")
+    candidates.append(plugin_dir / "dist" / "index.js")
+    entry_file = None
+    for c in candidates:
+        if c.exists():
+            entry_file = c
+            break
+    if not entry_file:
         return []
-    # Node script that loads the plugin entry and captures registerTool calls
     script = """
 const tools = [];
 const mockApi = {
@@ -123,7 +136,10 @@ const mockApi = {
 };
 async function run() {
     const mod = await import(new URL('file://' + process.argv[1]));
-    const entry = mod.default?.default || mod.default;
+    let entry = mod.default?.default || mod.default;
+    if (!entry && typeof mod.createEntry === 'function') {
+        entry = mod.createEntry();
+    }
     if (typeof entry === 'function') {
         await entry(mockApi);
     } else if (entry && typeof entry.register === 'function') {
@@ -143,7 +159,7 @@ run().catch(() => process.stdout.write('[]'));
 """
     try:
         result = subprocess.run(
-            ["node", "--input-type=module", "-e", script, str(adapter.resolve())],
+            ["node", "--input-type=module", "-e", script, str(entry_file.resolve())],
             capture_output=True, text=True, timeout=10,
             cwd=str(plugin_dir),
         )
