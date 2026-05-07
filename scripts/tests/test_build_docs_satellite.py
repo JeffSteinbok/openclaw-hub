@@ -18,12 +18,12 @@ class BuildDocsSatelliteTests(unittest.TestCase):
             release_manifest = root / "release-manifest.json"
             plugins_dir = root / "plugins"
             services_dir = root / "services"
-            libs_dir = root / "libs" / "python"
+            libs_dir = root / "libs" / "ts"
             out_dir = root / "out" / "docs-satellite"
 
             _write(
                 release_manifest,
-                json.dumps({"includes": {"plugins": ["demo"], "services": ["fastmail-sse"], "sharedPython": ["repo_paths"]}}),
+                json.dumps({"includes": {"plugins": ["demo"], "services": ["fastmail-sse"]}}),
             )
             _write(
                 plugins_dir / "demo" / "openclaw.plugin.json",
@@ -66,15 +66,19 @@ class BuildDocsSatelliteTests(unittest.TestCase):
             )
             _write(
                 libs_dir / "README.md",
-                "# Shared Python libs\n\nShared runtime packages.\n\n## Dependency direction\n- plugins may import libs\n",
+                "# Shared TypeScript libs\n\nShared runtime packages.\n\n## Dependency direction\n- plugins may import libs\n",
             )
             _write(
-                libs_dir / "repo_paths" / "__init__.py",
-                '__all__ = ["bootstrap_repo_paths"]\n',
+                libs_dir / "mail_runtime_core" / "package.json",
+                json.dumps({"name": "@local/mail_runtime_core", "description": "Mail runtime core"}),
             )
             _write(
-                libs_dir / "repo_paths" / "README.md",
-                "# repo_paths\n\nBootstrap helpers.\n",
+                libs_dir / "mail_runtime_core" / "README.md",
+                "# Mail Runtime Core\n\nProvider-agnostic mail runtime.\n",
+            )
+            _write(
+                libs_dir / "mail_runtime_core" / "src" / "index.ts",
+                "export {};\n",
             )
 
             old_root = build_docs_satellite.REPO_ROOT
@@ -101,7 +105,7 @@ class BuildDocsSatelliteTests(unittest.TestCase):
 
             self.assertEqual(
                 manifest["artifacts"],
-                ["libs.json", "libs/repo_paths.json", "plugins/demo.json", "services.json", "services/fastmail-sse.json"],
+                ["libs.json", "libs/mail_runtime_core.json", "plugins/demo.json", "services.json", "services/fastmail-sse.json"],
             )
             plugin_payload = json.loads((out_dir / "plugins" / "demo.json").read_text(encoding="utf-8"))
             self.assertEqual(plugin_payload["plugin"], "demo")
@@ -115,8 +119,9 @@ class BuildDocsSatelliteTests(unittest.TestCase):
             self.assertEqual(plugin_payload["tools"][0]["name"], "demo_tool")
             service_payload = json.loads((out_dir / "services" / "fastmail-sse.json").read_text(encoding="utf-8"))
             self.assertEqual(service_payload["service"], "fastmail-sse")
+            self.assertIn("source_url", service_payload)
             libs_payload = json.loads((out_dir / "libs.json").read_text(encoding="utf-8"))
-            self.assertEqual(libs_payload["libraries"][0]["id"], "repo_paths")
+            self.assertEqual(libs_payload["libraries"][0]["id"], "mail_runtime_core")
 
     def test_build_docs_satellite_requires_declared_plugin_env_vars_in_readme(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -124,12 +129,12 @@ class BuildDocsSatelliteTests(unittest.TestCase):
             release_manifest = root / "release-manifest.json"
             plugins_dir = root / "plugins"
             services_dir = root / "services"
-            libs_dir = root / "libs" / "python"
+            libs_dir = root / "libs" / "ts"
             out_dir = root / "out" / "docs-satellite"
 
             _write(
                 release_manifest,
-                json.dumps({"includes": {"plugins": ["demo"], "services": [], "sharedPython": []}}),
+                json.dumps({"includes": {"plugins": ["demo"], "services": []}}),
             )
             _write(
                 plugins_dir / "demo" / "openclaw.plugin.json",
@@ -199,12 +204,12 @@ class BuildDocsSatelliteTests(unittest.TestCase):
             release_manifest = root / "release-manifest.json"
             plugins_dir = root / "plugins"
             services_dir = root / "services"
-            libs_dir = root / "libs" / "python"
+            libs_dir = root / "libs" / "ts"
             out_dir = root / "out" / "docs-satellite"
 
             _write(
                 release_manifest,
-                json.dumps({"includes": {"plugins": ["demo"], "services": ["fastmail-sse"], "sharedPython": ["repo_paths"]}}),
+                json.dumps({"includes": {"plugins": ["demo"], "services": ["fastmail-sse"]}}),
             )
             _write(
                 plugins_dir / "demo" / "openclaw.plugin.json",
@@ -224,10 +229,9 @@ class BuildDocsSatelliteTests(unittest.TestCase):
             )
             _write(services_dir / "fastmail-sse" / "README.md", "# FastMail SSE Service\n\nRealtime adapter.\n")
             _write(services_dir / "ignored-service" / "README.md", "# Ignored Service\n\nIgnore me.\n")
-            _write(libs_dir / "README.md", "# Shared Python libs\n\nShared runtime packages.\n")
-            _write(libs_dir / "repo_paths" / "__init__.py", "")
-            _write(libs_dir / "repo_paths" / "README.md", "# repo_paths\n\nBootstrap helpers.\n")
-            _write(libs_dir / "ignored_pkg" / "__init__.py", "")
+            _write(libs_dir / "README.md", "# Shared TypeScript libs\n\nShared runtime packages.\n")
+            _write(libs_dir / "mail_runtime_core" / "package.json", json.dumps({"name": "@local/mail_runtime_core"}))
+            _write(libs_dir / "mail_runtime_core" / "README.md", "# Mail Runtime Core\n\nMail runtime.\n")
             _write(libs_dir / "ignored_pkg" / "README.md", "# ignored\n\nIgnore me.\n")
 
             old_root = build_docs_satellite.REPO_ROOT
@@ -256,5 +260,5 @@ class BuildDocsSatelliteTests(unittest.TestCase):
             self.assertFalse((out_dir / "plugins" / "ignored.json").exists())
             self.assertTrue((out_dir / "services" / "fastmail-sse.json").exists())
             self.assertFalse((out_dir / "services" / "ignored-service.json").exists())
-            self.assertTrue((out_dir / "libs" / "repo_paths.json").exists())
+            self.assertTrue((out_dir / "libs" / "mail_runtime_core.json").exists())
             self.assertFalse((out_dir / "libs" / "ignored_pkg.json").exists())

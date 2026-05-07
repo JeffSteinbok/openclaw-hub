@@ -1,15 +1,21 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "bundler",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "declaration": true,
-    "types": ["node"],
-    "skipLibCheck": true
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/**/*.ts"]
+  "exclude": [
+    "tests",
+    "vitest.config.ts",
+    "dist",
+    "node_modules"
+  ]
 }

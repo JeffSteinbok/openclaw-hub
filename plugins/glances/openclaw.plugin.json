@@ -3,8 +3,7 @@
   "name": "Glances",
   "version": "1.0.0",
   "description": "Read CPU, memory, disk, and summary metrics from a Glances server",
-  "entry": "dist/index.js",
-  "tools": "src/tools.py",
+  "entry": "./dist/adapter.js",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -28,5 +27,6 @@
   },
   "activation": {
     "onStartup": true
-  }
+  },
+  "openclaw": {}
 }

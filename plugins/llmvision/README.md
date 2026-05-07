@@ -11,20 +11,46 @@ Home Assistant LLM Vision integration for Octo. This plugin exposes Python-backe
 | `llmvision_analyze_image` | Trigger a fresh AI image analysis run for a camera entity |
 | `llmvision_create_event` | Create a new event in the LLM Vision timeline |
 
-## Configuration
+## Configuration Schema
 
-This plugin reads Home Assistant connection settings from environment variables:
-
-- `HASS_SERVER` — base URL for the Home Assistant instance
-- `HASS_TOKEN` — bearer token used for Home Assistant API requests
-
-## Structure
-
-```text
-plugins/llmvision/
-  openclaw.plugin.json
-  src/index.ts
-  src/tools.py
+```json
+{
+  "server": "http://192.168.1.123:8123",
+  "token": "your_long_lived_access_token"
+}
 ```
 
-`src/index.ts` registers the plugin with the TypeScript framework, while `src/tools.py` contains the Python tool implementations that talk directly to the Home Assistant REST API.
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `server` | string | Yes | Home Assistant server URL |
+| `token` | string | Yes | Home Assistant long-lived access token |
+
+## Example config
+
+Set credentials in `plugins.entries["llmvision"].config`:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "llmvision": {
+        "enabled": true,
+        "config": {
+          "server": "http://192.168.1.123:8123",
+          "token": "your_long_lived_access_token"
+        }
+      }
+    }
+  }
+}
+```
+
+Uses the same Home Assistant credentials as the homeassistant plugin.
+
+## Development
+
+### Build
+
+```bash
+npm run build --workspace=plugins/llmvision
+```

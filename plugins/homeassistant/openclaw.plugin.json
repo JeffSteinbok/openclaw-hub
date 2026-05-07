@@ -3,24 +3,20 @@
   "name": "Home Assistant",
   "version": "1.0.1",
   "description": "Control devices, query state, and inspect activity in Home Assistant",
-  "entry": "dist/index.js",
-  "tools": "src/tools.py",
+  "entry": "./dist/adapter.js",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
-      "server": { "type": "string", "description": "Home Assistant server URL" },
-      "token": { "type": "string", "description": "Home Assistant long-lived access token" }
-    }
-  },
-  "setup": {
-    "providers": [
-      {
-        "id": "homeassistant",
-        "authMethods": ["token"],
-        "envVars": ["HASS_SERVER", "HASS_TOKEN"]
+      "server": {
+        "type": "string",
+        "description": "Home Assistant server URL"
+      },
+      "token": {
+        "type": "string",
+        "description": "Home Assistant long-lived access token"
       }
-    ]
+    }
   },
   "source": {
     "canonicalRepo": "JeffSteinbok/octo",
@@ -34,5 +30,6 @@
   },
   "activation": {
     "onStartup": true
-  }
+  },
+  "openclaw": {}
 }

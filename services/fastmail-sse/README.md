@@ -2,19 +2,16 @@
 
 Real-time email ingestion daemon that acts as the FastMail-specific adapter over the shared mail runtime. It connects to FastMail's JMAP EventSource, normalizes each new message into a provider-agnostic mail envelope, matches deterministic rules, and invokes shared/runtime-registered mail actions. The current source is FastMail SSE, but the underlying mail runtime is designed to be reused by future Outlook poll/webhook sources.
 
-Core shared code now lives in:
+Core shared code lives in:
 
-- `libs/python/mail_runtime_core/runtime.py` — provider-agnostic envelope/rule/action runtime
-- `libs/python/mail_runtime_core/builtin_actions.py` — shared `notify_email` / `detect_tracking` action registration
-- `libs/python/mail_runtime_core/package_tracking.py` — shared mail-envelope adapter for tracking actions
-- `libs/python/package_tracking_core/` — shared tracking detection, storage, and URL extraction logic
-- `libs/python/mail_runtime_core/result_dispatch.py` — shared `ActionResult` dispatch helper
-- `libs/python/mail_action_usps/` — reusable USPS mail action module (see [`../../libs/python/mail_action_usps/README.md`](../../libs/python/mail_action_usps/README.md))
+- `libs/ts/mail_runtime_core/` — provider-agnostic envelope/rule/action runtime, built-in actions (`notify_email`, `detect_tracking`), result dispatch
+- `libs/ts/package_tracking_core/` — shared tracking detection, storage, and URL extraction logic
+- `libs/ts/mail_action_usps/` — reusable USPS mail action module (rules, memory, vision analysis)
 
-`services/fastmail-sse/` is now the FastMail source/adapter layer that invokes the shared runtime.
+`services/fastmail-sse/` is the FastMail source/adapter layer that invokes the shared runtime.
 
 ## Features
-- **Shared mail pipeline**: `source -> envelope -> rules -> Python actions`
+- **Shared mail pipeline**: `source -> envelope -> rules -> actions`
 - **Deterministic mail rules**: Top-level `mail_rules` for source/account/sender/subject matching
 - **Multi-mailbox monitoring**: Monitor personal inbox + shared mailboxes simultaneously
 - **Package tracking detection**: Automatically detect and register tracking numbers
@@ -122,7 +119,7 @@ Create `~/.openclaw/services/fastmail-sse-config.json` (see `config.example.json
 
 **Label**: Human-readable label for the account (displayed in multi-account notifications)
 
-Generic `mail_rules` syntax, match fields, ordering, and reusable examples live in `libs/python/mail_runtime_core/README.md`.
+Generic `mail_rules` syntax, match fields, ordering, and reusable examples live in `libs/ts/mail_runtime_core/`.
 
 ### FastMail-exposed actions
 
@@ -136,7 +133,7 @@ This service registers the following shared/domain actions for use in `mail_rule
 
 ### FastMail-specific USPS example
 
-For the USPS internals, agent boundaries, two-phase processing model, and rule/config schemas, see [`libs/python/mail_action_usps/README.md`](../../libs/python/mail_action_usps/README.md).
+For the USPS internals, agent boundaries, two-phase processing model, and rule/config schemas, see [`libs/ts/mail_action_usps/`](../../libs/ts/mail_action_usps/).
 
 Use a second rule if you want to re-process an older USPS digest by forwarding it to yourself. Forwarded mail usually changes the sender away from `usps.com`, so it needs its own `sender_email`/`body_contains` match.
 

@@ -22,19 +22,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
       - name: Install Node dependencies
         run: npm install
-
-      - name: Install Python dependencies
-        run: |
-          for req in plugins/*/requirements.txt; do
-            [ -f "$req" ] && pip install -r "$req"
-          done
 
       - name: Build
         run: npm run build
@@ -42,14 +31,16 @@ jobs:
       - name: Run script tests
         run: npm run test:scripts
 
-      - name: Run plugin tests
+      - name: Run TypeScript plugin tests
         run: |
           set -euo pipefail
           failed=0
-          for test_file in plugins/*/tests/test_*.py; do
-            dir="$(dirname "$(dirname "$test_file")")"
-            echo "=== $dir ==="
-            (cd "$dir" && python3 -m unittest discover -s tests -p 'test_*.py' -v) || failed=1
+          for vitest_config in plugins/*/vitest.config.ts; do
+            dir="$(dirname "$vitest_config")"
+            if [ -f "$dir/package.json" ] && grep -q '"test"' "$dir/package.json"; then
+              echo "=== $dir ==="
+              (cd "$dir" && npm test) || failed=1
+            fi
           done
           [ "$failed" -eq 0 ]
 
@@ -57,10 +48,12 @@ jobs:
         run: |
           set -euo pipefail
           failed=0
-          for test_file in services/*/tests/test_*.py; do
-            dir="$(dirname "$(dirname "$test_file")")"
-            echo "=== $dir ==="
-            (cd "$dir" && python3 -m unittest discover -s tests -p 'test_*.py' -v) || failed=1
+          for vitest_config in services/*/vitest.config.ts; do
+            dir="$(dirname "$vitest_config")"
+            if [ -f "$dir/package.json" ] && grep -q '"test"' "$dir/package.json"; then
+              echo "=== $dir ==="
+              (cd "$dir" && npm test) || failed=1
+            fi
           done
           [ "$failed" -eq 0 ]
 
@@ -68,9 +61,11 @@ jobs:
         run: |
           set -euo pipefail
           failed=0
-          for test_file in libs/python/*/tests/test_*.py; do
-            dir="$(dirname "$(dirname "$test_file")")"
-            echo "=== $dir ==="
-            (cd "$dir" && python3 -m unittest discover -s tests -p 'test_*.py' -v) || failed=1
+          for vitest_config in libs/ts/*/vitest.config.ts; do
+            dir="$(dirname "$vitest_config")"
+            if [ -f "$dir/package.json" ] && grep -q '"test"' "$dir/package.json"; then
+              echo "=== $dir ==="
+              (cd "$dir" && npm test) || failed=1
+            fi
           done
           [ "$failed" -eq 0 ]

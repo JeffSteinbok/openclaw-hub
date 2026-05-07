@@ -4,13 +4,15 @@
   "version": "2026.4.19",
   "type": "module",
   "workspaces": [
-    "plugins/framework",
+    "libs/ts/package_tracking_core",
+    "libs/ts/mail_runtime_core",
+    "libs/ts/mail_action_usps",
+    "services/fastmail-sse",
     "plugins/fastmail",
     "plugins/glances",
     "plugins/homeassistant",
     "plugins/ics-calendar",
     "plugins/llmvision",
-    "plugins/opentable",
     "plugins/outlook-calendar",
     "plugins/outlook-mail",
     "plugins/outlook-work-calendar",
@@ -18,15 +20,20 @@
     "plugins/spotify",
     "plugins/stock-quotes",
     "plugins/withings",
-    "plugins/usps-mail"
+    "plugins/usps-mail",
+    "plugins/package-tracking",
+    "plugins/usps-mail",
+    "plugins/fastmail"
   ],
   "scripts": {
-    "build:framework": "npm run build --workspace plugins/framework",
-    "build:plugins": "npm run build --workspace plugins/fastmail --workspace plugins/glances --workspace plugins/homeassistant --workspace plugins/ics-calendar --workspace plugins/llmvision --workspace plugins/opentable --workspace plugins/outlook-calendar --workspace plugins/outlook-mail --workspace plugins/outlook-work-calendar --workspace plugins/package-tracking --workspace plugins/spotify --workspace plugins/stock-quotes --workspace plugins/withings --workspace plugins/usps-mail",
-    "build": "npm run build:framework && npm run build:plugins && node scripts/symlink-python.mjs",
+    "build:plugins": "npm run build --workspace plugins/fastmail --workspace plugins/glances --workspace plugins/homeassistant --workspace plugins/ics-calendar --workspace plugins/llmvision --workspace plugins/outlook-calendar --workspace plugins/outlook-mail --workspace plugins/outlook-work-calendar --workspace plugins/package-tracking --workspace plugins/spotify --workspace plugins/stock-quotes --workspace plugins/withings --workspace plugins/usps-mail",
+    "build": "npm run build:plugins",
     "build:docs-satellite": "python3 scripts/build_docs_satellite.py",
-    "test:scripts": "node --test scripts/tests/symlink-python.test.mjs && python3 -m unittest scripts.tests.test_export_artifacts scripts.tests.test_build_docs_satellite",
+    "test:scripts": "python3 -m unittest scripts.tests.test_export_artifacts scripts.tests.test_build_docs_satellite",
     "export:artifacts": "python3 scripts/export_artifacts.py",
     "export:release": "python3 scripts/export_artifacts.py --all-plugins --all-services"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
   }
 }
