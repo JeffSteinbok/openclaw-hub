@@ -124,3 +124,38 @@ Ask your agent for the Withings auth URL, open it in a browser, then pass the re
 - Scopes requested: `user.info`, `user.metrics`, and `user.activity`.
 - Tokens are stored at `~/.openclaw/withings_tokens.json`.
 - Access tokens refresh automatically using the stored refresh token.
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/withings
+npm install && npm run build
+node dist/bin/withings.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/withings.js withings-auth-url ...
+node dist/bin/withings.js withings-auth-complete ...
+node dist/bin/withings.js withings-auth-status ...
+node dist/bin/withings.js withings-get-measurements ...
+node dist/bin/withings.js withings-get-activity ...
+node dist/bin/withings.js withings-get-sleep ...
+node dist/bin/withings.js withings-get-heart ...
+
+# JSON output
+node dist/bin/withings.js <command> [args...] --json
+```
+
+### CLI Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `WITHINGS_CLIENT_ID` | Withings OAuth2 client ID |
+| `WITHINGS_CLIENT_SECRET` | Withings OAuth2 client secret |
+| `WITHINGS_REDIRECT_URI` | OAuth2 redirect URI |

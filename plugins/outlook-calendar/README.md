@@ -75,3 +75,32 @@ openclaw.plugin.json
 src/tools.py
 src/fetch_calendar.py
 ```
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/outlook-calendar
+npm install && npm run build
+node dist/bin/outlook-calendar.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/outlook-calendar.js outlook-calendar-fetch ...
+
+# JSON output
+node dist/bin/outlook-calendar.js <command> [args...] --json
+```
+
+### CLI Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `OUTLOOK_CALENDAR_CLIENT_ID` | Microsoft OAuth client ID |
+| `OUTLOOK_CALENDAR_CLIENT_SECRET` | Microsoft OAuth client secret |
+| `OUTLOOK_CALENDAR_REFRESH_TOKEN` | Microsoft OAuth refresh token |

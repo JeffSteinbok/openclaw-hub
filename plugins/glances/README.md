@@ -90,3 +90,34 @@ npm run build --workspace=plugins/glances
 ```bash
 python3 plugins/glances/tests/test_tools.py
 ```
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/glances
+npm install && npm run build
+node dist/bin/glances.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/glances.js glances-summary-get ...
+node dist/bin/glances.js glances-cpu-get ...
+node dist/bin/glances.js glances-memory-get ...
+node dist/bin/glances.js glances-disk-get ...
+node dist/bin/glances.js glances-endpoint-get ...
+
+# JSON output
+node dist/bin/glances.js <command> [args...] --json
+```
+
+### CLI Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `GLANCES_URL` | Base URL for the Glances web server, e.g. http://127.0.0.1:61208 |

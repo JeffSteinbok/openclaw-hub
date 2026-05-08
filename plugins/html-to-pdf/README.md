@@ -38,3 +38,24 @@ No configuration required.
 ```bash
 npm run build --workspace=plugins/html-to-pdf
 ```
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/html-to-pdf
+npm install && npm run build
+node dist/bin/html-to-pdf.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/html-to-pdf.js html-to-pdf <input_path>
+
+# JSON output
+node dist/bin/html-to-pdf.js <command> [args...] --json
+```

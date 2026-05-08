@@ -78,3 +78,30 @@ openclaw.plugin.json
 src/tools.py
 src/fetch_calendar.py
 ```
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/ics-calendar
+npm install && npm run build
+node dist/bin/ics-calendar.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/ics-calendar.js ics-calendar-fetch ...
+
+# JSON output
+node dist/bin/ics-calendar.js <command> [args...] --json
+```
+
+### CLI Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `ICS_CALENDAR_CALENDARS` | List of calendar configs with id, label, url |

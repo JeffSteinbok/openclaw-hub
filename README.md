@@ -35,6 +35,8 @@ Services like `fastmail-sse` run as separate processes (typically systemd user s
 
 ## Plugins
 
+All plugins can also be used as **standalone CLI tools** — no gateway required. Run `npm run build` in any plugin directory to generate a CLI at `dist/bin/<name>.js`. See [plugins/README.md](plugins/README.md#cli-generation) for details.
+
 | | Plugin | Description |
 |---|--------|-------------|
 | ✉️ | [Fastmail](plugins/fastmail/) | Send/search/read mail, work with calendars |

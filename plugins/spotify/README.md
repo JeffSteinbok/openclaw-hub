@@ -74,3 +74,40 @@ pip install spotipy
 - Use `spotify_get_devices` to find available devices and pass `device_id` to target a specific one
 - Search results include Spotify URIs that can be passed directly to `spotify_play`
 - Token cache is stored at `~/.openclaw/.spotify_token_cache` (auto-refreshed)
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/spotify
+npm install && npm run build
+node dist/bin/spotify.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/spotify.js spotify-now-playing ...
+node dist/bin/spotify.js spotify-play ...
+node dist/bin/spotify.js spotify-pause ...
+node dist/bin/spotify.js spotify-next ...
+node dist/bin/spotify.js spotify-previous ...
+node dist/bin/spotify.js spotify-search ...
+node dist/bin/spotify.js spotify-get-playlists ...
+node dist/bin/spotify.js spotify-get-devices ...
+node dist/bin/spotify.js spotify-add-to-playlist ...
+
+# JSON output
+node dist/bin/spotify.js <command> [args...] --json
+```
+
+### CLI Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `SPOTIFY_CLIENT_ID` | Spotify app client ID |
+| `SPOTIFY_CLIENT_SECRET` | Spotify app client secret |
+| `SPOTIFY_REDIRECT_URI` | OAuth2 redirect URI |

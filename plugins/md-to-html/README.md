@@ -97,3 +97,25 @@ npm install
 npm test
 npm run build  # outputs dist/
 ```
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/md-to-html
+npm install && npm run build
+node dist/bin/md-to-html.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/md-to-html.js md-to-html <input_path>
+node dist/bin/md-to-html.js md-to-html-syntax Returns
+
+# JSON output
+node dist/bin/md-to-html.js <command> [args...] --json
+```
