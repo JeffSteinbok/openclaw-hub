@@ -5,9 +5,7 @@
  */
 
 import { Type } from "@sinclair/typebox";
-import { resolveConfig } from "./config.js";
-import { cmdInbox, cmdSearch, cmdRead } from "./search.js";
-import { cmdSend, cmdMeeting, cmdUpdateEvent, cmdQueryEvents } from "./email.js";
+import { resolveConfig, cmdInbox, cmdSearch, cmdRead, cmdSend, cmdMeeting, cmdUpdateEvent, cmdQueryEvents } from "./handlers.js";
 
 // ---------------------------------------------------------------------------
 // Types

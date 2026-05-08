@@ -3,11 +3,15 @@
   "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "withings": "./dist/bin/withings.js"
+  },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ../../libs/ts/cli_shared/dist/generate-cli.js --entry ./dist/index.js --out ./dist/bin",
     "test": "vitest run"
   },
   "dependencies": {
+    "@openclaw/cli-shared": "file:../../libs/ts/cli_shared",
     "@sinclair/typebox": "^0.34.49"
   },
   "devDependencies": {
