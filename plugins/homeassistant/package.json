@@ -3,12 +3,16 @@
   "version": "1.0.1",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "homeassistant": "./dist/bin/homeassistant.js"
+  },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ../../libs/ts/cli_shared/dist/generate-cli.js --entry ./dist/index.js --out ./dist/bin",
     "test": "vitest run"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.49"
+    "@sinclair/typebox": "^0.34.49",
+    "@openclaw/cli-shared": "file:../../libs/ts/cli_shared"
   },
   "devDependencies": {
     "@types/node": "^25",

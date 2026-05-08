@@ -6,12 +6,7 @@
  */
 
 import { Type } from "@sinclair/typebox";
-// The library only exports processDigest from its main entry.
-// Rules and memory helpers are imported from internal dist files.
-import { processDigest } from "@openclaw/mail-action-usps";
-
-import { addRule, removeRule, testRule, listRules } from "./usps-rules.js";
-import { lookup, getStats, loadState } from "./usps-memory.js";
+import { processDigest, addRule, removeRule, testRule, listRules, lookup, getStats, loadState } from "./handlers.js";
 
 // ---------------------------------------------------------------------------
 // Types

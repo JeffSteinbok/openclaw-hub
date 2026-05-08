@@ -3,14 +3,18 @@
   "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "html-to-pdf": "./dist/bin/html-to-pdf.js"
+  },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ../../libs/ts/cli_shared/dist/generate-cli.js --entry ./dist/index.js --out ./dist/bin",
     "test": "vitest run"
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.48"
   },
   "devDependencies": {
+    "@openclaw/cli-shared": "file:../../libs/ts/cli_shared",
     "@types/node": "^25",
     "tsup": "^8.3.0",
     "typescript": "^6",

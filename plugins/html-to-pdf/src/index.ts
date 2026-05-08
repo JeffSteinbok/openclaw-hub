@@ -1,13 +1,15 @@
 /**
- * HTML to PDF plugin — converts HTML files to PDF using Chromium headless.
+ * HTML to PDF plugin — OpenClaw plugin shim.
+ *
+ * Constructs config from pluginConfig, registers tools that delegate to handlers.
  */
 
-import { execFile } from "node:child_process";
-import { access } from "node:fs/promises";
-import { promisify } from "node:util";
 import { Type } from "@sinclair/typebox";
+import { htmlToPdf, type HtmlToPdfResult } from "./handlers.js";
 
-const execFileAsync = promisify(execFile);
+// Re-export for consumers and tests
+export { htmlToPdf };
+export type { HtmlToPdfResult };
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,91 +20,8 @@ type PluginApi = {
   pluginConfig?: Record<string, unknown>;
 };
 
-export interface HtmlToPdfResult {
-  success: boolean;
-  output_path?: string;
-  error?: string;
-}
-
 // ---------------------------------------------------------------------------
-// Chromium discovery and invocation
-// ---------------------------------------------------------------------------
-
-const CHROMIUM_PATHS = ["chromium-browser", "chromium", "google-chrome"];
-
-async function resolvedPaths(): Promise<string[]> {
-  const found: string[] = [];
-  for (const bin of CHROMIUM_PATHS) {
-    try {
-      const { stdout } = await execFileAsync("which", [bin]);
-      found.push(stdout.trim());
-    } catch {
-      // not found
-    }
-  }
-  // Deduplicate by resolved path (chromium-browser and chromium may both point
-  // to the same snap wrapper)
-  return [...new Set(found)];
-}
-
-// ---------------------------------------------------------------------------
-// Core logic
-// ---------------------------------------------------------------------------
-
-export async function htmlToPdf(
-  inputPath: string,
-  outputPath: string,
-  timeoutMs = 30000,
-): Promise<HtmlToPdfResult> {
-  if (!outputPath.endsWith(".pdf")) {
-    return { success: false, error: "output_path must end with .pdf" };
-  }
-
-  try {
-    await access(inputPath);
-  } catch {
-    return { success: false, error: `Input file not found: ${inputPath}` };
-  }
-
-  const paths = await resolvedPaths();
-  if (paths.length === 0) {
-    return {
-      success: false,
-      error: "Chromium not found. Install chromium-browser, chromium, or google-chrome.",
-    };
-  }
-
-  const args = [
-    "--headless",
-    "--no-sandbox",
-    "--disable-gpu",
-    `--print-to-pdf=${outputPath}`,
-    `file://${inputPath}`,
-  ];
-
-  let lastError = "Chromium did not produce the output file.";
-
-  for (const bin of paths) {
-    try {
-      await execFileAsync(bin, args, { timeout: timeoutMs });
-    } catch (e: unknown) {
-      lastError = e instanceof Error ? e.message : String(e);
-      continue;
-    }
-    // Verify the file was actually written (snap sandboxes may silently drop it)
-    try {
-      await access(outputPath);
-      return { success: true, output_path: outputPath };
-    } catch {
-      // Binary exited 0 but didn't produce the file — try the next one
-    }
-  }
-
-  return { success: false, error: lastError };
-}
-
-// ---------------------------------------------------------------------------
-// Plugin
+// Helpers
 // ---------------------------------------------------------------------------
 
 function formatResult(data: unknown) {
@@ -111,6 +30,10 @@ function formatResult(data: unknown) {
     details: {},
   };
 }
+
+// ---------------------------------------------------------------------------
+// Plugin entry
+// ---------------------------------------------------------------------------
 
 function createEntry() {
   return {
