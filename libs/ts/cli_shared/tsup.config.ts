@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/adapter.ts", "src/handlers.ts"],
+  entry: ["src/index.ts", "src/runtime.ts", "src/generate-cli.ts"],
   format: ["esm"],
   outDir: "dist",
   dts: false,
@@ -10,5 +10,4 @@ export default defineConfig({
   target: "node20",
   splitting: false,
   shims: false,
-  skipNodeModulesBundle: true,
 });
