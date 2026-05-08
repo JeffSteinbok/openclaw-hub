@@ -2,11 +2,15 @@
   "name": "ics-calendar",
   "version": "1.0.1",
   "type": "module",
+  "bin": {
+    "ics-calendar": "./dist/bin/ics-calendar.js"
+  },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ../../libs/ts/cli_shared/dist/generate-cli.js --entry ./dist/index.js --out ./dist/bin",
     "test": "vitest run"
   },
   "devDependencies": {
+    "@openclaw/cli-shared": "file:../../libs/ts/cli_shared",
     "typescript": "^6",
     "@types/node": "^25",
     "tsup": "^8.3.0",
