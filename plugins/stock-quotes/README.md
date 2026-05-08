@@ -63,3 +63,31 @@ The plugin works out of the box with no configuration. It fetches stocks, ETFs, 
 ```bash
 npm run build --workspace=plugins/stock-quotes
 ```
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/stock-quotes
+npm install && npm run build
+node dist/bin/stock-quotes.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/stock-quotes.js stock-quote ...
+node dist/bin/stock-quotes.js stock-quotes ...
+
+# JSON output
+node dist/bin/stock-quotes.js <command> [args...] --json
+```
+
+### CLI Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `STOCK_QUOTES_FINNHUB_API_KEY` | Optional Finnhub API key for premium data |

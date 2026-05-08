@@ -14,11 +14,40 @@ Use this structure for plugin READMEs in `openclaw-hub`.
 
 ## Recommended sections
 
+- `## CLI Usage`
 - `## Notes`
 - `## Plugin Structure`
 - setup or auth sections when the plugin needs extra operational steps
 
 ## Section details
+
+### CLI Usage
+
+- Show how to build and run the plugin as a standalone CLI
+- Include example commands for each tool/subcommand
+- List environment variables needed for CLI mode (if plugin has configSchema)
+
+Example:
+
+```md
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+\`\`\`bash
+cd plugins/my-plugin
+npm install && npm run build
+node dist/bin/my-plugin.js --help
+node dist/bin/my-plugin.js my-tool <arg>
+node dist/bin/my-plugin.js my-tool <arg> --json
+\`\`\`
+
+### CLI Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `MY_PLUGIN_API_KEY` | API key for the service |
+```
 
 ### Tools
 

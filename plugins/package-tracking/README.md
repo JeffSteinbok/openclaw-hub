@@ -55,3 +55,35 @@ Add the path to your provider module in the plugin config:
 
 Providers are loaded asynchronously at startup. If a provider fails to load,
 a warning is logged and the remaining providers continue to initialize.
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/package-tracking
+npm install && npm run build
+node dist/bin/package-tracking.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/package-tracking.js package-track ...
+node dist/bin/package-tracking.js package-add ...
+node dist/bin/package-tracking.js package-remove ...
+node dist/bin/package-tracking.js package-list ...
+node dist/bin/package-tracking.js package-scan ...
+node dist/bin/package-tracking.js get-package-status ...
+
+# JSON output
+node dist/bin/package-tracking.js <command> [args...] --json
+```
+
+### CLI Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `PACKAGE_TRACKING_STATUS_PROVIDERS` | Paths to external ESM carrier status provider plugin modules |

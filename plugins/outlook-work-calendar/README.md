@@ -62,3 +62,31 @@ openclaw.plugin.json
 src/tools.py
 src/fetch_calendar.py
 ```
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/outlook-work-calendar
+npm install && npm run build
+node dist/bin/outlook-work-calendar.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/outlook-work-calendar.js outlook-work-calendar-fetch ...
+
+# JSON output
+node dist/bin/outlook-work-calendar.js <command> [args...] --json
+```
+
+### CLI Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `OUTLOOK_WORK_CALENDAR_CALENDAR_URL` | Published Outlook work calendar base URL |
+| `OUTLOOK_WORK_CALENDAR_FOLDER_ID` | EWS folder ID for the calendar |

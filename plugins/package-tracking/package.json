@@ -3,16 +3,21 @@
   "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "package-tracking": "./dist/bin/package-tracking.js"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "tsup && node ../../libs/ts/cli_shared/dist/generate-cli.js --entry ./dist/index.js --out ./dist/bin",
     "test": "vitest run"
   },
   "dependencies": {
+    "@openclaw/cli-shared": "file:../../libs/ts/cli_shared",
     "@openclaw/package-tracking-core": "file:../../libs/ts/package_tracking_core",
     "@sinclair/typebox": "^0.34.48"
   },
   "devDependencies": {
     "@types/node": "^25",
+    "tsup": "^8.3.0",
     "typescript": "^6",
     "vitest": "^2.1.8"
   },
