@@ -1,0 +1,220 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock fetch globally
+const mockFetch = vi.fn();
+vi.stubGlobal("fetch", mockFetch);
+
+// Dynamic import to pick up the mock
+const mod = await import("../src/index.js");
+const plugin = mod.default;
+
+describe("satellite plugin", () => {
+  const tools: Record<string, { execute: (id: string, params: Record<string, unknown>) => Promise<unknown> }> = {};
+  const api = {
+    registerTool: (tool: { name: string; execute: unknown }) => {
+      tools[tool.name] = tool as typeof tools[string];
+    },
+    pluginConfig: { token: "test-token", baseUrl: "http://localhost:9000" },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    plugin.register(api);
+  });
+
+  describe("amazon_list_orders", () => {
+    it("returns orders from satellite", async () => {
+      const fakeResponse = {
+        orders: [{ id: "113-111-222", date: "2026-05-01", total: "$29.99", status: "Delivered", items: ["Widget"] }],
+        total: 1,
+        page: 1,
+      };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => fakeResponse,
+      });
+
+      const result = await tools.amazon_list_orders.execute("call1", {});
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.orders).toHaveLength(1);
+      expect(parsed.orders[0].id).toBe("113-111-222");
+    });
+
+    it("passes page parameter", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ orders: [], total: 0, page: 2 }),
+      });
+
+      await tools.amazon_list_orders.execute("call1b", { page: 2 });
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain("page=2");
+    });
+
+    it("returns error on fetch failure", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        text: async () => "down",
+      });
+
+      const result = await tools.amazon_list_orders.execute("call2", {});
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.error).toContain("503");
+    });
+  });
+
+  describe("amazon_get_order", () => {
+    it("returns order details", async () => {
+      const fakeOrder = {
+        id: "113-111-222",
+        status: "Shipped",
+        items: [{ title: "Widget", quantity: 1, price: "$29.99" }],
+        tracking: [{ carrier: "UPS", tracking_number: "1Z999AA10123456784", status: "In Transit" }],
+      };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => fakeOrder });
+
+      const result = await tools.amazon_get_order.execute("call3", { order_id: "113-111-222" });
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.id).toBe("113-111-222");
+      expect(parsed.tracking[0].carrier).toBe("UPS");
+    });
+
+    it("errors when order_id is missing", async () => {
+      const result = await tools.amazon_get_order.execute("call4", {});
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.error).toBe("order_id is required");
+    });
+  });
+
+  describe("amazon_search", () => {
+    it("searches products", async () => {
+      const fakeResults = { results: [{ asin: "B0TEST", title: "Test Product", price: "$9.99" }] };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => fakeResults });
+
+      const result = await tools.amazon_search.execute("call7", { q: "test widget" });
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.results[0].asin).toBe("B0TEST");
+    });
+
+    it("errors when q is missing", async () => {
+      const result = await tools.amazon_search.execute("call8", {});
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.error).toContain("q");
+    });
+  });
+
+  describe("amazon_get_product", () => {
+    it("returns product details", async () => {
+      const fakeProduct = { asin: "B0TEST", title: "Widget", price: "$19.99", rating: 4.5 };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => fakeProduct });
+
+      const result = await tools.amazon_get_product.execute("call9", { asin: "B0TEST" });
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.asin).toBe("B0TEST");
+      expect(parsed.rating).toBe(4.5);
+    });
+  });
+
+  describe("amazon_get_cart", () => {
+    it("returns cart contents", async () => {
+      const fakeCart = { items: [{ item_id: "abc", title: "Widget", quantity: 1 }] };
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => fakeCart });
+
+      const result = await tools.amazon_get_cart.execute("call10", {});
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.items[0].item_id).toBe("abc");
+    });
+  });
+
+  describe("amazon_add_to_cart", () => {
+    it("adds item to cart", async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) });
+
+      const result = await tools.amazon_add_to_cart.execute("call11", { asin: "B0TEST" });
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.success).toBe(true);
+      expect(mockFetch.mock.calls[0][1].method).toBe("POST");
+    });
+  });
+
+  describe("amazon_remove_from_cart", () => {
+    it("removes item from cart", async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) });
+
+      const result = await tools.amazon_remove_from_cart.execute("call12", { item_id: "abc" });
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.success).toBe(true);
+      expect(mockFetch.mock.calls[0][1].method).toBe("DELETE");
+    });
+  });
+
+  describe("monarch_get_accounts", () => {
+    it("returns accounts grouped by type", async () => {
+      const fakeAccounts = {
+        provider: "monarch",
+        accounts: {
+          Investments: { total: 100000, accounts: [{ name: "401k", balance: 100000, institution: "Fidelity", last_updated: "2026-05-05" }] },
+        },
+      };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => fakeAccounts,
+      });
+
+      const result = await tools.monarch_get_accounts.execute("call5", {});
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.provider).toBe("monarch");
+      expect(parsed.accounts.Investments.total).toBe(100000);
+    });
+  });
+
+  describe("monarch_get_net_worth", () => {
+    it("returns net worth summary", async () => {
+      const fakeNetWorth = { provider: "monarch", assets: 500000, liabilities: 100000, net_worth: 400000 };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => fakeNetWorth,
+      });
+
+      const result = await tools.monarch_get_net_worth.execute("call6", {});
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.net_worth).toBe(400000);
+      expect(parsed.assets).toBe(500000);
+    });
+  });
+
+  describe("monarch_get_spending", () => {
+    it("returns spending trends with default months", async () => {
+      const fakeSpending = {
+        provider: "monarch",
+        months: [
+          { month: "2026-04", income: 8000, expenses: 5000, savings: 3000 },
+          { month: "2026-03", income: 8000, expenses: 4500, savings: 3500 },
+          { month: "2026-02", income: 8000, expenses: 6000, savings: 2000 },
+        ],
+      };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => fakeSpending,
+      });
+
+      const result = await tools.monarch_get_spending.execute("call7", {});
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.provider).toBe("monarch");
+      expect(parsed.months).toHaveLength(3);
+      expect(mockFetch.mock.calls[0][0]).toContain("/monarch/spending?months=3");
+    });
+
+    it("passes custom months parameter", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ provider: "monarch", months: [] }),
+      });
+
+      await tools.monarch_get_spending.execute("call8", { months: 6 });
+      expect(mockFetch.mock.calls[0][0]).toContain("/monarch/spending?months=6");
+    });
+  });
+});

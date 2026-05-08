@@ -1,0 +1,23 @@
+{
+  "id": "octo-satellite",
+  "name": "Octo Satellite",
+  "emoji": "🛰️",
+  "description": "OpenClaw toolset providing structured access to the [Octo Satellite](https://github.com/JeffSteinbok/octo-satellite) service. Exposes Amazon order management and Monarch Money financial tools.",
+  "version": "0.1.0",
+  "entry": "./dist/adapter.js",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "token": { "type": "string", "description": "Satellite API bearer token" },
+      "baseUrl": { "type": "string", "description": "Satellite base URL (default: http://localhost:9000)" }
+    }
+  },
+  "source": {
+    "canonicalRepo": "JeffSteinbok/openclaw-hub",
+    "canonicalPath": "plugins/octo-satellite"
+  },
+  "activation": {
+    "onStartup": true
+  }
+}
