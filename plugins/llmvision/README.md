@@ -54,3 +54,34 @@ Uses the same Home Assistant credentials as the homeassistant plugin.
 ```bash
 npm run build --workspace=plugins/llmvision
 ```
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/llmvision
+npm install && npm run build
+node dist/bin/llmvision.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/llmvision.js llmvision-timeline-get ...
+node dist/bin/llmvision.js llmvision-get-image ...
+node dist/bin/llmvision.js llmvision-analyze-image ...
+node dist/bin/llmvision.js llmvision-create-event ...
+
+# JSON output
+node dist/bin/llmvision.js <command> [args...] --json
+```
+
+### CLI Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `LLMVISION_SERVER` | Home Assistant server URL |
+| `LLMVISION_TOKEN` | Home Assistant long-lived access token |

@@ -95,3 +95,35 @@ openclaw.plugin.json
 src/tools.py
 src/outlook_mail.py
 ```
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/outlook-mail
+npm install && npm run build
+node dist/bin/outlook-mail.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/outlook-mail.js outlook-inbox ...
+node dist/bin/outlook-mail.js outlook-search ...
+node dist/bin/outlook-mail.js outlook-read ...
+node dist/bin/outlook-mail.js outlook-save-attachments ...
+
+# JSON output
+node dist/bin/outlook-mail.js <command> [args...] --json
+```
+
+### CLI Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `OUTLOOK_MAIL_CLIENT_ID` | Microsoft OAuth client ID |
+| `OUTLOOK_MAIL_CLIENT_SECRET` | Microsoft OAuth client secret |
+| `OUTLOOK_MAIL_REFRESH_TOKEN` | Microsoft OAuth refresh token |

@@ -64,3 +64,41 @@ Set credentials in `plugins.entries["homeassistant"].config`:
 ```bash
 npm run build --workspace=plugins/homeassistant
 ```
+
+---
+
+## CLI Usage
+
+All tools are also available as a standalone CLI:
+
+```bash
+cd plugins/homeassistant
+npm install && npm run build
+node dist/bin/homeassistant.js --help
+```
+
+### Example commands
+
+```bash
+node dist/bin/homeassistant.js hass-state-get ...
+node dist/bin/homeassistant.js hass-state-list ...
+node dist/bin/homeassistant.js hass-service-call ...
+node dist/bin/homeassistant.js hass-event-list ...
+node dist/bin/homeassistant.js hass-person-find ...
+node dist/bin/homeassistant.js hass-speaker-volume-get ...
+node dist/bin/homeassistant.js hass-speaker-volume-set ...
+node dist/bin/homeassistant.js hass-logbook ...
+node dist/bin/homeassistant.js hass-camera-list ...
+node dist/bin/homeassistant.js hass-camera-snapshot ...
+node dist/bin/homeassistant.js hass-camera-collage ...
+
+# JSON output
+node dist/bin/homeassistant.js <command> [args...] --json
+```
+
+### CLI Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `HOMEASSISTANT_SERVER` | Home Assistant server URL (e.g. http://192.168.1.76:8123) |
+| `HOMEASSISTANT_TOKEN` | Home Assistant long-lived access token |
