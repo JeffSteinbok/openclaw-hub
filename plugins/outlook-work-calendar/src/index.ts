@@ -16,7 +16,7 @@ type PluginApi = { registerTool: (t: unknown) => void; pluginConfig?: Record<str
 function fmt(data: unknown) { return { content: [{ type: "text" as const, text: JSON.stringify(data) }], details: {} }; }
 
 function buildConfig(pluginConfig?: Record<string, unknown>): OutlookWorkCalendarConfig {
-  const calendarUrl = String(pluginConfig?.calendarUrl ?? process.env.OUTLOOK_WORK_CALENDAR_URL ?? "");
+  const calendarUrl = String(pluginConfig?.url ?? process.env.OUTLOOK_WORK_CALENDAR_URL ?? "");
   const folderId = String(pluginConfig?.folderId ?? process.env.OUTLOOK_WORK_FOLDER_ID ?? "");
   return { calendarUrl, folderId };
 }
