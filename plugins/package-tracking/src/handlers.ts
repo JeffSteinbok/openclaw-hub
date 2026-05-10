@@ -11,6 +11,7 @@ import {
   listPackages,
   scanTextForTrackingNumbers,
   statusRegistry,
+  builtinProviders,
   type CarrierStatusPlugin,
 } from "@openclaw/package-tracking-core";
 
@@ -22,6 +23,13 @@ export interface PackageTrackingConfig {
 }
 
 export async function loadProviders(providers: string[]): Promise<void> {
+  // Register built-in providers first (USPS, FedEx, UPS)
+  for (const provider of builtinProviders) {
+    statusRegistry.register(provider);
+  }
+  console.log(`[package-tracking] registered ${builtinProviders.length} built-in providers`);
+
+  // Then load any external/override providers (registered last = highest priority)
   for (const pluginPath of providers) {
     try {
       const mod = await import(pluginPath) as CarrierStatusPlugin;
@@ -86,8 +94,12 @@ export function handlePackageAdd(args: Record<string, unknown>): Record<string, 
 
   const carrier = (args.carrier as string | undefined) ?? undefined;
   const label = (args.label as string | undefined) ?? undefined;
+  const orderId = (args.order_id as string | undefined) ?? undefined;
 
-  return addPackage(trackingNumber, carrier, label);
+  const extra: Record<string, unknown> = {};
+  if (orderId) extra.order_id = orderId;
+
+  return addPackage(trackingNumber, carrier, label, Object.keys(extra).length ? extra : null);
 }
 
 export function handlePackageRemove(args: Record<string, unknown>): Record<string, unknown> {

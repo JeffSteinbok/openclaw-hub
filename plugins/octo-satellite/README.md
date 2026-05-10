@@ -16,6 +16,9 @@ OpenClaw plugin providing structured access to the [Octo Satellite](https://gith
 | [`monarch_get_accounts`](#tool-monarch_get_accounts) | List financial accounts grouped by type with balances |
 | [`monarch_get_net_worth`](#tool-monarch_get_net_worth) | Get current net worth summary |
 | [`monarch_get_spending`](#tool-monarch_get_spending) | Get spending trends broken down by month |
+| [`monarch_get_health`](#tool-monarch_get_health) | Verify Monarch session is authenticated |
+| [`monarch_get_sync_status`](#tool-monarch_get_sync_status) | Get sync status for all linked accounts |
+| [`monarch_refresh_accounts`](#tool-monarch_refresh_accounts) | Trigger an account refresh with all institutions |
 
 ## Configuration Schema
 
@@ -113,6 +116,24 @@ No parameters. Returns total assets, total liabilities, and net worth.
 ### `monarch_get_spending`
 
 - `months` — optional number of months to look back (default: 3)
+
+<a id="tool-monarch_get_health"></a>
+
+### `monarch_get_health`
+
+No parameters. Returns the authentication status of the Monarch Money session.
+
+<a id="tool-monarch_get_sync_status"></a>
+
+### `monarch_get_sync_status`
+
+No parameters. Returns sync status for all linked accounts — last synced time, institution health, and connection state.
+
+<a id="tool-monarch_refresh_accounts"></a>
+
+### `monarch_refresh_accounts`
+
+No parameters. Triggers an account refresh with all linked institutions. Fire-and-forget — returns immediately after requesting the refresh. Use `monarch_get_sync_status` to check progress.
 
 ## Notes
 

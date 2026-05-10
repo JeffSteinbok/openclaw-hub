@@ -19,6 +19,8 @@ vi.mock("@openclaw/package-tracking-core", () => ({
   removePackage: vi.fn(),
   listPackages: vi.fn(),
   scanTextForTrackingNumbers: vi.fn(),
+  builtinProviders: [],
+  statusRegistry: { register: vi.fn(), hasProviders: false, getStatus: vi.fn() },
 }));
 
 import {
@@ -244,7 +246,7 @@ describe("package_add", () => {
       }),
     );
     expect(result).toEqual(added);
-    expect(mockAddPackage).toHaveBeenCalledWith("1Z999AA10123456784", "UPS", "Birthday gift");
+    expect(mockAddPackage).toHaveBeenCalledWith("1Z999AA10123456784", "UPS", "Birthday gift", null);
   });
 
   it("passes undefined for optional params when not provided", async () => {
@@ -252,7 +254,7 @@ describe("package_add", () => {
 
     const { api } = await loadPlugin();
     api.tools["package_add"].execute("id", { tracking_number: "1Z999AA10123456784" });
-    expect(mockAddPackage).toHaveBeenCalledWith("1Z999AA10123456784", undefined, undefined);
+    expect(mockAddPackage).toHaveBeenCalledWith("1Z999AA10123456784", undefined, undefined, null);
   });
 });
 

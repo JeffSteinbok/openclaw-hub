@@ -60,14 +60,12 @@ function createEntry() {
       },
     },
     register(api: PluginApi) {
-      // Load external carrier status provider plugins (deferred to avoid async during register)
+      // Load built-in + any external carrier status providers (deferred to avoid async during register)
       const config = (api.pluginConfig ?? {}) as PackageTrackingConfig;
       const statusProviders = config.status_providers ?? [];
-      if (statusProviders.length > 0) {
-        setImmediate(() => {
-          void loadProviders(statusProviders);
-        });
-      }
+      setImmediate(() => {
+        void loadProviders(statusProviders);
+      });
 
       api.registerTool({
         name: "package_track",
@@ -96,7 +94,7 @@ function createEntry() {
         description: "Save a package to the tracking list, with an optional label.",
         parameters: Type.Object({
           tracking_number: Type.String({
-            description: "Package tracking number",
+            description: "Package tracking number (e.g. 1Z..., TBA...US)",
           }),
           carrier: Type.Optional(
             Type.String({
@@ -106,6 +104,11 @@ function createEntry() {
           label: Type.Optional(
             Type.String({
               description: "Optional label/description for the package",
+            }),
+          ),
+          order_id: Type.Optional(
+            Type.String({
+              description: "Optional Amazon order ID (e.g. 113-1234567-8901234) to link for status lookups",
             }),
           ),
         }),
