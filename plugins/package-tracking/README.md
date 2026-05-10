@@ -1,7 +1,19 @@
 # Package Tracking Plugin
 
-Track packages across UPS, FedEx, USPS, and Amazon. Supports pluggable carrier
-status providers for live delivery updates.
+Track packages across UPS, FedEx, USPS, and Amazon. Ships with built-in status
+providers for the major carriers and supports custom providers for additional
+carriers or API-based overrides.
+
+## Supported Carriers
+
+| Carrier | Status Provider | How it works | Config needed |
+|---------|----------------|--------------|---------------|
+| **USPS** | Built-in | Web scraper via [Camoufox](https://github.com/nichochar/camoufox) | None — auto-registered |
+| **FedEx** | Built-in | Web scraper via Camoufox | None — auto-registered |
+| **UPS** | Built-in | Web scraper via Camoufox | None — auto-registered |
+| **Amazon** | External | API via [octo-satellite](https://github.com/JeffSteinbok/openclaw-hub/tree/main/plugins/octo-satellite) | Add [`amazon_status_provider`](https://github.com/JeffSteinbok/octo/tree/main/libs/ts/amazon_status_provider) to `status_providers` |
+
+Built-in providers require Python 3.10+ and Camoufox (`pip3 install camoufox && camoufox fetch`).
 
 ## Tools
 
@@ -12,49 +24,51 @@ status providers for live delivery updates.
 | `package_remove` | Remove a saved package |
 | `package_list` | List all saved packages |
 | `package_scan` | Scan free-form text for tracking numbers |
-| `get_package_status` | Get live carrier status (requires a status provider) |
+| `get_package_status` | Get live carrier status from the provider registry |
 
 ## Configuration
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `status_providers` | `string[]` | Paths to external ESM carrier status provider modules |
+| `status_providers` | `string[]` | Paths to external ESM carrier status provider modules (optional — built-ins work without this) |
 
-## Pluggable Status Providers
+## Adding Custom Providers
 
-The `get_package_status` tool delegates to external carrier status provider
-plugins loaded at startup. Each provider is an ESM module exporting a
-`register(registry)` function that adds carrier-specific status lookup logic.
+External providers are ESM modules that export a `register(registry)` function.
+They're loaded *after* built-ins and take priority for the same carrier, enabling
+API-based overrides with a scraper fallback:
 
-### Writing a provider
+```typescript
+import type { CarrierStatusPlugin, StatusProviderRegistry } from '@openclaw/package-tracking-core';
 
-```ts
-import type { StatusRegistry } from "@openclaw/package-tracking-core";
-
-export async function register(registry: StatusRegistry) {
-  registry.addProvider("MyCarrier", {
-    async getStatus(trackingNumber: string) {
-      // Call carrier API, return structured status
-      return { carrier: "MyCarrier", status: "In Transit", ... };
+export const register: CarrierStatusPlugin['register'] = (registry) => {
+  registry.register({
+    name: 'FedEx API',
+    carriers: ['FedEx'],
+    async getStatus(trackingNumber, carrier) {
+      // call FedEx Track API ...
+      return { tracking_number: trackingNumber, carrier: 'FedEx', status: 'In Transit',
+               delivered: false, last_update: null, description: null };
     },
   });
-}
+};
 ```
 
-### Configuring providers
-
-Add the path to your provider module in the plugin config:
+Add the compiled path to your plugin config:
 
 ```json
 {
   "status_providers": [
-    "/path/to/my-carrier-provider.js"
+    "/path/to/my-fedex-api-provider/dist/index.js"
   ]
 }
 ```
 
-Providers are loaded asynchronously at startup. If a provider fails to load,
-a warning is logged and the remaining providers continue to initialize.
+If a provider returns `null`, the registry falls through to the next one — so
+an API provider can fail gracefully to the built-in scraper.
+
+See [`package_tracking_core` README](../../libs/ts/package_tracking_core/README.md)
+for architecture details, the Python CLI, and how to add new built-in carriers.
 
 ---
 
