@@ -86,8 +86,12 @@ export function handlePackageAdd(args: Record<string, unknown>): Record<string, 
 
   const carrier = (args.carrier as string | undefined) ?? undefined;
   const label = (args.label as string | undefined) ?? undefined;
+  const orderId = (args.order_id as string | undefined) ?? undefined;
 
-  return addPackage(trackingNumber, carrier, label);
+  const extra: Record<string, unknown> = {};
+  if (orderId) extra.order_id = orderId;
+
+  return addPackage(trackingNumber, carrier, label, Object.keys(extra).length ? extra : null);
 }
 
 export function handlePackageRemove(args: Record<string, unknown>): Record<string, unknown> {
