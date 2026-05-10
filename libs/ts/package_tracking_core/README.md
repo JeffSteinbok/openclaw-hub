@@ -12,11 +12,20 @@ Reusable package-tracking logic shared by the mail runtime's built-in [`detect_t
 - **Built-in status providers** for USPS, FedEx, and UPS (auto-registered by the plugin)
 - **Provider registry** for adding custom or API-based status providers
 
-## Built-in Status Providers
+## Status Providers
 
-The core ships with built-in status providers for **USPS**, **FedEx**, and **UPS**. These are automatically registered when the `package-tracking` plugin loads — no configuration needed.
+The `get_package_status` tool queries live carrier status through a provider registry. Providers are tried in reverse registration order — if one returns `null`, the next is tried.
 
-Each carrier is an independent `CarrierStatusProvider`. Internally they use [Camoufox](https://github.com/nichochar/camoufox) (a stealth Firefox fork) to scrape carrier tracking pages, but this is an implementation detail that can change per-carrier without affecting consumers.
+### Supported Carriers
+
+| Carrier | Provider | Type | Ships with | Config needed |
+|---------|----------|------|------------|---------------|
+| **USPS** | Built-in | Web scraper ([Camoufox](https://github.com/nichochar/camoufox)) | `package_tracking_core` | None — auto-registered |
+| **FedEx** | Built-in | Web scraper (Camoufox) | `package_tracking_core` | None — auto-registered |
+| **UPS** | Built-in | Web scraper (Camoufox) | `package_tracking_core` | None — auto-registered |
+| **Amazon** | External | API via [octo-satellite](https://github.com/JeffSteinbok/octo) | [`amazon_status_provider`](https://github.com/JeffSteinbok/octo/tree/main/libs/ts/amazon_status_provider) | Add to `status_providers` in plugin config |
+
+Built-in providers are automatically registered when the `package-tracking` plugin loads. External providers (like Amazon) are loaded from paths listed in the plugin's `status_providers` config and take priority over built-ins for the same carrier.
 
 ### Prerequisites
 
