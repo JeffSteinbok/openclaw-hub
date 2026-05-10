@@ -1,0 +1,87 @@
+"""
+UPS tracking page scraper using Camoufox.
+
+UPS uses an Angular SPA. Key classes:
+  .ups-card              — card wrapper
+  .card-header-custom    — status header with "Delivered" / "In Transit"
+  Shipment Details       — section in body text
+"""
+
+import re
+from typing import Any
+
+from .base_tracker import BaseTracker
+
+
+class UPSTracker(BaseTracker):
+    carrier = "UPS"
+
+    def get_url(self, tracking_number: str) -> str:
+        tn = tracking_number.strip().upper()
+        return f"https://www.ups.com/track?tracknum={tn}"
+
+    async def wait_for_content(self, page: Any) -> None:
+        await page.wait_for_selector(
+            ".ups-card, .card-header-custom, [class*='ups-card']",
+            timeout=20000,
+        )
+
+    async def extract_status(self, page: Any) -> dict:
+        status = "Unknown"
+        delivered = False
+        service_type = None
+
+        body_text = await page.inner_text("body")
+
+        # Status from body text — look for "Delivered check_circle" or "In Transit"
+        m = re.search(
+            r"(Delivered|In Transit|Out [Ff]or Delivery|Picked Up|"
+            r"Label Created|Exception|On the Way|Shipping Label Created)"
+            r"(?:\s*check_circle)?",
+            body_text,
+        )
+        if m:
+            status = m.group(1)
+
+        if re.search(r"\bdeliver", status, re.IGNORECASE):
+            delivered = True
+
+        # Delivery date/time — "Thursday\nMay 07\nat 9:52 A.M."
+        delivery_match = re.search(
+            r"(\w+day)\s*\n\s*(\w+ \d{1,2})\s*\n\s*at\s+(.+?)(?:\n|$)",
+            body_text,
+        )
+        last_update = None
+        if delivery_match:
+            last_update = f"{delivery_match.group(1)} {delivery_match.group(2)} at {delivery_match.group(3).strip()}"
+
+        # Delivered To location
+        description = None
+        delivered_to = re.search(r"Delivered To\s*\n\s*(?:expand_\w+\s*\n\s*)?(.+?)(?:\n|$)", body_text)
+        if delivered_to:
+            loc = delivered_to.group(1).strip()
+            if loc and loc not in ("expand_less", "expand_more"):
+                description = f"Delivered to {loc}"
+
+        # Service type from Shipment Details
+        svc_match = re.search(r"Service\s*\n+\s*(.+?)(?:\n|$)", body_text)
+        if svc_match:
+            service_type = svc_match.group(1).strip()
+
+        # Shipped date
+        shipped_date = None
+        ship_match = re.search(r"Shipped / Billed On\s*\n+\s*(\d{2}/\d{2}/\d{4})", body_text)
+        if ship_match:
+            shipped_date = ship_match.group(1)
+
+        events: list[dict] = []
+
+        return {
+            "status": status,
+            "delivered": delivered,
+            "last_update": last_update,
+            "description": description,
+            "service_type": service_type,
+            "shipped_date": shipped_date,
+            "events": events,
+        }

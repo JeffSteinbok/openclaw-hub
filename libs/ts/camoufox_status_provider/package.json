@@ -1,0 +1,15 @@
+{
+  "name": "@openclaw/camoufox-status-provider",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@openclaw/package-tracking-core": "file:../package_tracking_core",
+    "typescript": "^6",
+    "vitest": "^3"
+  }
+}
