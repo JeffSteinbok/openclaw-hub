@@ -26,11 +26,18 @@ Built-in providers require Python 3.10+ and Camoufox (`pip3 install camoufox && 
 | `package_scan` | Scan free-form text for tracking numbers |
 | `get_package_status` | Get live carrier status from the provider registry |
 
-## Configuration
+## Example config
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `status_providers` | `string[]` | Paths to external ESM carrier status provider modules (optional — built-ins work without this) |
+```json
+{
+  "status_providers": [
+    "/path/to/custom_provider/dist/index.js"
+  ]
+}
+```
+
+Built-in providers (USPS, FedEx, UPS) require no configuration — they auto-register on startup.
+Only add `status_providers` if you need external providers like Amazon.
 
 ## Adding Custom Providers
 
