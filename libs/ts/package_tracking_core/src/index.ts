@@ -629,3 +629,14 @@ export const statusRegistry = new StatusProviderRegistry();
 export interface CarrierStatusPlugin {
   register(registry: StatusProviderRegistry): void | Promise<void>;
 }
+
+// ---------------------------------------------------------------------------
+// Built-in providers (re-exported for convenience)
+// ---------------------------------------------------------------------------
+
+export {
+  uspsProvider,
+  fedexProvider,
+  upsProvider,
+  builtinProviders,
+} from "./providers/index.js";

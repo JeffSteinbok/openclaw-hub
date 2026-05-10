@@ -60,14 +60,12 @@ function createEntry() {
       },
     },
     register(api: PluginApi) {
-      // Load external carrier status provider plugins (deferred to avoid async during register)
+      // Load built-in + any external carrier status providers (deferred to avoid async during register)
       const config = (api.pluginConfig ?? {}) as PackageTrackingConfig;
       const statusProviders = config.status_providers ?? [];
-      if (statusProviders.length > 0) {
-        setImmediate(() => {
-          void loadProviders(statusProviders);
-        });
-      }
+      setImmediate(() => {
+        void loadProviders(statusProviders);
+      });
 
       api.registerTool({
         name: "package_track",
