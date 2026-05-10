@@ -15,6 +15,9 @@ import {
   monarchGetAccounts,
   monarchGetNetWorth,
   monarchGetSpending,
+  monarchGetHealth,
+  monarchGetSyncStatus,
+  monarchRefreshAccounts,
   type SatelliteConfig,
 } from "./handlers.js";
 
@@ -341,6 +344,69 @@ function createEntry() {
           const result = await monarchGetSpending({
             months: params.months ? Number(params.months) : undefined,
           }, config);
+          return formatResult(result);
+        },
+      });
+
+      // ------------------------------------------------------------------
+      // monarch_get_health
+      // ------------------------------------------------------------------
+      api.registerTool({
+        name: "monarch_get_health",
+        label: "Monarch Health Check",
+        description:
+          "Verify Monarch Money session is authenticated and the connection is healthy.",
+        parameters: {
+          type: "object",
+          properties: {},
+          required: [],
+          additionalProperties: false,
+        },
+        async execute(_toolCallId: string, _params: Record<string, unknown>) {
+          const result = await monarchGetHealth(config);
+          return formatResult(result);
+        },
+      });
+
+      // ------------------------------------------------------------------
+      // monarch_get_sync_status
+      // ------------------------------------------------------------------
+      api.registerTool({
+        name: "monarch_get_sync_status",
+        label: "Monarch Sync Status",
+        description:
+          "Get sync status for all linked Monarch Money accounts — last synced time, " +
+          "institution health, and connection state for each account.",
+        parameters: {
+          type: "object",
+          properties: {},
+          required: [],
+          additionalProperties: false,
+        },
+        async execute(_toolCallId: string, _params: Record<string, unknown>) {
+          const result = await monarchGetSyncStatus(config);
+          return formatResult(result);
+        },
+      });
+
+      // ------------------------------------------------------------------
+      // monarch_refresh_accounts
+      // ------------------------------------------------------------------
+      api.registerTool({
+        name: "monarch_refresh_accounts",
+        label: "Refresh Monarch Accounts",
+        description:
+          "Trigger an account refresh with all linked Monarch Money institutions. " +
+          "Fire-and-forget — returns immediately after requesting the refresh. " +
+          "Use monarch_get_sync_status to check progress afterward.",
+        parameters: {
+          type: "object",
+          properties: {},
+          required: [],
+          additionalProperties: false,
+        },
+        async execute(_toolCallId: string, _params: Record<string, unknown>) {
+          const result = await monarchRefreshAccounts(config);
           return formatResult(result);
         },
       });
