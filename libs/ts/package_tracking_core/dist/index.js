@@ -131,7 +131,7 @@ function savePackages(packages) {
 function getTimestamp() {
     return new Date().toISOString().replace("+00:00", "Z");
 }
-export function addPackage(trackingNumber, carrier, label) {
+export function addPackage(trackingNumber, carrier, label, extra) {
     const upper = trackingNumber.trim().toUpperCase();
     if (!upper)
         return { error: "tracking_number is required" };
@@ -150,6 +150,7 @@ export function addPackage(trackingNumber, carrier, label) {
         url,
         label: label ?? "",
         added_at: getTimestamp(),
+        ...(extra ?? {}),
     };
     savePackages(packages);
     return packages[upper];
@@ -431,3 +432,7 @@ export class StatusProviderRegistry {
  * Plugins import and register against this instance.
  */
 export const statusRegistry = new StatusProviderRegistry();
+// ---------------------------------------------------------------------------
+// Built-in providers (re-exported for convenience)
+// ---------------------------------------------------------------------------
+export { uspsProvider, fedexProvider, upsProvider, builtinProviders, } from "./providers/index.js";

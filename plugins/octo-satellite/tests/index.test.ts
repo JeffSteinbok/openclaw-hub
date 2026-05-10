@@ -217,4 +217,56 @@ describe("satellite plugin", () => {
       expect(mockFetch.mock.calls[0][0]).toContain("/monarch/spending?months=6");
     });
   });
+
+  describe("monarch_get_health", () => {
+    it("returns health status", async () => {
+      const fakeHealth = { provider: "monarch", status: "authenticated" };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => fakeHealth,
+      });
+
+      const result = await tools.monarch_get_health.execute("call9", {});
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.status).toBe("authenticated");
+      expect(mockFetch.mock.calls[0][0]).toContain("/monarch/health");
+    });
+  });
+
+  describe("monarch_get_sync_status", () => {
+    it("returns sync status for accounts", async () => {
+      const fakeSyncStatus = {
+        provider: "monarch",
+        accounts: [
+          { name: "Chase Checking", last_synced: "2026-05-09T10:00:00Z", status: "healthy" },
+        ],
+      };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => fakeSyncStatus,
+      });
+
+      const result = await tools.monarch_get_sync_status.execute("call10", {});
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.accounts).toHaveLength(1);
+      expect(parsed.accounts[0].status).toBe("healthy");
+      expect(mockFetch.mock.calls[0][0]).toContain("/monarch/sync-status");
+    });
+  });
+
+  describe("monarch_refresh_accounts", () => {
+    it("triggers account refresh", async () => {
+      const fakeRefresh = { provider: "monarch", status: "refresh_requested" };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => fakeRefresh,
+      });
+
+      const result = await tools.monarch_refresh_accounts.execute("call11", {});
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.status).toBe("refresh_requested");
+      expect(mockFetch.mock.calls[0][0]).toContain("/monarch/refresh");
+      expect(mockFetch.mock.calls[0][1].method).toBe("POST");
+    });
+  });
 });

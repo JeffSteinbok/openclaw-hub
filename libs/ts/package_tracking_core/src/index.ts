@@ -188,6 +188,7 @@ export function addPackage(
   trackingNumber: string,
   carrier?: string | null,
   label?: string | null,
+  extra?: Record<string, unknown> | null,
 ): Record<string, unknown> {
   const upper = trackingNumber.trim().toUpperCase();
   if (!upper) return { error: "tracking_number is required" };
@@ -209,6 +210,7 @@ export function addPackage(
     url,
     label: label ?? "",
     added_at: getTimestamp(),
+    ...(extra ?? {}),
   };
   savePackages(packages);
   return packages[upper];
@@ -627,3 +629,14 @@ export const statusRegistry = new StatusProviderRegistry();
 export interface CarrierStatusPlugin {
   register(registry: StatusProviderRegistry): void | Promise<void>;
 }
+
+// ---------------------------------------------------------------------------
+// Built-in providers (re-exported for convenience)
+// ---------------------------------------------------------------------------
+
+export {
+  uspsProvider,
+  fedexProvider,
+  upsProvider,
+  builtinProviders,
+} from "./providers/index.js";

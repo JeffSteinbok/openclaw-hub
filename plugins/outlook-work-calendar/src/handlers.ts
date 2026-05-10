@@ -36,7 +36,9 @@ function httpPost(url: string, body: string, headers: Record<string, string>): P
 // ---------------------------------------------------------------------------
 
 function buildRequestBody(folderId: string, startDate: string, endDate: string): unknown {
-  const fmtDt = (d: string) => new Date(d).toISOString().replace(/Z$/, ".000").slice(0, 23);
+  // Append local midnight time directly without parsing through Date (which treats YYYY-MM-DD as UTC).
+  // The EWS endpoint uses the TimeZoneContext to interpret these datetime strings as local time.
+  const fmtDt = (d: string) => `${d}T00:00:00.000`;
   return {
     "__type": "FindItemJsonRequest:#Exchange",
     Header: { "__type": "JsonRequestHeaders:#Exchange", RequestServerVersion: "Exchange2013",
@@ -85,7 +87,7 @@ export async function fetchWorkCalendar(
   const endDate = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
   const url = `${calendarUrl}/service.svc?action=FindItem&app=PublishedCalendar&n=18`;
   const body = JSON.stringify(buildRequestBody(folderId, startDate, endDate));
-  const res = await httpPost(url, body, { "Content-Type": "application/json; charset=utf-8", "Action": "FindItem" });
+  const res = await httpPost(url, body, { "Content-Type": "application/json; charset=utf-8", "Action": "FindItem", "User-Agent": "Mozilla/5.0" });
   const data = JSON.parse(res);
   const events = extractEvents(data).map(e => formatEvent(e as Record<string, unknown>));
   return { start_date: startDate, end_date: endDate, count: events.length, events };

@@ -160,3 +160,27 @@ export async function monarchGetSpending(
     return await satelliteFetch(config, `/monarch/spending?months=${months}`);
   });
 }
+
+export async function monarchGetHealth(
+  config: SatelliteConfig,
+): Promise<unknown> {
+  return withErrorCatch(async () => {
+    return await satelliteFetch(config, "/monarch/health");
+  });
+}
+
+export async function monarchGetSyncStatus(
+  config: SatelliteConfig,
+): Promise<unknown> {
+  return withErrorCatch(async () => {
+    return await satelliteFetch(config, "/monarch/sync-status");
+  });
+}
+
+export async function monarchRefreshAccounts(
+  config: SatelliteConfig,
+): Promise<unknown> {
+  return withErrorCatch(async () => {
+    return await satelliteFetch(config, "/monarch/refresh", "POST");
+  });
+}

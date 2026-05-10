@@ -330,7 +330,7 @@ export async function wwDaily(params: DailyParams, cfg: WWConfig): Promise<unkno
       const foods = (tracked[key] ?? []) as Array<Record<string, unknown>>;
       if (!foods.length) continue;
       meals[label] = foods.map(f => ({
-        tracking_id: f._id ?? f.trackingId ?? "",
+        tracking_id: f.entryId ?? f._id ?? f.trackingId ?? "",
         entry_id: f.entryId ?? "",
         is_quick_add: f.sourceType === "MEMBERFOODQUICK",
         name: f.name ?? "Unknown",
@@ -452,21 +452,24 @@ export async function wwDelete(params: DeleteParams, cfg: WWConfig): Promise<unk
     const targetDate = params.date ?? localDateString();
     const trackingId = params.tracking_id;
     if (!trackingId) return { error: "tracking_id is required" };
-    const url = ep.tracked_foods_v3.replace("{date}", targetDate);
-    const entries = await apiGet(url, jwt, cfg, ep) as Array<Record<string, unknown>>;
+    const listUrl = ep.tracked_foods_v3.replace("{date}", targetDate);
+    const entries = await apiGet(listUrl, jwt, cfg, ep) as Array<Record<string, unknown>>;
     // Check if this is a meal (mealId) — collect all components
     const mealComponents = entries.filter(e => String(e.mealId ?? "") === trackingId);
-    let deleteBody: Array<{ entryId: string; isQuickAdd: boolean }>;
     if (mealComponents.length > 0) {
-      deleteBody = mealComponents.map(e => ({ entryId: String(e.entryId ?? ""), isQuickAdd: false })).filter(e => e.entryId);
+      // Delete each meal component individually via item endpoint
+      for (const e of mealComponents) {
+        const itemUrl = ep.tracked_food_item.replace("{date}", targetDate).replace("{tracking_id}", String(e.entryId ?? e._id ?? ""));
+        await apiDelete(itemUrl, jwt, cfg, ep, undefined);
+      }
     } else {
       const entry = entries.find(e => String(e._id ?? "") === trackingId || String(e.entryId ?? "") === trackingId);
       if (!entry) return { error: `Entry ${trackingId} not found on ${targetDate}` };
-      const entryId = String(entry.entryId ?? "");
-      if (!entryId) return { error: "Entry has no entryId — cannot delete" };
-      deleteBody = [{ entryId, isQuickAdd: entry.sourceType === "MEMBERFOODQUICK" }];
+      const itemId = String(entry.entryId ?? entry._id ?? "");
+      if (!itemId) return { error: "Entry has no id — cannot delete" };
+      const itemUrl = ep.tracked_food_item.replace("{date}", targetDate).replace("{tracking_id}", itemId);
+      await apiDelete(itemUrl, jwt, cfg, ep, undefined);
     }
-    await apiDelete(url, jwt, cfg, ep, deleteBody);
     return { status: "ok", message: `Deleted tracked item ${trackingId} from ${targetDate}`, date: targetDate, tracking_id: trackingId };
   } catch (e) { return { error: (e as Error).message }; }
 }

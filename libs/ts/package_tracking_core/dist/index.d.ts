@@ -31,7 +31,7 @@ export interface TrackedPackage {
     added_at: string;
     [key: string]: unknown;
 }
-export declare function addPackage(trackingNumber: string, carrier?: string | null, label?: string | null): Record<string, unknown>;
+export declare function addPackage(trackingNumber: string, carrier?: string | null, label?: string | null, extra?: Record<string, unknown> | null): Record<string, unknown>;
 export declare function removePackage(trackingNumber: string): Record<string, unknown>;
 export declare function listPackages(): {
     packages: TrackedPackage[];
@@ -147,3 +147,4 @@ export declare const statusRegistry: StatusProviderRegistry;
 export interface CarrierStatusPlugin {
     register(registry: StatusProviderRegistry): void | Promise<void>;
 }
+export { uspsProvider, fedexProvider, upsProvider, builtinProviders, } from "./providers/index.js";
