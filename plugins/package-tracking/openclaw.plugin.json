@@ -7,7 +7,13 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "status_providers": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Paths to external ESM carrier status provider modules"
+      }
+    }
   },
   "source": {
     "canonicalRepo": "JeffSteinbok/octo",
