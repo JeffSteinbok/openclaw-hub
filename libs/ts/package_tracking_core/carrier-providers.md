@@ -176,3 +176,35 @@ returns `null` or throws, the next matching provider is tried.
 
 > ⚠️ Status provider plugins run with the same privileges as the OpenClaw gateway process. Only
 > load plugins from paths you trust.
+
+---
+
+## Built-in provider: Camoufox Scraper
+
+The `@openclaw/camoufox-status-provider` package provides a universal scraper-based
+provider that handles **USPS**, **FedEx**, and **UPS** using
+[Camoufox](https://github.com/nichochar/camoufox) — a stealth Firefox fork that
+bypasses bot detection (Akamai, etc.) on carrier websites.
+
+### Prerequisites
+
+```bash
+pip3 install camoufox
+camoufox fetch
+```
+
+### Wiring it up
+
+```json
+{
+  "plugin": "package-tracking",
+  "config": {
+    "status_providers": [
+      "/path/to/openclaw-hub/libs/ts/camoufox_status_provider/dist/index.js"
+    ]
+  }
+}
+```
+
+See [`libs/ts/camoufox_status_provider/README.md`](../../camoufox_status_provider/README.md)
+for full details, architecture, and how to add new carriers.
