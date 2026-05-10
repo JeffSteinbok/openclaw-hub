@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-09
+
+### Added
+- **Built-in carrier status providers** — USPS, FedEx, and UPS status lookups now ship with `package_tracking_core` and auto-register when the plugin loads. No configuration needed.
+- **Camoufox web scraper** — Python-based scraper using a stealth Firefox fork to extract tracking data from carrier websites. Handles bot detection, SPA hydration timing, and carrier-specific DOM/regex extraction.
+- **Provider registry with fallback chain** — providers are tried in reverse registration order; external/API providers override built-ins. If a provider returns `null`, the next one is tried.
+- **`addPackage()` extra param** — core `addPackage()` now accepts an optional `extra` record for carrier-specific metadata (e.g., `order_id` for Amazon).
+- **`order_id` on `package_add` tool** — the plugin tool now accepts an `order_id` parameter for Amazon package tracking.
+- **Satellite tracking endpoints** — FedEx and Amazon tracking endpoints added to octo-satellite plugin.
+
+### Changed
+- Providers moved from standalone `camoufox_status_provider` package into `package_tracking_core/src/providers/`.
+- Plugin auto-registers built-in providers on startup (previously required manual `status_providers` config).
+- README updated with Mermaid architecture diagram, provider extension guide, and prerequisites.
+
 ## 2026-05-07
 
 ### Added
