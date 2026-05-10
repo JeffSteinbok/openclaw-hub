@@ -29,15 +29,12 @@ camoufox fetch            # downloads the patched Firefox binary (~300MB, cached
 
 ### How it works
 
-```
-Plugin                     Core                          Python
-┌─────────────┐           ┌──────────────────┐          ┌──────────────────┐
-│ get_package │  query    │ StatusRegistry   │  spawn   │ camoufox_tracker │
-│   _status   │─────────▶│  ├─ USPS provider│────────▶│   ├─ USPSTracker │
-│             │  result   │  ├─ FedEx        │  JSON   │   ├─ FedExTracker│
-│             │◀──────────│  ├─ UPS          │◀────────│   └─ UPSTracker  │
-│             │           │  └─ (custom...)  │  stdout  │                  │
-└─────────────┘           └──────────────────┘          └──────────────────┘
+```mermaid
+flowchart LR
+    Plugin["get_package_status<br/>(plugin)"] -- query --> Registry["StatusRegistry<br/>├ USPS provider<br/>├ FedEx provider<br/>├ UPS provider<br/>└ (custom…)"]
+    Registry -- spawn --> Python["camoufox_tracker<br/>├ USPSTracker<br/>├ FedExTracker<br/>└ UPSTracker"]
+    Python -- "JSON via stdout" --> Registry
+    Registry -- result --> Plugin
 ```
 
 Each lookup spawns a fresh headless browser (~5–10s). Fine for on-demand checks, not bulk polling.
