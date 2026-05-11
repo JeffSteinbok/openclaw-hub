@@ -25,3 +25,7 @@ Thumbs.db
 # Vitest compiled config artifacts
 vitest.config.js
 vitest.config.d.ts
+
+# tsup generated config files
+tsup.config.d.ts
+tsup.config.js
