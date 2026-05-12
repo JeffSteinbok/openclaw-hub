@@ -55,7 +55,7 @@ async def main() -> int:
     tracker = tracker_cls()
 
     try:
-        result = await asyncio.wait_for(tracker.track(tracking_number), timeout=30)
+        result = await asyncio.wait_for(tracker.track(tracking_number), timeout=45)
         emit_ok(result)
         return 0
     except asyncio.TimeoutError:

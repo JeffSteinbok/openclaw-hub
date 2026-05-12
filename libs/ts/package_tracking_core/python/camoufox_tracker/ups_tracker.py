@@ -1,16 +1,29 @@
 """
 UPS tracking page scraper using Camoufox.
 
-UPS uses an Angular SPA. Key classes:
-  .ups-card              — card wrapper
-  .card-header-custom    — status header with "Delivered" / "In Transit"
-  Shipment Details       — section in body text
+UPS uses an Angular SPA that may render content in the main page or
+inside an iframe. We search all frames for the body text that contains
+tracking data.
+
+Key body-text patterns:
+  "Delivered check_circle"          — delivered status
+  "In Transit" / "Out for Delivery" — active statuses
+  "Thursday\nMay 07\nat 9:52 A.M." — delivery/expected date
+  "Delivered To\n...\nLOCATION"    — delivery location
+  "Service\nUPS Ground Saver®"     — service type
+  "Shipped / Billed On\nMM/DD/YYYY"— ship date
 """
 
 import re
 from typing import Any
 
 from .base_tracker import BaseTracker
+
+# Keywords that indicate the frame body has real tracking content.
+_TRACKING_MARKERS = re.compile(
+    r"Delivered|In Transit|Out [Ff]or Delivery|Picked Up|"
+    r"Label Created|Shipment Details|On the Way",
+)
 
 
 class UPSTracker(BaseTracker):
@@ -22,16 +35,30 @@ class UPSTracker(BaseTracker):
 
     async def wait_for_content(self, page: Any) -> None:
         await page.wait_for_selector(
-            ".ups-card, .card-header-custom, [class*='ups-card']",
+            ".ups-card, .card-header-custom, [class*='ups-card'], app-root",
             timeout=20000,
         )
+
+    async def _get_body_text(self, page: Any) -> str:
+        """Search main page and all child frames for body text with tracking data."""
+        best = ""
+        for frame in page.frames:
+            try:
+                text = (await frame.inner_text("body")).strip()
+            except Exception:
+                continue
+            if len(text) > len(best):
+                best = text
+            if _TRACKING_MARKERS.search(text):
+                return text
+        return best
 
     async def extract_status(self, page: Any) -> dict:
         status = "Unknown"
         delivered = False
         service_type = None
 
-        body_text = await page.inner_text("body")
+        body_text = await self._get_body_text(page)
 
         # Status from body text — look for "Delivered check_circle" or "In Transit"
         m = re.search(
@@ -43,12 +70,11 @@ class UPSTracker(BaseTracker):
         if m:
             status = m.group(1)
 
-        if re.search(r"\bdeliver", status, re.IGNORECASE):
-            delivered = True
+        delivered = status.lower().startswith("delivered")
 
-        # Delivery date/time — "Thursday\nMay 07\nat 9:52 A.M."
+        # Delivery date/time — "Thursday, May 07\nat\n9:52 A.M." (may span 3-4 lines)
         delivery_match = re.search(
-            r"(\w+day)\s*\n\s*(\w+ \d{1,2})\s*\n\s*at\s+(.+?)(?:\n|$)",
+            r"(\w+day)(?:,\s*|\s*\n\s*)(\w+ \d{1,2})\s*\n\s*at\s*\n?\s*(.+?)(?:\n|$)",
             body_text,
         )
         last_update = None
