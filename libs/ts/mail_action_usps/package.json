@@ -26,8 +26,8 @@
     "@openclaw/mail-runtime-core": "*"
   },
   "devDependencies": {
+    "@types/node": "^25.7.0",
     "typescript": "^6",
-    "@types/node": "^25",
     "vitest": "^2.1.8"
   }
 }

@@ -12,9 +12,9 @@
   },
   "devDependencies": {
     "@openclaw/cli-shared": "file:../../libs/ts/cli_shared",
-    "typescript": "^6",
-    "@types/node": "^25",
+    "@types/node": "^25.7.0",
     "tsup": "^8.3.0",
+    "typescript": "^6",
     "vitest": "^2.1.8"
   },
   "openclaw": {

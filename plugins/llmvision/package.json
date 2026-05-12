@@ -11,13 +11,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.49",
-    "@openclaw/cli-shared": "file:../../libs/ts/cli_shared"
+    "@openclaw/cli-shared": "file:../../libs/ts/cli_shared",
+    "@sinclair/typebox": "^0.34.49"
   },
   "devDependencies": {
-    "typescript": "^6",
-    "@types/node": "^25",
+    "@types/node": "^25.7.0",
     "tsup": "^8.3.0",
+    "typescript": "^6",
     "vitest": "^2.1.8"
   },
   "openclaw": {

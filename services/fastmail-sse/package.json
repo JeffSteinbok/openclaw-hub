@@ -15,15 +15,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@openclaw/mail-runtime-core": "*",
     "@openclaw/mail-action-usps": "*",
+    "@openclaw/mail-runtime-core": "*",
     "@openclaw/package-tracking-core": "*",
     "mailparser": "^3.7.2"
   },
   "devDependencies": {
-    "typescript": "^6",
-    "@types/node": "^25",
     "@types/mailparser": "^3.4.5",
+    "@types/node": "^25.7.0",
+    "typescript": "^6",
     "vitest": "^2.1.8"
   }
 }

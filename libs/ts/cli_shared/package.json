@@ -14,7 +14,7 @@
     "build": "tsup"
   },
   "devDependencies": {
-    "@types/node": "^25",
+    "@types/node": "^25.7.0",
     "tsup": "^8.3.0",
     "typescript": "^6"
   }
