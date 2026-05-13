@@ -148,3 +148,9 @@ openclaw.plugin.json
 src/index.ts
 dist/index.js
 ```
+
+---
+
+## CLI
+
+Built with [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapace-plugin-sdk).

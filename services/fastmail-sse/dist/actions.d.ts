@@ -1,6 +1,6 @@
 /**
- * Action registration — built-in + USPS actions.
+ * Action registration — built-in + tracking + USPS actions.
  */
-import type { ActionRegistry } from "@openclaw/mail-runtime-core";
+import type { ActionRegistry } from "carapace-mail-runtime";
 import type { AccountConfig } from "./config.js";
 export declare function registerActions(registry: ActionRegistry, accountConfig: Record<string, AccountConfig>, accountIds: string[], inboxIds: string[], mailboxNames: Record<string, string>): void;

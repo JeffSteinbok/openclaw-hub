@@ -16,7 +16,7 @@ import {
   executeRules,
   type MailEnvelope,
   type MailProviderClient,
-} from "@openclaw/mail-runtime-core";
+} from "carapace-mail-runtime";
 
 describe("TestPipelineRules", () => {
   let testWorkspace: string | null = null;

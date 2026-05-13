@@ -7,11 +7,11 @@
     "outlook-mail": "./dist/bin/outlook-mail.js"
   },
   "scripts": {
-    "build": "tsup && node ../../libs/ts/cli_shared/dist/generate-cli.js --entry ./dist/index.js --out ./dist/bin",
+    "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
     "test": "vitest run"
   },
   "devDependencies": {
-    "@openclaw/cli-shared": "file:../../libs/ts/cli_shared",
+    "carapace-plugin-sdk": "^1.0.0",
     "typescript": "^6",
     "@types/node": "^25",
     "tsup": "^8.3.0",

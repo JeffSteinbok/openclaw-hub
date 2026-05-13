@@ -7,7 +7,7 @@ import { emailToEnvelope } from "./email.js";
 import { FastmailProviderClient } from "./provider.js";
 import { loadState, saveState } from "./state.js";
 import { dispatchResults } from "./dispatch.js";
-import { executeRules } from "@openclaw/mail-runtime-core";
+import { executeRules } from "carapace-mail-runtime";
 import { homedir } from "node:os";
 import { join } from "node:path";
 const PIPELINE_WORKSPACE = join(homedir(), ".openclaw/services/mail-runtime");

@@ -178,3 +178,9 @@ Endpoints discovered via reverse engineering the unofficial WW API:
 
 ### Log meal format
 Post all component foods with `mealId` and `mealVersionId` set — WW groups them automatically.
+
+---
+
+## CLI
+
+Built with [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapace-plugin-sdk).

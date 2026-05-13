@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { ruleMatches, type MailEnvelope } from "@openclaw/mail-runtime-core";
+import { ruleMatches, type MailEnvelope } from "carapace-mail-runtime";
 
 function makeEnvelope(auth: { dkim?: string; spf?: string; dmarc?: string }): MailEnvelope {
   return {

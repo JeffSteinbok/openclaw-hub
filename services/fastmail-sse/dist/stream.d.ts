@@ -2,7 +2,7 @@
  * SSE stream connection — connect to JMAP EventSource and process changes.
  */
 import type { MailRule } from "./config.js";
-import type { ActionRegistry } from "@openclaw/mail-runtime-core";
+import type { ActionRegistry } from "carapace-mail-runtime";
 export declare function stream(token: string, config: {
     accountIds: string[];
     inboxIds: string[];

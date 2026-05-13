@@ -69,6 +69,8 @@ npm run build --workspace=plugins/homeassistant
 
 ## CLI Usage
 
+Built with [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapace-plugin-sdk).
+
 All tools are also available as a standalone CLI:
 
 ```bash

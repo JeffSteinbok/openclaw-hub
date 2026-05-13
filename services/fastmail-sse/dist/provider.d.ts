@@ -1,7 +1,7 @@
 /**
  * FastmailProviderClient — implements MailProviderClient for Fastmail JMAP.
  */
-import type { AttachmentMeta, MailEnvelope, MailProviderClient } from "@openclaw/mail-runtime-core";
+import type { AttachmentMeta, MailEnvelope, MailProviderClient } from "carapace-mail-runtime";
 export declare class FastmailProviderClient implements MailProviderClient {
     private token;
     private logger;

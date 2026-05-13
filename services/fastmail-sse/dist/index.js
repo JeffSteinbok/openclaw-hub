@@ -2,7 +2,7 @@
  * Main entry point — loads config, registers actions, starts SSE stream.
  */
 import { watch } from "node:fs";
-import { ActionRegistry } from "@openclaw/mail-runtime-core";
+import { ActionRegistry } from "carapace-mail-runtime";
 import { log, requireEnv, getToken, loadRuntimeConfig, buildPipelineRules, CONFIG_FILE, RECONNECT_DELAY, } from "./config.js";
 import { getMailboxNames } from "./jmap.js";
 import { registerActions } from "./actions.js";
@@ -16,7 +16,7 @@ export { deliver, handoffToAgent, dispatchResults } from "./dispatch.js";
 export { loadState, saveState } from "./state.js";
 export { registerActions } from "./actions.js";
 export { stream } from "./stream.js";
-export { formatMessage } from "@openclaw/mail-runtime-core";
+export { formatMessage } from "carapace-mail-runtime";
 export async function main() {
     const runtimeConfig = loadRuntimeConfig();
     const accountConfig = runtimeConfig.accounts;

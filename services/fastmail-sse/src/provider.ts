@@ -9,7 +9,7 @@ import type {
   AttachmentMeta,
   MailEnvelope,
   MailProviderClient,
-} from "@openclaw/mail-runtime-core";
+} from "carapace-mail-runtime";
 import { jmap, getJmapSession } from "./jmap.js";
 import { getEmailBodyText, getEmailBodyHtml } from "./email.js";
 

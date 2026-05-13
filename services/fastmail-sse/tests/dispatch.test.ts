@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { dispatchResults } from "../src/dispatch.js";
-import type { ActionResult } from "@openclaw/mail-runtime-core";
+import type { ActionResult } from "carapace-mail-runtime";
 
 // Mock the config module's log function
 vi.mock("../src/config.js", () => ({

@@ -9,8 +9,8 @@ import { emailToEnvelope } from "./email.js";
 import { FastmailProviderClient } from "./provider.js";
 import { loadState, saveState, type SseState } from "./state.js";
 import { dispatchResults } from "./dispatch.js";
-import type { ActionRegistry } from "@openclaw/mail-runtime-core";
-import { executeRules } from "@openclaw/mail-runtime-core";
+import type { ActionRegistry } from "carapace-mail-runtime";
+import { executeRules } from "carapace-mail-runtime";
 import { homedir } from "node:os";
 import { join } from "node:path";
 

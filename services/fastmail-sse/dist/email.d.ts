@@ -1,7 +1,7 @@
 /**
  * Email body extraction and envelope conversion.
  */
-import type { AuthResults, MailEnvelope } from "@openclaw/mail-runtime-core";
+import type { AuthResults, MailEnvelope } from "carapace-mail-runtime";
 import type { JmapEmail } from "./jmap.js";
 export declare function getEmailBodyText(email: Record<string, unknown>): string;
 export declare function getEmailBodyHtml(email: Record<string, unknown>): string;
