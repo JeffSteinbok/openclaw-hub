@@ -4,7 +4,7 @@
 
 Public plugins, services, and shared libraries for [OpenClaw](https://jeffsteinbok.github.io/octo-docs/). This repo contains the public pieces I use in my own assistant.
 
-> **Building a new plugin?** Use [carapace-plugin-template](https://github.com/JeffSteinbok/carapace-plugin-template) to scaffold it as a standalone repo with the [Carapace SDK](https://github.com/JeffSteinbok/carapace-plugin-sdk). See [carapace-stock-quotes](https://github.com/JeffSteinbok/carapace-stock-quotes) for a real example.
+> **Building a new plugin?** Use [carapace-plugin-template](https://github.com/JeffSteinbok/carapace-plugin-template) to scaffold it as a standalone repo with the [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapace-plugin-sdk).
 
 ---
 
@@ -19,19 +19,15 @@ Public plugins, services, and shared libraries for [OpenClaw](https://jeffsteinb
 | 📅 | [ICS Calendar](plugins/ics-calendar/) | Read events from ICS feeds |
 | 👁️ | [LLMVision](plugins/llmvision/) | Image analysis workflows |
 | 📝 | [Markdown to HTML](plugins/md-to-html/) | Convert extended Markdown to styled HTML |
+| 🛰️ | [Octo Satellite](plugins/octo-satellite/) | Remote agent for running plugins on secondary machines |
 | 📆 | [Outlook Calendar](plugins/outlook-calendar/) | Query Outlook calendar data |
 | 📬 | [Outlook Mail](plugins/outlook-mail/) | Search and read Outlook mail |
 | 🗓️ | [Outlook Work Calendar](plugins/outlook-work-calendar/) | Work-focused Outlook calendar |
-| 📦 | [Package Tracking](plugins/package-tracking/) | Track any package by carrier + number; auto-detect from email |
 | 🎵 | [Spotify](plugins/spotify/) | Playback control and search |
 | 📮 | [USPS Mail](plugins/usps-mail/) | Operator-facing USPS Informed Delivery tools |
 | ❤️ | [Withings](plugins/withings/) | Health metrics from Withings devices |
 
-Standalone plugins (own repos):
-
-| | Plugin | Description |
-|---|--------|-------------|
-| 📈 | [Stock Quotes](https://github.com/JeffSteinbok/carapace-stock-quotes) | Stock, ETF, and mutual fund quotes — `npm install carapace-stock-quotes` |
+All plugins use the [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapace-plugin-sdk) for CLI generation.
 
 ---
 
@@ -39,9 +35,7 @@ Standalone plugins (own repos):
 
 | Component | Purpose |
 |-----------|---------|
-| 🧠 [Mail Runtime Core](libs/ts/mail_runtime_core/) | Rule engine, action registry, result dispatch |
 | 📮 [USPS Mail Action](libs/ts/mail_action_usps/) | USPS Informed Delivery digest processing |
-| 📦 [Package Tracking Core](libs/ts/package_tracking_core/) | Carrier detection, tracking URLs, storage |
 | ⚡ [FastMail SSE](services/fastmail-sse/) | Live FastMail listener that feeds the runtime |
 
 ---

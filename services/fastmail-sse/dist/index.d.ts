@@ -9,5 +9,5 @@ export { deliver, handoffToAgent, dispatchResults } from "./dispatch.js";
 export { loadState, saveState } from "./state.js";
 export { registerActions } from "./actions.js";
 export { stream } from "./stream.js";
-export { formatMessage } from "@openclaw/mail-runtime-core";
+export { formatMessage } from "carapace-mail-runtime";
 export declare function main(): Promise<void>;

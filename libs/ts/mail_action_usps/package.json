@@ -23,7 +23,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@openclaw/mail-runtime-core": "*"
+    "carapace-mail-runtime": "github:JeffSteinbok/carapace-mail-runtime"
   },
   "devDependencies": {
     "typescript": "^6",

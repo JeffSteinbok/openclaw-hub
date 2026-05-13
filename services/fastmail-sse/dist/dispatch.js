@@ -2,7 +2,7 @@
  * Result dispatch and delivery via subprocess.
  */
 import { execFileSync } from "node:child_process";
-import { dispatchResults as dispatchActionResults } from "@openclaw/mail-runtime-core";
+import { dispatchResults as dispatchActionResults } from "carapace-mail-runtime";
 import { log } from "./config.js";
 // ── Delivery ─────────────────────────────────────────────────
 export function deliver(msg, channel, target) {
