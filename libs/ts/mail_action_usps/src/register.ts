@@ -6,7 +6,7 @@ import type {
   ActionContext,
   ActionRegistry,
   ActionResult,
-} from "@openclaw/mail-runtime-core";
+} from "carapace-mail-runtime";
 
 import { processDigest } from "./analyze.js";
 

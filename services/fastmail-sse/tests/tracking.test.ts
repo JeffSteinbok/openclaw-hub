@@ -7,7 +7,7 @@ import {
   scanAndAddPackages,
   type TrackingClient,
   type MailEnvelope,
-} from "@openclaw/mail-runtime-core";
+} from "carapace-mail-runtime";
 
 function makeEnvelope(overrides: Partial<MailEnvelope> = {}): MailEnvelope {
   return {
@@ -73,6 +73,7 @@ describe("TestScanAndAddPackages", () => {
       addPackage: vi.fn().mockReturnValue({
         tracking_number: "1Z999AA10123456784",
         carrier: "UPS",
+        url: "https://www.ups.com/track?tracknum=1Z999AA10123456784",
       }),
     });
 
@@ -83,7 +84,7 @@ describe("TestScanAndAddPackages", () => {
     });
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toBe("1Z999AA10123456784");
+    expect(result[0]).toEqual({ tracking_number: "1Z999AA10123456784", carrier: "UPS", url: "https://www.ups.com/track?tracknum=1Z999AA10123456784" });
   });
 
   it("should return empty list when no tracking numbers found", async () => {
@@ -177,6 +178,7 @@ describe("TestScanAndAddPackages", () => {
       addPackage: vi.fn().mockReturnValue({
         tracking_number: "1Z999AA10123456784",
         carrier: "UPS",
+        url: "https://www.ups.com/track?tracknum=1Z999AA10123456784",
       }),
     });
 
@@ -187,7 +189,7 @@ describe("TestScanAndAddPackages", () => {
     });
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toBe("1Z999AA10123456784");
+    expect(result[0]).toEqual({ tracking_number: "1Z999AA10123456784", carrier: "UPS", url: "https://www.ups.com/track?tracknum=1Z999AA10123456784" });
     expect(mock.scanTextForTrackingNumbers).toHaveBeenCalledOnce();
   });
 

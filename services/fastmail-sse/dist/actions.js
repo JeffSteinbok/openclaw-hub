@@ -1,14 +1,16 @@
 /**
- * Action registration — built-in + USPS actions.
+ * Action registration — built-in + tracking + USPS actions.
  */
-import { registerBuiltinActions, loadTrackingClient, } from "@openclaw/mail-runtime-core";
+import { registerBuiltinActions } from "carapace-mail-runtime";
+import { registerDetectTracking } from "carapace-package-tracking/mail-action";
 import { registerUspsActions } from "@openclaw/mail-action-usps";
 export function registerActions(registry, accountConfig, accountIds, inboxIds, mailboxNames) {
     registerBuiltinActions(registry, {
         mailboxPrefixResolver: (envelope) => mailboxPrefix(envelope, accountConfig, accountIds, inboxIds, mailboxNames),
+    });
+    registerDetectTracking(registry, {
         accountLabelResolver: (envelope) => accountConfig[envelope.account_id]?.label ??
             envelope.account_id.slice(0, 8),
-        trackingClientLoader: loadTrackingClient,
     });
     registerUspsActions(registry);
 }

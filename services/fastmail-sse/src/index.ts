@@ -3,7 +3,7 @@
  */
 
 import { watch, type FSWatcher } from "node:fs";
-import { ActionRegistry, type ActionPlugin } from "@openclaw/mail-runtime-core";
+import { ActionRegistry, type ActionPlugin } from "carapace-mail-runtime";
 import {
   log,
   requireEnv,
@@ -32,7 +32,7 @@ export { deliver, handoffToAgent, dispatchResults } from "./dispatch.js";
 export { loadState, saveState } from "./state.js";
 export { registerActions } from "./actions.js";
 export { stream } from "./stream.js";
-export { formatMessage } from "@openclaw/mail-runtime-core";
+export { formatMessage } from "carapace-mail-runtime";
 
 export async function main(): Promise<void> {
   const runtimeConfig = loadRuntimeConfig();

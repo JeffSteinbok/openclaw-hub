@@ -15,15 +15,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@openclaw/mail-runtime-core": "*",
     "@openclaw/mail-action-usps": "*",
-    "@openclaw/package-tracking-core": "*",
+    "carapace-mail-runtime": "github:JeffSteinbok/carapace-mail-runtime",
+    "carapace-package-tracking": "github:JeffSteinbok/carapace-package-tracking",
     "mailparser": "^3.7.2"
   },
   "devDependencies": {
-    "typescript": "^6",
-    "@types/node": "^25",
     "@types/mailparser": "^3.4.5",
+    "@types/node": "^25",
+    "typescript": "^6",
     "vitest": "^2.1.8"
   }
 }

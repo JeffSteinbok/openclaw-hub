@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { FastmailProviderClient } from "../src/provider.js";
-import type { MailEnvelope } from "@openclaw/mail-runtime-core";
+import type { MailEnvelope } from "carapace-mail-runtime";
 
 vi.mock("../src/jmap.js", () => ({
   jmap: vi.fn(),
