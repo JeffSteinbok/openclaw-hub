@@ -7,7 +7,7 @@
     "spotify": "./dist/bin/spotify.js"
   },
   "scripts": {
-    "build": "tsup && node ../../libs/ts/cli_shared/dist/generate-cli.js --entry ./dist/index.js --out ./dist/bin",
+    "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
     "test": "vitest run"
   },
   "devDependencies": {
@@ -31,6 +31,6 @@
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",
-    "@openclaw/cli-shared": "file:../../libs/ts/cli_shared"
+    "carapace-plugin-sdk": "^1.0.0"
   }
 }

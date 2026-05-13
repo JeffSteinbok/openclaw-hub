@@ -7,7 +7,7 @@
     "octo-satellite": "./dist/bin/octo-satellite.js"
   },
   "scripts": {
-    "build": "tsup && node ../../libs/ts/cli_shared/dist/generate-cli.js --entry ./dist/index.js --out ./dist/bin",
+    "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
     "test": "vitest run"
   },
   "devDependencies": {
@@ -16,7 +16,7 @@
     "tsup": "^8.3.0",
     "vitest": "^4.1.5",
     "@sinclair/typebox": "^0.34.0",
-    "@openclaw/cli-shared": "file:../../libs/ts/cli_shared"
+    "carapace-plugin-sdk": "^1.0.0"
   },
   "openclaw": {
     "extensions": [
