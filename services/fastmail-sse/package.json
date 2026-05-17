@@ -17,7 +17,7 @@
   "dependencies": {
     "@openclaw/mail-action-usps": "*",
     "carapace-mail-runtime": "github:JeffSteinbok/carapace-mail-runtime",
-    "carapace-package-tracking": "github:JeffSteinbok/carapace-package-tracking",
+    "carapace-package-tracking": "github:JeffSteinbok/carapace-package-tracking#f8d305063689c81ed270074f37cb0c3a7f2ef6ea",
     "mailparser": "^3.7.2"
   },
   "devDependencies": {
