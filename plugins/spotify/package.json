@@ -31,6 +31,6 @@
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",
-    "carapace-plugin-sdk": "^1.0.0"
+    "carapace-plugin-sdk": "^1.0.3"
   }
 }
