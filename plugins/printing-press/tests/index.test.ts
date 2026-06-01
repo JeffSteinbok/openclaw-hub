@@ -1,8 +1,8 @@
 /**
  * Tests for the Printing Press adapter plugin.
  *
- * Tests manifest parsing, tool resolution, argument building, security
- * validation, and plugin registration.
+ * Tests manifest parsing, CLI introspection, tool resolution, argument
+ * building, security validation, and plugin registration.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -251,6 +251,38 @@ describe("argument building", () => {
 
     expect(args).toContain("--file-format=mp3");
   });
+
+  it("uses wire_name when available", async () => {
+    const { buildArgs } = await import("../src/executor.js");
+    const args = buildArgs(
+      ["forecast"],
+      { forecast_days: 3 },
+      [{ name: "forecast_days", wire_name: "forecast-days", type: "integer", location: "flag" }],
+    );
+
+    expect(args).toContain("--forecast-days=3");
+  });
+
+  it("places positional args before flags", async () => {
+    const { buildArgs } = await import("../src/executor.js");
+    const args = buildArgs(
+      ["geocoding"],
+      { name: "Seattle", count: 5 },
+      [
+        { name: "name", type: "string", location: "positional" },
+        { name: "count", type: "integer", location: "flag" },
+      ],
+    );
+
+    const nameIdx = args.indexOf("Seattle");
+    const countIdx = args.indexOf("--count=5");
+    expect(nameIdx).toBeGreaterThan(-1);
+    expect(countIdx).toBeGreaterThan(-1);
+    expect(nameIdx).toBeLessThan(countIdx);
+    // Positional should come right after subcommand
+    expect(args[0]).toBe("geocoding");
+    expect(args[1]).toBe("Seattle");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -352,7 +384,36 @@ describe("plugin entry", () => {
 
     expect(tools["pp_testapi_items_list"]).toBeDefined();
     expect(tools["pp_testapi_items_get"]).toBeDefined();
-    // Meta-tool should also be registered
+    expect(tools["pp_list_tools"]).toBeDefined();
+  });
+
+  it("accepts config without manifestPath", async () => {
+    const { createEntry } = await import("../src/index.js");
+
+    // Create a fake binary that responds to __complete
+    const fakeBin = join(TEST_ROOT, "fake-introspect-cli");
+    writeFileSync(fakeBin, `#!/bin/sh
+if [ "$1" = "__complete" ]; then
+  echo ":4"
+  echo "Completion ended with directive: ShellCompDirectiveNoFileComp"
+  exit 0
+fi
+echo '{}'
+`);
+    chmodSync(fakeBin, 0o755);
+
+    const entry = createEntry();
+    const tools: Record<string, unknown> = {};
+
+    // Should not throw — introspection mode (no manifest)
+    expect(() => entry.register({
+      pluginConfig: {
+        clis: [{ name: "goat", binaryPath: fakeBin }],
+      },
+      registerTool: (tool: { name: string }) => { tools[tool.name] = tool; },
+    })).not.toThrow();
+
+    // pp_list_tools always registered
     expect(tools["pp_list_tools"]).toBeDefined();
   });
 
@@ -436,5 +497,311 @@ describe("executor", () => {
     });
 
     expect(result.output).toMatchObject({ error: expect.stringContaining("timed out") });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Introspection parser tests
+// ---------------------------------------------------------------------------
+
+describe("introspection: parseCompleteOutput", () => {
+  it("parses tab-separated command entries", async () => {
+    const { parseCompleteOutput } = await import("../src/introspect.js");
+    const output = [
+      "forecast\tGet current weather conditions and today's forecast",
+      "alerts\tView active NWS weather alerts",
+      "geocoding\tSearch for a location by name",
+      ":4",
+      "Completion ended with directive: ShellCompDirectiveNoFileComp",
+    ].join("\n");
+
+    const entries = parseCompleteOutput(output);
+    expect(entries).toHaveLength(3);
+    expect(entries[0]).toEqual({ name: "forecast", description: "Get current weather conditions and today's forecast" });
+    expect(entries[2]).toEqual({ name: "geocoding", description: "Search for a location by name" });
+  });
+
+  it("skips directive and empty lines", async () => {
+    const { parseCompleteOutput } = await import("../src/introspect.js");
+    const output = ":4\nCompletion ended with directive: ShellCompDirectiveNoFileComp\n";
+    expect(parseCompleteOutput(output)).toHaveLength(0);
+  });
+
+  it("handles entries without descriptions", async () => {
+    const { parseCompleteOutput } = await import("../src/introspect.js");
+    const output = "forecast\n:4\n";
+    const entries = parseCompleteOutput(output);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual({ name: "forecast", description: "" });
+  });
+
+  it("parses flag entries from __complete", async () => {
+    const { parseCompleteOutput } = await import("../src/introspect.js");
+    const output = [
+      "--latitude\tLatitude (-90 to 90)",
+      "--longitude\tLongitude (-180 to 180)",
+      "--forecast-days\tNumber of forecast days (1-16)",
+      ":4",
+    ].join("\n");
+
+    const entries = parseCompleteOutput(output);
+    expect(entries).toHaveLength(3);
+    expect(entries[0].name).toBe("--latitude");
+  });
+});
+
+describe("introspection: parseHelpFlags", () => {
+  it("parses typed flags from --help output", async () => {
+    const { parseHelpFlags } = await import("../src/introspect.js");
+    const helpOutput = `Get current weather conditions
+
+Usage:
+  weather-goat forecast [flags]
+
+Flags:
+      --latitude float    Latitude (-90 to 90)
+      --longitude float   Longitude (-180 to 180)
+      --forecast-days int         Number of forecast days (1-16) (default 7)
+      --temperature-unit string   Temperature unit: celsius or fahrenheit (default "fahrenheit")
+  -h, --help              help for forecast
+
+Global Flags:
+      --agent                Set all agent-friendly defaults
+      --json                 Output as JSON
+`;
+
+    const flags = parseHelpFlags(helpOutput);
+    expect(flags.length).toBeGreaterThanOrEqual(3);
+
+    const lat = flags.find((f) => f.longName === "latitude");
+    expect(lat).toBeDefined();
+    expect(lat!.type).toBe("float");
+
+    const days = flags.find((f) => f.longName === "forecast-days");
+    expect(days).toBeDefined();
+    expect(days!.type).toBe("int");
+    expect(days!.defaultValue).toBe("7");
+
+    const unit = flags.find((f) => f.longName === "temperature-unit");
+    expect(unit).toBeDefined();
+    expect(unit!.type).toBe("string");
+    expect(unit!.defaultValue).toBe("fahrenheit");
+
+    // Global flags should be excluded
+    const agent = flags.find((f) => f.longName === "agent");
+    expect(agent).toBeUndefined();
+
+    const json = flags.find((f) => f.longName === "json");
+    expect(json).toBeUndefined();
+
+    // help is in GLOBAL_FLAGS set, so excluded
+    const help = flags.find((f) => f.longName === "help");
+    expect(help).toBeUndefined();
+  });
+
+  it("treats flags without type annotation as boolean", async () => {
+    const { parseHelpFlags } = await import("../src/introspect.js");
+    const helpOutput = `Flags:
+      --verbose   Enable verbose output
+      --dry-run   Show request without sending
+`;
+    const flags = parseHelpFlags(helpOutput);
+    const verbose = flags.find((f) => f.longName === "verbose");
+    expect(verbose).toBeDefined();
+    expect(verbose!.type).toBe("bool");
+
+    // dry-run is a global flag, should be excluded
+    const dryRun = flags.find((f) => f.longName === "dry-run");
+    expect(dryRun).toBeUndefined();
+  });
+
+  it("parses short+long flag aliases", async () => {
+    const { parseHelpFlags } = await import("../src/introspect.js");
+    const helpOutput = `Flags:
+  -n, --count int         Number of results (default 5)
+  -l, --language string   Language for results (default "en")
+`;
+    const flags = parseHelpFlags(helpOutput);
+    expect(flags).toHaveLength(2);
+    expect(flags[0].longName).toBe("count");
+    expect(flags[0].type).toBe("int");
+    expect(flags[1].longName).toBe("language");
+  });
+});
+
+describe("introspection: parsePositionals", () => {
+  it("parses required positional args", async () => {
+    const { parsePositionals } = await import("../src/introspect.js");
+    const helpOutput = `Compare weather
+
+Usage:
+  weather-goat compare <location1> <location2> [flags]
+
+Flags:
+`;
+    const positionals = parsePositionals(helpOutput);
+    expect(positionals).toHaveLength(2);
+    expect(positionals[0]).toEqual({ name: "location1", required: true });
+    expect(positionals[1]).toEqual({ name: "location2", required: true });
+  });
+
+  it("parses optional positional args", async () => {
+    const { parsePositionals } = await import("../src/introspect.js");
+    const helpOutput = `View alerts
+
+Usage:
+  weather-goat alerts [location] [flags]
+
+Flags:
+`;
+    const positionals = parsePositionals(helpOutput);
+    expect(positionals).toHaveLength(1);
+    expect(positionals[0]).toEqual({ name: "location", required: false });
+  });
+
+  it("parses mixed required and optional args", async () => {
+    const { parsePositionals } = await import("../src/introspect.js");
+    const helpOutput = `Search
+
+Usage:
+  cli search <query> [limit] [flags]
+
+Flags:
+`;
+    const positionals = parsePositionals(helpOutput);
+    expect(positionals).toHaveLength(2);
+    expect(positionals[0]).toEqual({ name: "query", required: true });
+    expect(positionals[1]).toEqual({ name: "limit", required: false });
+  });
+
+  it("returns empty for commands with no positionals", async () => {
+    const { parsePositionals } = await import("../src/introspect.js");
+    const helpOutput = `Get forecast
+
+Usage:
+  weather-goat forecast [flags]
+
+Flags:
+`;
+    const positionals = parsePositionals(helpOutput);
+    expect(positionals).toHaveLength(0);
+  });
+});
+
+describe("introspection: integration with fake CLI", () => {
+  it("discovers commands from a fake Cobra CLI", async () => {
+    const { introspectCli } = await import("../src/introspect.js");
+
+    // Create a fake CLI that mimics Cobra __complete and --help
+    const fakeBin = join(TEST_ROOT, "fake-cobra-cli");
+    writeFileSync(fakeBin, `#!/bin/sh
+case "$*" in
+  "__complete ")
+    echo "forecast	Get weather forecast"
+    echo "geocoding	Search for a location"
+    echo "help	Help about any command"
+    echo "version	Print version"
+    echo "completion	Generate completion scripts"
+    echo "config	Manage configuration"
+    echo ":4"
+    echo "Completion ended with directive: ShellCompDirectiveNoFileComp"
+    ;;
+  "__complete forecast ")
+    echo ":4"
+    echo "Completion ended with directive: ShellCompDirectiveNoFileComp"
+    ;;
+  "__complete geocoding ")
+    echo ":4"
+    echo "Completion ended with directive: ShellCompDirectiveNoFileComp"
+    ;;
+  "forecast --help")
+    echo "Get weather forecast"
+    echo ""
+    echo "Usage:"
+    echo "  fake-cobra-cli forecast [flags]"
+    echo ""
+    echo "Flags:"
+    echo "      --latitude float    Latitude (-90 to 90)"
+    echo "      --longitude float   Longitude (-180 to 180)"
+    echo "  -h, --help              help for forecast"
+    echo ""
+    echo "Global Flags:"
+    echo "      --json   Output as JSON"
+    ;;
+  "geocoding --help")
+    echo "Search for a location"
+    echo ""
+    echo "Usage:"
+    echo "  fake-cobra-cli geocoding <name> [flags]"
+    echo ""
+    echo "Flags:"
+    echo "      --count int         Number of results (default 5)"
+    echo "  -h, --help              help for geocoding"
+    echo ""
+    echo "Global Flags:"
+    echo "      --json   Output as JSON"
+    ;;
+  *)
+    echo '{}'
+    ;;
+esac
+`);
+    chmodSync(fakeBin, 0o755);
+
+    const tools = introspectCli({
+      name: "weather",
+      binaryPath: fakeBin,
+    });
+
+    // Should discover forecast and geocoding, skip help/version/completion/config
+    expect(tools.length).toBe(2);
+
+    const forecast = tools.find((t) => t.toolName === "pp_weather_forecast");
+    expect(forecast).toBeDefined();
+    expect(forecast!.subcommand).toEqual(["forecast"]);
+    expect(forecast!.ppTool.params.length).toBe(2); // latitude, longitude (help excluded)
+    expect(forecast!.ppTool.params[0].name).toBe("latitude");
+    expect(forecast!.ppTool.params[0].type).toBe("number"); // float → number
+
+    const geocoding = tools.find((t) => t.toolName === "pp_weather_geocoding");
+    expect(geocoding).toBeDefined();
+    // Should have positional arg + flag
+    const posParams = geocoding!.ppTool.params.filter((p) => p.location === "positional");
+    expect(posParams).toHaveLength(1);
+    expect(posParams[0].name).toBe("name");
+    expect(posParams[0].required).toBe(true);
+
+    const flagParams = geocoding!.ppTool.params.filter((p) => p.location === "flag");
+    expect(flagParams).toHaveLength(1);
+    expect(flagParams[0].name).toBe("count");
+  });
+
+  it("respects allowedTools filter in introspection mode", async () => {
+    const { introspectCli } = await import("../src/introspect.js");
+
+    const fakeBin = join(TEST_ROOT, "fake-cobra-cli"); // reuse from above
+
+    const tools = introspectCli({
+      name: "weather",
+      binaryPath: fakeBin,
+      allowedTools: ["forecast"],
+    });
+
+    expect(tools.length).toBe(1);
+    expect(tools[0].toolName).toBe("pp_weather_forecast");
+  });
+
+  it("respects maxTools cap", async () => {
+    const { introspectCli } = await import("../src/introspect.js");
+
+    const fakeBin = join(TEST_ROOT, "fake-cobra-cli"); // reuse from above
+
+    const tools = introspectCli({
+      name: "weather",
+      binaryPath: fakeBin,
+      maxTools: 1,
+    });
+
+    expect(tools.length).toBe(1);
   });
 });

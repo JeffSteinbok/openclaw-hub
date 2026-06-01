@@ -43,10 +43,11 @@ export interface PPToolsManifest {
 export interface CliConfig {
   name: string;
   binaryPath: string;
-  manifestPath: string;
+  manifestPath?: string;
   env?: Record<string, string>;
   allowedTools?: string[];
   blockedMethods?: string[];
+  blockedCommands?: string[];
   timeout?: number;
   maxTools?: number;
 }
