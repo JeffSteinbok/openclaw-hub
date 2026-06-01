@@ -37,36 +37,49 @@ const MAX_BUFFER = 10 * 1024 * 1024; // 10 MB
 /**
  * Build CLI arguments from tool params.
  * Uses --flag=value form to prevent argument injection.
+ * Positional args are placed after the subcommand, before flags.
  */
 export function buildArgs(
   subcommand: string[],
   params: Record<string, unknown>,
   paramDefs: PPToolParam[],
 ): string[] {
-  const args = [...subcommand, "--json", "--compact", "--quiet"];
+  const args = [...subcommand];
 
-  // Build a set of valid param names from the manifest
+  // Build a set of valid param names from definitions
   const validParams = new Map(paramDefs.map((p) => [p.name, p]));
 
-  for (const [key, value] of Object.entries(params)) {
-    // Only pass params that are defined in the manifest
-    if (!validParams.has(key)) continue;
+  // Collect positional args first (ordered by definition order)
+  const positionals: string[] = [];
+  const flagArgs: string[] = [];
 
+  for (const [key, value] of Object.entries(params)) {
+    const def = validParams.get(key);
+    if (!def) continue;
     if (value === undefined || value === null) continue;
 
-    const flagName = key.replace(/_/g, "-");
+    if (def.location === "positional") {
+      positionals.push(String(value));
+      continue;
+    }
+
+    // Use wire_name if available (preserves original CLI flag name),
+    // otherwise convert underscores to hyphens
+    const flagName = def.wire_name ?? key.replace(/_/g, "-");
 
     if (typeof value === "boolean") {
-      if (value) args.push(`--${flagName}`);
+      if (value) flagArgs.push(`--${flagName}`);
     } else if (Array.isArray(value)) {
-      // Repeated flag for array values
       for (const item of value) {
-        args.push(`--${flagName}=${String(item)}`);
+        flagArgs.push(`--${flagName}=${String(item)}`);
       }
     } else {
-      args.push(`--${flagName}=${String(value)}`);
+      flagArgs.push(`--${flagName}=${String(value)}`);
     }
   }
+
+  // Positionals → then agent defaults → then user flags
+  args.push(...positionals, "--json", "--compact", "--quiet", ...flagArgs);
 
   return args;
 }

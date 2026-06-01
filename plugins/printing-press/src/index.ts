@@ -1,9 +1,9 @@
 /**
  * Printing Press adapter plugin — OpenClaw plugin shim.
  *
- * Dynamically registers tools from Printing Press CLI tools-manifest.json files.
- * Each configured CLI's tools are exposed as Carapace tools that execute the
- * binary via execFile (no shell access).
+ * Dynamically registers tools from Printing Press CLIs by introspecting the
+ * binary itself (via Cobra __complete / --help), or from tools-manifest.json
+ * files when available.
  */
 
 import { Type } from "@sinclair/typebox";
@@ -14,6 +14,7 @@ import {
   type ResolvedTool,
   type PPToolParam,
 } from "./manifest.js";
+import { introspectCli } from "./introspect.js";
 import { validateBinaryPath } from "./security.js";
 import { executeCli } from "./executor.js";
 
@@ -86,19 +87,22 @@ function buildConfig(pluginConfig?: Record<string, unknown>): PluginConfig {
   return {
     clis: clis.map((cli: unknown) => {
       const c = cli as Record<string, unknown>;
-      if (!c.name || !c.binaryPath || !c.manifestPath) {
-        throw new Error("Each CLI requires 'name', 'binaryPath', and 'manifestPath'");
+      if (!c.name || !c.binaryPath) {
+        throw new Error("Each CLI requires 'name' and 'binaryPath'");
       }
       return {
         name: String(c.name),
         binaryPath: String(c.binaryPath),
-        manifestPath: String(c.manifestPath),
+        manifestPath: c.manifestPath ? String(c.manifestPath) : undefined,
         env: (c.env as Record<string, string>) ?? undefined,
         allowedTools: Array.isArray(c.allowedTools)
           ? (c.allowedTools as string[])
           : undefined,
         blockedMethods: Array.isArray(c.blockedMethods)
           ? (c.blockedMethods as string[])
+          : undefined,
+        blockedCommands: Array.isArray(c.blockedCommands)
+          ? (c.blockedCommands as string[])
           : undefined,
         timeout: typeof c.timeout === "number" ? c.timeout : undefined,
         maxTools: typeof c.maxTools === "number" ? c.maxTools : undefined,
@@ -121,16 +125,17 @@ const configSchema = {
       items: {
         type: "object" as const,
         properties: {
-          name: { type: "string" as const, description: "Short identifier for this CLI (e.g. 'linear')" },
+          name: { type: "string" as const, description: "Short identifier for this CLI (e.g. 'weather')" },
           binaryPath: { type: "string" as const, description: "Absolute path to the CLI binary" },
-          manifestPath: { type: "string" as const, description: "Path to tools-manifest.json" },
+          manifestPath: { type: "string" as const, description: "Path to tools-manifest.json (optional — uses CLI introspection if omitted)" },
           env: { type: "object" as const, description: "Environment variables for this CLI" },
-          allowedTools: { type: "array" as const, description: "Whitelist of tool names to register (registers all GET tools if omitted)" },
-          blockedMethods: { type: "array" as const, description: "HTTP methods to block (default: DELETE, PUT, PATCH)" },
+          allowedTools: { type: "array" as const, description: "Whitelist of tool names to register (registers all tools if omitted)" },
+          blockedMethods: { type: "array" as const, description: "HTTP methods to block for manifest mode (default: DELETE, PUT, PATCH)" },
+          blockedCommands: { type: "array" as const, description: "Additional commands to skip in introspection mode" },
           timeout: { type: "number" as const, description: "Execution timeout in ms (default: 30000)" },
           maxTools: { type: "number" as const, description: "Maximum number of tools to register per CLI (default: 50)" },
         },
-        required: ["name", "binaryPath", "manifestPath"],
+        required: ["name", "binaryPath"],
       },
     },
   },
@@ -157,14 +162,24 @@ function createEntry() {
           // Validate binary
           validateBinaryPath(cliConfig.binaryPath);
 
-          // Load and resolve tools
-          const manifest = loadToolsManifest(cliConfig.manifestPath);
-          const tools = resolveTools(manifest, cliConfig);
+          let tools: ResolvedTool[];
 
-          console.log(
-            `[printing-press] ${cliConfig.name}: registering ${tools.length} tools ` +
-            `from ${manifest.tools.length} available (${manifest.api_name})`
-          );
+          if (cliConfig.manifestPath) {
+            // Manifest mode — use tools-manifest.json
+            const manifest = loadToolsManifest(cliConfig.manifestPath);
+            tools = resolveTools(manifest, cliConfig);
+            console.log(
+              `[printing-press] ${cliConfig.name}: registering ${tools.length} tools ` +
+              `from manifest (${manifest.api_name})`
+            );
+          } else {
+            // Introspection mode — discover tools from CLI
+            tools = introspectCli(cliConfig);
+            console.log(
+              `[printing-press] ${cliConfig.name}: registering ${tools.length} tools ` +
+              `via CLI introspection`
+            );
+          }
 
           for (const resolved of tools) {
             registerTool(api, resolved);
@@ -173,7 +188,6 @@ function createEntry() {
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : String(e);
           console.error(`[printing-press] Failed to load CLI '${cliConfig.name}': ${msg}`);
-          // Continue loading other CLIs
         }
       }
 
@@ -213,10 +227,16 @@ function registerTool(api: PluginApi, resolved: ResolvedTool): void {
   const { toolName, subcommand, ppTool, cliConfig } = resolved;
   const methodTag = ppTool.method.toUpperCase() !== "GET" ? ` [${ppTool.method}]` : "";
 
+  // Build description with positional arg hints
+  const positionalParams = ppTool.params.filter((p) => p.location === "positional");
+  const posHint = positionalParams.length > 0
+    ? ` — args: ${positionalParams.map((p) => p.required ? `<${p.name}>` : `[${p.name}]`).join(" ")}`
+    : "";
+
   api.registerTool({
     name: toolName,
     label: `PP: ${cliConfig.name} — ${subcommand.join(" ")}`,
-    description: `${ppTool.description}${methodTag}`,
+    description: `${ppTool.description}${methodTag}${posHint}`,
     parameters: buildParametersSchema(ppTool.params),
     async execute(_toolCallId: string, params: Record<string, unknown>) {
       try {
