@@ -16,7 +16,7 @@
     "tsup": "^8.3.0",
     "vitest": "^4.1.5",
     "@sinclair/typebox": "^0.34.49",
-    "carapace-plugin-sdk": "^1.0.0"
+    "carapace-plugin-sdk": "^1.0.3"
   },
   "openclaw": {
     "extensions": [

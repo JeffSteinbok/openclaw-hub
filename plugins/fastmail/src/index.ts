@@ -79,6 +79,12 @@ function createEntry() {
           attachment: Type.Optional(
             Type.Array(Type.String(), { description: "File path(s) to attach" }),
           ),
+          in_reply_to: Type.Optional(
+            Type.String({ description: "Message-ID of the email being replied to (enables threading). Include angle brackets, e.g. <abc@mail.example.com>." }),
+          ),
+          references: Type.Optional(
+            Type.String({ description: "Space-separated list of Message-IDs for the full thread References header. Typically: prior References + In-Reply-To." }),
+          ),
         }),
         async execute(_toolCallId: string, params: Record<string, unknown>) {
           try {
@@ -89,6 +95,8 @@ function createEntry() {
               body: params.body as string,
               signature: params.signature as string | undefined,
               attachment: params.attachment as string[] | undefined,
+              in_reply_to: params.in_reply_to as string | undefined,
+              references: params.references as string | undefined,
             });
             return formatResult({ status: "ok", output });
           } catch (e) {

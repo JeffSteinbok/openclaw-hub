@@ -11,7 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "carapace-plugin-sdk": "^1.0.0",
+    "carapace-plugin-sdk": "^1.0.3",
     "@openclaw/mail-action-usps": "*",
     "@sinclair/typebox": "^0.34.48"
   },

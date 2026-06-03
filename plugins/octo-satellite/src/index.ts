@@ -17,6 +17,7 @@ import {
   monarchGetSpending,
   monarchGetHealth,
   monarchGetSyncStatus,
+  monarchGetInvestments,
   monarchRefreshAccounts,
   type SatelliteConfig,
 } from "./handlers.js";
@@ -407,6 +408,36 @@ function createEntry() {
         },
         async execute(_toolCallId: string, _params: Record<string, unknown>) {
           const result = await monarchRefreshAccounts(config);
+          return formatResult(result);
+        },
+      });
+
+      // ------------------------------------------------------------------
+      // monarch_get_investments
+      // ------------------------------------------------------------------
+      api.registerTool({
+        name: "monarch_get_investments",
+        label: "Get Investment Holdings",
+        description:
+          "Get investment account positions (holdings) from Monarch Money. " +
+          "Optionally filter to a single account by account_id. " +
+          "Returns positions with ticker, shares, value, and cost basis.",
+        parameters: {
+          type: "object",
+          properties: {
+            account_id: {
+              type: "integer",
+              description:
+                "Monarch account ID to filter to (optional — omit for all investment accounts)",
+            },
+          },
+          required: [],
+          additionalProperties: false,
+        },
+        async execute(_toolCallId: string, params: Record<string, unknown>) {
+          const result = await monarchGetInvestments({
+            account_id: params.account_id != null ? Number(params.account_id) : undefined,
+          }, config);
           return formatResult(result);
         },
       });
