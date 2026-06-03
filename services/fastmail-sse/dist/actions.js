@@ -18,12 +18,12 @@ function mailboxPrefix(envelope, accountConfig, accountIds, inboxIds, mailboxNam
     const accountLabel = accountConfig[envelope.account_id]?.label ??
         envelope.account_id.slice(0, 8);
     if (accountLabel && accountIds.length > 1) {
-        return `[${accountLabel}] `;
+        return `🐙`;
     }
     if (inboxIds.length > 1 && envelope.mailbox_id) {
         const mailboxName = mailboxNames[envelope.mailbox_id] ??
             envelope.mailbox_id.slice(0, 8);
-        return `[${mailboxName}] `;
+        return `🐙`;
     }
-    return "";
+    return "🐙";
 }
