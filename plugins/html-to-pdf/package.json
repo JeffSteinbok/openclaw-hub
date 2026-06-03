@@ -14,8 +14,8 @@
     "@sinclair/typebox": "^0.34.48"
   },
   "devDependencies": {
-    "carapace-plugin-sdk": "^1.0.0",
-    "@types/node": "^25",
+    "@types/node": "^25.9.1",
+    "carapace-plugin-sdk": "^1.0.3",
     "tsup": "^8.3.0",
     "typescript": "^6",
     "vitest": "^4.1.0"
