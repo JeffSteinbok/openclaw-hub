@@ -177,6 +177,17 @@ export async function monarchGetSyncStatus(
   });
 }
 
+export async function monarchGetInvestments(
+  params: { account_id?: number },
+  config: SatelliteConfig,
+): Promise<unknown> {
+  return withErrorCatch(async () => {
+    let path = "/monarch/investments";
+    if (params.account_id != null) path += `?account_id=${params.account_id}`;
+    return await satelliteFetch(config, path);
+  });
+}
+
 export async function monarchRefreshAccounts(
   config: SatelliteConfig,
 ): Promise<unknown> {
