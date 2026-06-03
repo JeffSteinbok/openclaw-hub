@@ -50,6 +50,14 @@ function execPromise(
   return new Promise((resolve, reject) => {
     execFile(bin, args, { timeout: timeoutMs, maxBuffer: 50 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) {
+        // The openclaw CLI writes its JSON payload and then hangs (does not self-exit).
+        // execFile kills it on timeout and sets err.killed=true, but stdout is fully
+        // written by then. Treat a killed process the same as success so the caller
+        // can still parse the JSON.
+        if (err.killed && stdout && stdout.trim().length > 0) {
+          resolve({ stdout, stderr });
+          return;
+        }
         reject(new Error(`openclaw nodes invoke failed: ${err.message}\nstderr: ${stderr}`));
       } else {
         resolve({ stdout, stderr });
