@@ -324,12 +324,10 @@ export async function cmdSend(cfg: FastmailConfig, args: SendArgs): Promise<stri
       emailObj.cc = ccList.map((e) => ({ email: e }));
     }
     if (args.in_reply_to) {
-      // Strip angle brackets — JMAP wraps them itself
-      emailObj.inReplyTo = [args.in_reply_to.replace(/^<|>$/g, "")];
+      emailObj.inReplyTo = [args.in_reply_to];
     }
     if (args.references) {
-      // JMAP references is an array of message IDs — strip angle brackets
-      emailObj.references = args.references.split(/\s+/).filter(Boolean).map((id) => id.replace(/^<|>$/g, ""));
+      emailObj.references = args.references.split(/\s+/).filter(Boolean);
     }
 
     const result = await jmap(cfg.jmapToken, [
