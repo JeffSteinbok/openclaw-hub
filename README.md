@@ -19,12 +19,15 @@ Public plugins, services, and shared libraries for [OpenClaw](https://jeffsteinb
 | 📅 | [ICS Calendar](plugins/ics-calendar/) | Read events from ICS feeds |
 | 👁️ | [LLMVision](plugins/llmvision/) | Image analysis workflows |
 | 📝 | [Markdown to HTML](plugins/md-to-html/) | Convert extended Markdown to styled HTML |
+| 📓 | [Obsidian Vault](plugins/obsidian-vault/) | Read-only access to an Obsidian vault — search, read, explore notes |
 | 🛰️ | [Octo Satellite](plugins/octo-satellite/) | Remote agent for running plugins on secondary machines |
 | 📆 | [Outlook Calendar](plugins/outlook-calendar/) | Query Outlook calendar data |
 | 📬 | [Outlook Mail](plugins/outlook-mail/) | Search and read Outlook mail |
 | 🗓️ | [Outlook Work Calendar](plugins/outlook-work-calendar/) | Work-focused Outlook calendar |
+| 📸 | [Screenshot Capture](plugins/screenshot-capture/) | Capture screenshots from paired nodes, write to media store |
 | 🎵 | [Spotify](plugins/spotify/) | Playback control and search |
 | 📮 | [USPS Mail](plugins/usps-mail/) | Operator-facing USPS Informed Delivery tools |
+| ⚖️ | [WeightWatchers](plugins/weightwatchers/) | WeightWatchers points and meal tracking |
 | ❤️ | [Withings](plugins/withings/) | Health metrics from Withings devices |
 
 All plugins use the [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapace-plugin-sdk) for CLI generation.
