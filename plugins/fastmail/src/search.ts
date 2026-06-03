@@ -69,6 +69,8 @@ function formatEmailList(emails: EmailSummary[]): string {
 
 interface EmailDetail {
   id: string;
+  messageId: string[];
+  references: string[];
   from: EmailAddress[];
   to: EmailAddress[];
   cc: EmailAddress[];
@@ -98,6 +100,8 @@ function formatEmailDetail(email: EmailDetail): string {
   ];
   if (ccStr) lines.push(`Cc:      ${ccStr}`);
   lines.push(`Date:    ${email.receivedAt ?? ""}`);
+  if (email.messageId && email.messageId.length > 0) lines.push(`Message-ID: ${email.messageId[0]}`);
+  if (email.references && email.references.length > 0) lines.push(`References: ${email.references.join(" ")}`);
   lines.push(`ID:      ${email.id ?? "?"}`);
   lines.push("-".repeat(60));
 
@@ -263,7 +267,7 @@ export async function cmdRead(
           accountId,
           ids: [emailId],
           properties: [
-            "id", "from", "to", "cc", "subject", "receivedAt",
+            "id", "messageId", "references", "from", "to", "cc", "subject", "receivedAt",
             "textBody", "bodyValues", "preview", "keywords",
           ],
           fetchTextBodyValues: true,
