@@ -58,12 +58,27 @@ function sanitizeFilename(name: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Extension → MIME mapping (reverse lookup for file_path mode)
+// ---------------------------------------------------------------------------
+
+const EXT_TO_MIME: Record<string, string> = {};
+for (const [mime, ext] of Object.entries(MIME_TO_EXT)) {
+  if (!EXT_TO_MIME[ext]) EXT_TO_MIME[ext] = mime;
+}
+
+function mimeForExt(filePath: string): string {
+  const ext = path.extname(filePath).replace(/^\./, "").toLowerCase();
+  return EXT_TO_MIME[ext] ?? "application/octet-stream";
+}
+
+// ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 
 export interface MediaWriteParams {
-  base64: string;
-  mimeType: string;
+  base64?: string;
+  file_path?: string;
+  mimeType?: string;
   filename?: string;
 }
 
@@ -82,29 +97,63 @@ export async function handleMediaWrite(
   mediaDir: string,
   params: MediaWriteParams
 ): Promise<MediaWriteResult | { error: string }> {
-  const { base64, mimeType } = params;
+  const { base64, file_path, filename } = params;
 
-  // --- Validate inputs ---
-  if (!base64 || base64.trim() === "") {
-    return { error: "base64 is required and must not be empty" };
-  }
-  if (!mimeType || mimeType.trim() === "") {
-    return { error: "mimeType is required" };
+  // --- Validate: need exactly one of base64 or file_path ---
+  const hasBase64 = base64 != null && base64.trim() !== "";
+  const hasFilePath = file_path != null && file_path.trim() !== "";
+
+  if (!hasBase64 && !hasFilePath) {
+    return { error: "Either base64 or file_path is required" };
   }
 
-  // --- Decode base64 ---
   let buf: Buffer;
-  try {
-    // Accept standard base64 or URL-safe base64 (replace - and _ with + and /)
-    const normalized = base64.replace(/-/g, "+").replace(/_/g, "/");
-    buf = Buffer.from(normalized, "base64");
-    if (buf.length === 0) {
-      return { error: "base64 decoded to empty buffer — check input encoding" };
+  let resolvedMime: string;
+
+  if (hasFilePath) {
+    // --- file_path mode: read from disk ---
+    const srcPath = path.resolve(file_path!.trim());
+
+    if (!fs.existsSync(srcPath)) {
+      return { error: `file_path does not exist: ${srcPath}` };
     }
-  } catch (e: unknown) {
-    return {
-      error: `Failed to decode base64: ${e instanceof Error ? e.message : String(e)}`,
-    };
+
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(srcPath);
+    } catch (e: unknown) {
+      return { error: `Cannot stat file_path: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    if (!stat.isFile()) {
+      return { error: `file_path is not a regular file: ${srcPath}` };
+    }
+
+    try {
+      buf = fs.readFileSync(srcPath);
+    } catch (e: unknown) {
+      return { error: `Failed to read file_path: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    if (buf.length === 0) {
+      return { error: "file_path points to an empty file" };
+    }
+
+    resolvedMime = params.mimeType?.trim() || mimeForExt(srcPath);
+  } else {
+    // --- base64 mode: decode from string ---
+    if (!params.mimeType || params.mimeType.trim() === "") {
+      return { error: "mimeType is required when using base64" };
+    }
+    resolvedMime = params.mimeType.trim();
+
+    try {
+      const normalized = base64!.replace(/-/g, "+").replace(/_/g, "/");
+      buf = Buffer.from(normalized, "base64");
+      if (buf.length === 0) {
+        return { error: "base64 decoded to empty buffer — check input encoding" };
+      }
+    } catch (e: unknown) {
+      return { error: `Failed to decode base64: ${e instanceof Error ? e.message : String(e)}` };
+    }
   }
 
   // --- Build output path ---
@@ -113,10 +162,17 @@ export async function handleMediaWrite(
     .replace(/[-:T]/g, "")
     .replace(/\..+$/, "");
   const rand = crypto.randomBytes(4).toString("hex");
-  const baseName = params.filename
-    ? sanitizeFilename(params.filename)
-    : "media";
-  const ext = extForMime(mimeType);
+
+  let baseName: string;
+  if (filename) {
+    baseName = sanitizeFilename(filename);
+  } else if (hasFilePath) {
+    baseName = sanitizeFilename(path.basename(file_path!));
+  } else {
+    baseName = "media";
+  }
+
+  const ext = extForMime(resolvedMime);
   const fileName = `${baseName}_${ts}_${rand}.${ext}`;
 
   // --- Write to disk ---
@@ -140,8 +196,8 @@ export async function handleMediaWrite(
 
   return {
     file: filePath,
-    mediaId: filePath, // gateway will replace this with a real media ID
+    mediaId: filePath,
     size_bytes: buf.length,
-    mimeType: mimeType.toLowerCase().split(";")[0].trim(),
+    mimeType: resolvedMime.toLowerCase().split(";")[0].trim(),
   };
 }
