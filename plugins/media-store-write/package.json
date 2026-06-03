@@ -1,0 +1,37 @@
+{
+  "name": "media-store-write",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Decode base64 bytes and write them to the OpenClaw gateway media store",
+  "main": "dist/index.js",
+  "bin": {
+    "media-store-write": "./dist/bin/media-store-write.js"
+  },
+  "scripts": {
+    "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.48"
+  },
+  "devDependencies": {
+    "carapace-plugin-sdk": "^1.0.0",
+    "@types/node": "^25",
+    "tsup": "^8.3.0",
+    "typescript": "^6",
+    "vitest": "^2.1.8"
+  },
+  "peerDependencies": {
+    "openclaw": "^2026.4.23"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/adapter.js"
+    ]
+  }
+}
