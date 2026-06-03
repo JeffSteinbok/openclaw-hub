@@ -150,6 +150,8 @@ function buildMimeMessage(opts: {
   cc?: string[];
   subject: string;
   body: string;
+  inReplyTo?: string;
+  references?: string;
   attachments?: Array<{ filename: string; contentType: string; data: Uint8Array }>;
 }): string {
   const boundary = `----=_Part_${randomUUID().replace(/-/g, "")}`;
@@ -163,6 +165,8 @@ function buildMimeMessage(opts: {
     `Subject: ${opts.subject}`,
     `Date: ${date}`,
     `Message-ID: ${msgId}`,
+    ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
+    ...(opts.references ? [`References: ${opts.references}`] : []),
     `MIME-Version: 1.0`,
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
   ];
@@ -297,6 +301,8 @@ export interface SendArgs {
   body: string;
   signature?: string;
   attachment?: string[];
+  in_reply_to?: string;
+  references?: string;
 }
 
 export async function cmdSend(cfg: FastmailConfig, args: SendArgs): Promise<string> {
@@ -316,6 +322,14 @@ export async function cmdSend(cfg: FastmailConfig, args: SendArgs): Promise<stri
     };
     if (ccList.length > 0) {
       emailObj.cc = ccList.map((e) => ({ email: e }));
+    }
+    if (args.in_reply_to) {
+      // Strip angle brackets — JMAP wraps them itself
+      emailObj.inReplyTo = [args.in_reply_to.replace(/^<|>$/g, "")];
+    }
+    if (args.references) {
+      // JMAP references is an array of message IDs — strip angle brackets
+      emailObj.references = args.references.split(/\s+/).filter(Boolean).map((id) => id.replace(/^<|>$/g, ""));
     }
 
     const result = await jmap(cfg.jmapToken, [
@@ -355,6 +369,8 @@ export async function cmdSend(cfg: FastmailConfig, args: SendArgs): Promise<stri
       cc: ccList.length > 0 ? ccList : undefined,
       subject: args.subject,
       body: bodyWithSig(args.body, args.signature),
+      inReplyTo: args.in_reply_to,
+      references: args.references,
       attachments,
     });
 

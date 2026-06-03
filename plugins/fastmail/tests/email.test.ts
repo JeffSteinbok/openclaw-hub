@@ -98,6 +98,24 @@ describe("cmdSend()", () => {
     expect(emailCreate.bodyValues["1"].value).toContain("-- Best regards");
   });
 
+  it("sets In-Reply-To and References headers for threading", async () => {
+    mockFetch.mockResolvedValueOnce(makeJmapOk());
+
+    const { cmdSend } = await import("../src/email.js");
+    await cmdSend(makeCfg(), {
+      to: "r@example.com",
+      subject: "Re: Thread Subject",
+      body: "Reply body",
+      in_reply_to: "<parent@mail.example.com>",
+      references: "<root@mail.example.com> <parent@mail.example.com>",
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const emailCreate = body.methodCalls[0][1].create.e;
+    expect(emailCreate.inReplyTo).toEqual(["<parent@mail.example.com>"]);
+    expect(emailCreate.references).toEqual(["<root@mail.example.com>", "<parent@mail.example.com>"]);
+  });
+
   it("handles JMAP errors gracefully", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
