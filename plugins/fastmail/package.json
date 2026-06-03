@@ -11,11 +11,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.48",
-    "carapace-plugin-sdk": "^1.0.3"
+    "carapace-plugin-sdk": "^1.0.3",
+    "@sinclair/typebox": "^0.34.48"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
+    "@types/node": "^25",
     "tsup": "^8.3.0",
     "typescript": "^6",
     "vitest": "^2.1.8"
