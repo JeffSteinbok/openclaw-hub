@@ -18,6 +18,7 @@ OpenClaw plugin providing structured access to the [Octo Satellite](https://gith
 | [`monarch_get_spending`](#tool-monarch_get_spending) | Get spending trends broken down by month |
 | [`monarch_get_health`](#tool-monarch_get_health) | Verify Monarch session is authenticated |
 | [`monarch_get_sync_status`](#tool-monarch_get_sync_status) | Get sync status for all linked accounts |
+| [`monarch_get_investments`](#tool-monarch_get_investments) | Get investment account positions (holdings) |
 | [`monarch_refresh_accounts`](#tool-monarch_refresh_accounts) | Trigger an account refresh with all institutions |
 
 ## Configuration Schema
@@ -128,6 +129,12 @@ No parameters. Returns the authentication status of the Monarch Money session.
 ### `monarch_get_sync_status`
 
 No parameters. Returns sync status for all linked accounts — last synced time, institution health, and connection state.
+
+<a id="tool-monarch_get_investments"></a>
+
+### `monarch_get_investments`
+
+- `account_id` — optional Monarch account ID to filter to a single investment account. Omit to return positions for all investment accounts. Returns positions with ticker, shares, value, and cost basis.
 
 <a id="tool-monarch_refresh_accounts"></a>
 
