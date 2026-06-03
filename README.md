@@ -19,12 +19,18 @@ Public plugins, services, and shared libraries for [OpenClaw](https://jeffsteinb
 | 📅 | [ICS Calendar](plugins/ics-calendar/) | Read events from ICS feeds |
 | 👁️ | [LLMVision](plugins/llmvision/) | Image analysis workflows |
 | 📝 | [Markdown to HTML](plugins/md-to-html/) | Convert extended Markdown to styled HTML |
+| 🗂️ | [Obsidian Vault](plugins/obsidian-vault/) | Read-only access to an Obsidian vault — search, read, and explore notes |
 | 🛰️ | [Octo Satellite](plugins/octo-satellite/) | Remote agent for running plugins on secondary machines |
+| 🍽️ | [OpenTable](plugins/opentable/) | Check restaurant availability and make reservations |
 | 📆 | [Outlook Calendar](plugins/outlook-calendar/) | Query Outlook calendar data |
 | 📬 | [Outlook Mail](plugins/outlook-mail/) | Search and read Outlook mail |
 | 🗓️ | [Outlook Work Calendar](plugins/outlook-work-calendar/) | Work-focused Outlook calendar |
+| 📦 | [Package Tracking](plugins/package-tracking/) | Carrier detection, tracking URL generation, package storage |
+| 🖨️ | [Printing Press](plugins/printing-press/) | Expose Printing Press CLI tools as OpenClaw tools |
 | 🎵 | [Spotify](plugins/spotify/) | Playback control and search |
+| 📈 | [Stock Quotes](plugins/stock-quotes/) | Get quotes for stocks, ETFs, and mutual funds |
 | 📮 | [USPS Mail](plugins/usps-mail/) | Operator-facing USPS Informed Delivery tools |
+| 🥗 | [WeightWatchers](plugins/weightwatchers/) | Search foods, log meals, view diary and points budget |
 | ❤️ | [Withings](plugins/withings/) | Health metrics from Withings devices |
 
 All plugins use the [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapace-plugin-sdk) for CLI generation.
