@@ -1,10 +1,10 @@
 {
-  "name": "glances",
+  "name": "printing-press",
   "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "glances": "./dist/bin/glances.js"
+    "printing-press": "./dist/bin/printing-press.js"
   },
   "scripts": {
     "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
@@ -14,7 +14,7 @@
     "@sinclair/typebox": "^0.34.48"
   },
   "devDependencies": {
-    "carapace-plugin-sdk": "^1.0.3",
+    "carapace-plugin-sdk": "file:/home/openclaw/git/carapace-plugin-sdk",
     "@types/node": "^25",
     "tsup": "^8.3.0",
     "typescript": "^6",
