@@ -68,13 +68,12 @@ describe("handleMediaWrite", () => {
   it("returns error for empty base64", async () => {
     const result = await handleMediaWrite(tmpDir, {
       base64: "",
-      mimeType: "image/png",
     });
     expect(result).toHaveProperty("error");
-    expect((result as { error: string }).error).toMatch(/base64 is required/i);
+    expect((result as { error: string }).error).toMatch(/either base64 or file_path/i);
   });
 
-  it("returns error for empty mimeType", async () => {
+  it("returns error for empty mimeType with base64", async () => {
     const result = await handleMediaWrite(tmpDir, {
       base64: "SGVsbG8=",
       mimeType: "",
@@ -115,5 +114,70 @@ describe("handleMediaWrite", () => {
     expect(result).not.toHaveProperty("error");
     const r = result as { file: string };
     expect(r.file).toMatch(/\.bin$/);
+  });
+
+  // --- file_path mode ---
+
+  it("copies a file from file_path into media store", async () => {
+    const srcFile = path.join(tmpDir, "screenshot.png");
+    fs.writeFileSync(srcFile, Buffer.from("fake-png-data"));
+
+    const outDir = path.join(tmpDir, "store");
+    const result = await handleMediaWrite(outDir, { file_path: srcFile });
+
+    expect(result).not.toHaveProperty("error");
+    const r = result as { file: string; size_bytes: number; mimeType: string };
+    expect(r.file.startsWith(outDir)).toBe(true);
+    expect(r.size_bytes).toBe(13);
+    expect(r.mimeType).toBe("image/png");
+    expect(fs.existsSync(r.file)).toBe(true);
+  });
+
+  it("auto-detects MIME from file extension", async () => {
+    const srcFile = path.join(tmpDir, "photo.jpg");
+    fs.writeFileSync(srcFile, Buffer.from("jpeg-data"));
+
+    const result = await handleMediaWrite(tmpDir, { file_path: srcFile });
+    expect(result).not.toHaveProperty("error");
+    expect((result as { mimeType: string }).mimeType).toBe("image/jpeg");
+  });
+
+  it("uses filename from source file when no filename hint given", async () => {
+    const srcFile = path.join(tmpDir, "my-capture.png");
+    fs.writeFileSync(srcFile, Buffer.from("data"));
+
+    const result = await handleMediaWrite(tmpDir, { file_path: srcFile });
+    expect(result).not.toHaveProperty("error");
+    expect((result as { file: string }).file).toMatch(/my-capture_\d+_[0-9a-f]{8}\.png$/);
+  });
+
+  it("allows mimeType override in file_path mode", async () => {
+    const srcFile = path.join(tmpDir, "data.bin");
+    fs.writeFileSync(srcFile, Buffer.from("data"));
+
+    const result = await handleMediaWrite(tmpDir, {
+      file_path: srcFile,
+      mimeType: "image/webp",
+    });
+    expect(result).not.toHaveProperty("error");
+    expect((result as { mimeType: string }).mimeType).toBe("image/webp");
+    expect((result as { file: string }).file).toMatch(/\.webp$/);
+  });
+
+  it("returns error for non-existent file_path", async () => {
+    const result = await handleMediaWrite(tmpDir, {
+      file_path: "/tmp/does-not-exist-12345.png",
+    });
+    expect(result).toHaveProperty("error");
+    expect((result as { error: string }).error).toMatch(/does not exist/i);
+  });
+
+  it("returns error for empty file via file_path", async () => {
+    const srcFile = path.join(tmpDir, "empty.png");
+    fs.writeFileSync(srcFile, Buffer.alloc(0));
+
+    const result = await handleMediaWrite(tmpDir, { file_path: srcFile });
+    expect(result).toHaveProperty("error");
+    expect((result as { error: string }).error).toMatch(/empty file/i);
   });
 });
