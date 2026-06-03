@@ -1,0 +1,39 @@
+{
+  "id": "obsidian-vault",
+  "name": "Obsidian Vault",
+  "description": "Read-only access to an Obsidian vault — search, read, and explore notes securely",
+  "version": "1.0.0",
+  "entry": "./dist/adapter.js",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "vaultRoot": {
+        "type": "string",
+        "description": "Absolute path to the Obsidian vault root directory"
+      },
+      "indexLocation": {
+        "type": "string",
+        "description": "Path for the SQLite index database (must be outside vaultRoot)",
+        "default": "~/.openclaw/obsidian-index.db"
+      }
+    },
+    "required": [
+      "vaultRoot"
+    ]
+  },
+  "contracts": {
+    "tools": [
+      "vault_search",
+      "vault_read",
+      "vault_recent",
+      "vault_tags",
+      "vault_backlinks",
+      "vault_related"
+    ]
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "openclaw": {}
+}
