@@ -19,7 +19,7 @@ Public plugins, services, and shared libraries for [OpenClaw](https://jeffsteinb
 | 📅 | [ICS Calendar](plugins/ics-calendar/) | Read events from ICS feeds |
 | 👁️ | [LLMVision](plugins/llmvision/) | Image analysis workflows |
 | 📝 | [Markdown to HTML](plugins/md-to-html/) | Convert extended Markdown to styled HTML |
-| 📓 | [Obsidian Vault](plugins/obsidian-vault/) | Read-only access to an Obsidian vault — search, read, explore notes |
+| 🗂️ | [Obsidian Vault](plugins/obsidian-vault/) | Read-only access to an Obsidian vault — search, read, and explore notes |
 | 🛰️ | [Octo Satellite](plugins/octo-satellite/) | Remote agent for running plugins on secondary machines |
 | 📆 | [Outlook Calendar](plugins/outlook-calendar/) | Query Outlook calendar data |
 | 📬 | [Outlook Mail](plugins/outlook-mail/) | Search and read Outlook mail |
