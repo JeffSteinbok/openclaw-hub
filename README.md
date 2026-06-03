@@ -24,10 +24,10 @@ Public plugins, services, and shared libraries for [OpenClaw](https://jeffsteinb
 | 📆 | [Outlook Calendar](plugins/outlook-calendar/) | Query Outlook calendar data |
 | 📬 | [Outlook Mail](plugins/outlook-mail/) | Search and read Outlook mail |
 | 🗓️ | [Outlook Work Calendar](plugins/outlook-work-calendar/) | Work-focused Outlook calendar |
-| 🖨️ | [Printing Press](plugins/printing-press/) | Expose Printing Press CLI tools as OpenClaw tools |
+| 📸 | [Screenshot Capture](plugins/screenshot-capture/) | Capture screenshots from paired nodes, write to media store |
 | 🎵 | [Spotify](plugins/spotify/) | Playback control and search |
 | 📮 | [USPS Mail](plugins/usps-mail/) | Operator-facing USPS Informed Delivery tools |
-| 🥗 | [WeightWatchers](plugins/weightwatchers/) | Search foods, log meals, view diary and points budget |
+| ⚖️ | [WeightWatchers](plugins/weightwatchers/) | WeightWatchers points and meal tracking |
 | ❤️ | [Withings](plugins/withings/) | Health metrics from Withings devices |
 
 All plugins use the [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapace-plugin-sdk) for CLI generation.

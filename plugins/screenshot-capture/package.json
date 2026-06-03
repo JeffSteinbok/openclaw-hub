@@ -1,0 +1,37 @@
+{
+  "name": "screenshot-capture",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Capture screenshots from paired nodes and write to gateway media store",
+  "main": "dist/index.js",
+  "bin": {
+    "screenshot-capture": "./dist/bin/screenshot-capture.js"
+  },
+  "scripts": {
+    "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.48"
+  },
+  "devDependencies": {
+    "carapace-plugin-sdk": "^1.0.0",
+    "@types/node": "^25",
+    "tsup": "^8.3.0",
+    "typescript": "^6",
+    "vitest": "^2.1.8"
+  },
+  "peerDependencies": {
+    "openclaw": "^2026.4.23"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/adapter.js"
+    ]
+  }
+}
