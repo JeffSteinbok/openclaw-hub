@@ -1,0 +1,69 @@
+{
+  "id": "printing-press",
+  "name": "Printing Press",
+  "description": "Expose Printing Press CLI tools as OpenClaw tools — no shell access required",
+  "version": "1.0.0",
+  "entry": "./dist/adapter.js",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "clis": {
+        "type": "array",
+        "description": "List of Printing Press CLIs to expose as tools",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Short identifier for this CLI (e.g. 'linear')"
+            },
+            "binaryPath": {
+              "type": "string",
+              "description": "Absolute path to the CLI binary"
+            },
+            "manifestPath": {
+              "type": "string",
+              "description": "Path to tools-manifest.json"
+            },
+            "env": {
+              "type": "object",
+              "description": "Environment variables for this CLI"
+            },
+            "allowedTools": {
+              "type": "array",
+              "description": "Whitelist of tool names to register (registers all GET tools if omitted)"
+            },
+            "blockedMethods": {
+              "type": "array",
+              "description": "HTTP methods to block (default: DELETE, PUT, PATCH)"
+            },
+            "timeout": {
+              "type": "number",
+              "description": "Execution timeout in ms (default: 30000)"
+            },
+            "maxTools": {
+              "type": "number",
+              "description": "Maximum number of tools to register per CLI (default: 50)"
+            }
+          },
+          "required": [
+            "name",
+            "binaryPath",
+            "manifestPath"
+          ]
+        }
+      }
+    },
+    "required": [
+      "clis"
+    ]
+  },
+  "contracts": {
+    "tools": []
+  },
+  "activation": {
+    "onStartup": true
+  },
+  "openclaw": {}
+}
