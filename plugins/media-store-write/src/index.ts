@@ -93,29 +93,41 @@ function createEntry() {
         name: "media_write",
         label: "Media Write",
         description: [
-          "Decode base64-encoded bytes and write them to the gateway media store.",
+          "Store a file in the gateway media store so it can be attached to messages.",
           "Returns { file, mediaId, size_bytes, mimeType } — the `file` field is automatically",
           "converted to a gateway mediaId by OpenClaw and can be passed to the `message` tool's",
           "`media` or `attachments` parameter.",
           "",
-          "Use this to store screenshots, images, or other binary data received as base64",
-          "(e.g. from nodes(action=\"invoke\", invokeCommand=\"screen.snapshot\")) so they can",
-          "be attached to Discord/Telegram messages without a subagent round-trip.",
+          "Accepts EITHER file_path (preferred for large files like screenshots) OR base64.",
+          "When using file_path, mimeType is auto-detected from the extension if not provided.",
         ].join("\n"),
         parameters: Type.Object({
-          base64: Type.String({
-            description:
-              "Base64-encoded file content. Standard or URL-safe encoding; padding optional.",
-          }),
-          mimeType: Type.String({
-            description:
-              'MIME type of the content, e.g. "image/png", "image/jpeg", "application/pdf".',
-          }),
+          file_path: Type.Optional(
+            Type.String({
+              description:
+                "Absolute path to an existing file to store (e.g. from screen.snapshot out-path). " +
+                "Preferred over base64 for large files. MIME type is auto-detected from extension.",
+            })
+          ),
+          base64: Type.Optional(
+            Type.String({
+              description:
+                "Base64-encoded file content. Standard or URL-safe encoding; padding optional. " +
+                "Use file_path instead for large payloads like screenshots.",
+            })
+          ),
+          mimeType: Type.Optional(
+            Type.String({
+              description:
+                'MIME type of the content, e.g. "image/png", "image/jpeg". ' +
+                "Required for base64 mode; auto-detected from extension for file_path mode.",
+            })
+          ),
           filename: Type.Optional(
             Type.String({
               description:
                 "Hint for the stored filename (basename only; no path traversal). " +
-                "A timestamp suffix is always appended. Defaults to \"media\".",
+                "A timestamp suffix is always appended. Defaults to source filename or \"media\".",
             })
           ),
         }),
@@ -123,8 +135,9 @@ function createEntry() {
           try {
             return formatResult(
               await handleMediaWrite(mediaDir, {
-                base64: String(params.base64 ?? ""),
-                mimeType: String(params.mimeType ?? "application/octet-stream"),
+                file_path: params.file_path as string | undefined,
+                base64: params.base64 as string | undefined,
+                mimeType: params.mimeType as string | undefined,
                 filename: params.filename as string | undefined,
               })
             );
