@@ -1,42 +1,37 @@
 /**
  * Handlers — core tool logic.
  *
- * Pure functions that accept config/index and return structured results.
+ * Pure functions that accept config/reader and return structured results.
  * No knowledge of the plugin framework.
  */
 
 import { readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
-import { resolveSafePath } from "./security.js";
-import { parseNote } from "./parser.js";
-import type { VaultIndex } from "./indexer.js";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface VaultConfig {
-  vaultRoot: string;
-  indexLocation: string;
-}
+import { relative } from "node:path";
+import { resolveSafePath, parseNote, type VaultConfig } from "@openclaw/obsidian-core";
+import type { VaultReader } from "./reader.js";
 
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
 
+function checkReady(reader: VaultReader): { error: string } | null {
+  const status = reader.getStatus();
+  if (status.state === "ready") return null;
+  return { error: status.message };
+}
+
 export function handleSearch(
-  index: VaultIndex,
+  reader: VaultReader,
   query: string,
   limit: number,
 ): unknown {
-  if (!index.ready) {
-    return { error: "Index is still being built. Please try again in a moment." };
-  }
+  const err = checkReady(reader);
+  if (err) return err;
   if (!query.trim()) {
     return { error: "Query must not be empty" };
   }
   try {
-    const results = index.search(query, limit);
+    const results = reader.search(query, limit);
     return { output: results };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -46,7 +41,6 @@ export function handleSearch(
 
 export function handleRead(
   config: VaultConfig,
-  index: VaultIndex,
   notePath: string,
 ): unknown {
   if (!notePath.trim()) {
@@ -86,13 +80,12 @@ export function handleRead(
 }
 
 export function handleRecent(
-  index: VaultIndex,
+  reader: VaultReader,
   limit: number,
 ): unknown {
-  if (!index.ready) {
-    return { error: "Index is still being built. Please try again in a moment." };
-  }
-  const results = index.listRecent(limit);
+  const err = checkReady(reader);
+  if (err) return err;
+  const results = reader.listRecent(limit);
   return {
     output: results.map((r) => ({
       path: r.path,
@@ -102,35 +95,32 @@ export function handleRecent(
   };
 }
 
-export function handleTags(index: VaultIndex): unknown {
-  if (!index.ready) {
-    return { error: "Index is still being built. Please try again in a moment." };
-  }
-  return { output: index.listTags() };
+export function handleTags(reader: VaultReader): unknown {
+  const err = checkReady(reader);
+  if (err) return err;
+  return { output: reader.listTags() };
 }
 
 export function handleBacklinks(
-  index: VaultIndex,
+  reader: VaultReader,
   notePath: string,
 ): unknown {
-  if (!index.ready) {
-    return { error: "Index is still being built. Please try again in a moment." };
-  }
+  const err = checkReady(reader);
+  if (err) return err;
   if (!notePath.trim()) {
     return { error: "Note path must not be empty" };
   }
-  return { output: index.getBacklinks(notePath) };
+  return { output: reader.getBacklinks(notePath) };
 }
 
 export function handleRelated(
-  index: VaultIndex,
+  reader: VaultReader,
   notePath: string,
 ): unknown {
-  if (!index.ready) {
-    return { error: "Index is still being built. Please try again in a moment." };
-  }
+  const err = checkReady(reader);
+  if (err) return err;
   if (!notePath.trim()) {
     return { error: "Note path must not be empty" };
   }
-  return { output: index.getRelatedNotes(notePath) };
+  return { output: reader.getRelatedNotes(notePath) };
 }

@@ -34,12 +34,14 @@ All plugins use the [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapa
 
 ---
 
-## Mail Runtime
+## Services & Libraries
 
 | Component | Purpose |
 |-----------|---------|
 | 📮 [USPS Mail Action](libs/ts/mail_action_usps/) | USPS Informed Delivery digest processing |
-| ⚡ [FastMail SSE](services/fastmail-sse/) | Live FastMail listener that feeds the runtime |
+| 📓 [Obsidian Core](libs/ts/obsidian-core/) | Shared parsing, security, and schema for Obsidian vault integration |
+| ⚡ [FastMail SSE](services/fastmail-sse/) | Live FastMail listener that feeds the mail runtime |
+| 🔍 [Obsidian Indexer](services/obsidian-indexer/) | FTS5 search index builder/watcher for Obsidian vaults (systemd service) |
 
 ---
 

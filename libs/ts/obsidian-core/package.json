@@ -1,0 +1,41 @@
+{
+  "name": "@openclaw/obsidian-core",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.js"
+    },
+    "./parser": {
+      "types": "./src/parser.ts",
+      "import": "./dist/parser.js"
+    },
+    "./security": {
+      "types": "./src/security.ts",
+      "import": "./dist/security.js"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "import": "./dist/types.js"
+    },
+    "./schema": {
+      "types": "./src/schema.ts",
+      "import": "./dist/schema.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6",
+    "vitest": "^2.1.8"
+  }
+}

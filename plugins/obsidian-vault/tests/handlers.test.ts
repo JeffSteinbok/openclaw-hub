@@ -1,17 +1,19 @@
 /**
  * Tests for the Obsidian Vault plugin.
  *
- * Uses a temporary directory with real files to test the full pipeline:
- * parsing, indexing, security, and tool handlers.
+ * Uses a temporary directory with real files and a pre-built index
+ * to test the read-only VaultReader and tool handlers.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdirSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, symlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import Database from "better-sqlite3";
+import { initSchema, parseNote } from "@openclaw/obsidian-core";
 
 // ---------------------------------------------------------------------------
-// Test vault setup
+// Test vault setup — build a real index, then test read-only access
 // ---------------------------------------------------------------------------
 
 const TEST_ROOT = join(tmpdir(), `obsidian-vault-test-${Date.now()}`);
@@ -25,10 +27,31 @@ function writeNote(relPath: string, content: string): void {
   writeFileSync(abs, content, "utf-8");
 }
 
-beforeAll(() => {
-  mkdirSync(VAULT_ROOT, { recursive: true });
+function indexNote(db: Database.Database, relPath: string, content: string): void {
+  const parsed = parseNote(content, relPath);
+  const stat = { mtimeMs: Date.now() };
 
-  writeNote("Projects/Battery Monitoring.md", `---
+  db.prepare(
+    "INSERT OR REPLACE INTO notes (path, title, content, frontmatter_json, mtime_ms) VALUES (?, ?, ?, ?, ?)"
+  ).run(relPath, parsed.title, parsed.content, JSON.stringify(parsed.frontmatter), stat.mtimeMs);
+
+  const deleteTags = db.prepare("DELETE FROM tags WHERE note_path = ?");
+  const insertTag = db.prepare("INSERT OR REPLACE INTO tags (note_path, tag) VALUES (?, ?)");
+  deleteTags.run(relPath);
+  for (const tag of parsed.tags) {
+    insertTag.run(relPath, tag);
+  }
+
+  const deleteLinks = db.prepare("DELETE FROM links WHERE source_path = ?");
+  const insertLink = db.prepare("INSERT INTO links (source_path, target, alias) VALUES (?, ?, ?)");
+  deleteLinks.run(relPath);
+  for (const link of parsed.wikilinks) {
+    insertLink.run(relPath, link.target, link.alias);
+  }
+}
+
+const NOTES: Record<string, string> = {
+  "Projects/Battery Monitoring.md": `---
 title: Battery Monitoring
 tags: [homeassistant, automation]
 ---
@@ -38,9 +61,8 @@ tags: [homeassistant, automation]
 Monitor battery levels for all devices. See also [[Zigbee Devices]] and [[Home Dashboard|Dashboard]].
 
 #monitoring #iot
-`);
-
-  writeNote("Projects/Zigbee Devices.md", `---
+`,
+  "Projects/Zigbee Devices.md": `---
 tags: homeassistant
 ---
 
@@ -49,9 +71,8 @@ tags: homeassistant
 List of Zigbee devices on the network. Related to [[Battery Monitoring]].
 
 #networking #iot
-`);
-
-  writeNote("Projects/Home Dashboard.md", `---
+`,
+  "Projects/Home Dashboard.md": `---
 title: Home Dashboard
 ---
 
@@ -65,16 +86,14 @@ const x = "#notag";
 \`\`\`
 
 #homeassistant #dashboard
-`);
-
-  writeNote("Notes/Daily/2024-01-15.md", `# Daily Note
+`,
+  "Notes/Daily/2024-01-15.md": `# Daily Note
 
 Today's tasks and observations.
 
 #daily
-`);
-
-  writeNote("Notes/Recipes/Pasta.md", `---
+`,
+  "Notes/Recipes/Pasta.md": `---
 title: Pasta Recipe
 tag: cooking, food
 ---
@@ -82,7 +101,42 @@ tag: cooking, food
 # Pasta Recipe
 
 A simple pasta recipe.
-`);
+`,
+  "Reference/Appliances.md": `---
+title: Appliances
+---
+
+# Appliances
+
+Washing Machine
+LG WM3900HWA
+
+Washer/Dryer combo available.
+
+Dryer
+LG: DLEX3900W
+`,
+};
+
+beforeAll(() => {
+  mkdirSync(VAULT_ROOT, { recursive: true });
+
+  // Write vault files
+  for (const [path, content] of Object.entries(NOTES)) {
+    writeNote(path, content);
+  }
+
+  // Build the index (as the indexer service would)
+  const db = new Database(INDEX_PATH);
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  initSchema(db);
+
+  for (const [path, content] of Object.entries(NOTES)) {
+    indexNote(db, path, content);
+  }
+
+  db.close();
 });
 
 afterAll(() => {
@@ -90,12 +144,12 @@ afterAll(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Parser tests
+// Parser tests (from obsidian-core — quick smoke test)
 // ---------------------------------------------------------------------------
 
-describe("parser", () => {
+describe("parser (via obsidian-core)", () => {
   it("extracts frontmatter", async () => {
-    const { parseFrontmatter } = await import("../src/parser.js");
+    const { parseFrontmatter } = await import("@openclaw/obsidian-core");
     const result = parseFrontmatter(`---
 title: Test
 tags: [a, b]
@@ -106,119 +160,52 @@ Content here.`);
     expect(result.frontmatter.tags).toEqual(["a", "b"]);
     expect(result.content.trim()).toBe("Content here.");
   });
-
-  it("handles missing frontmatter", async () => {
-    const { parseFrontmatter } = await import("../src/parser.js");
-    const result = parseFrontmatter("# Just a heading\n\nSome content.");
-    expect(result.frontmatter).toEqual({});
-    expect(result.content).toContain("Just a heading");
-  });
-
-  it("extracts inline tags", async () => {
-    const { extractTags } = await import("../src/parser.js");
-    const tags = extractTags("Some text #alpha and #beta-test here", {});
-    expect(tags).toContain("alpha");
-    expect(tags).toContain("beta-test");
-  });
-
-  it("extracts frontmatter tags", async () => {
-    const { extractTags } = await import("../src/parser.js");
-    const tags = extractTags("No inline tags", { tags: ["FooBar", "baz"] });
-    expect(tags).toContain("foobar");
-    expect(tags).toContain("baz");
-  });
-
-  it("extracts comma-separated string tags", async () => {
-    const { extractTags } = await import("../src/parser.js");
-    const tags = extractTags("", { tag: "cooking, food" });
-    expect(tags).toContain("cooking");
-    expect(tags).toContain("food");
-  });
-
-  it("ignores tags inside code blocks", async () => {
-    const { extractTags } = await import("../src/parser.js");
-    const content = "Real #tag here\n```\n#fake\n```\nAnd `#inline_fake`";
-    const tags = extractTags(content, {});
-    expect(tags).toContain("tag");
-    expect(tags).not.toContain("fake");
-    expect(tags).not.toContain("inline_fake");
-  });
-
-  it("extracts wikilinks", async () => {
-    const { extractWikilinks } = await import("../src/parser.js");
-    const links = extractWikilinks("See [[Note A]] and [[Note B|alias]] and [[Note C#heading]].");
-    expect(links).toHaveLength(3);
-    expect(links[0]).toEqual({ target: "Note A", alias: null });
-    expect(links[1]).toEqual({ target: "Note B", alias: "alias" });
-    expect(links[2]).toEqual({ target: "Note C", alias: null });
-  });
-
-  it("deduplicates wikilinks", async () => {
-    const { extractWikilinks } = await import("../src/parser.js");
-    const links = extractWikilinks("[[Dup]] and [[Dup]] again.");
-    expect(links).toHaveLength(1);
-  });
-
-  it("derives title from frontmatter", async () => {
-    const { deriveTitle } = await import("../src/parser.js");
-    expect(deriveTitle({ title: "My Title" }, "# Other", "file.md")).toBe("My Title");
-  });
-
-  it("derives title from H1", async () => {
-    const { deriveTitle } = await import("../src/parser.js");
-    expect(deriveTitle({}, "# Heading Title\n\nContent", "file.md")).toBe("Heading Title");
-  });
-
-  it("derives title from filename", async () => {
-    const { deriveTitle } = await import("../src/parser.js");
-    expect(deriveTitle({}, "No heading", "path/to/My Note.md")).toBe("My Note");
-  });
 });
 
 // ---------------------------------------------------------------------------
-// Security tests
+// Security tests (from obsidian-core — quick smoke test)
 // ---------------------------------------------------------------------------
 
-describe("security", () => {
+describe("security (via obsidian-core)", () => {
   it("resolves a valid path inside vault", async () => {
-    const { resolveSafePath } = await import("../src/security.js");
+    const { resolveSafePath } = await import("@openclaw/obsidian-core");
     const result = resolveSafePath(VAULT_ROOT, "Projects/Battery Monitoring.md");
     expect(result).toBe(join(VAULT_ROOT, "Projects/Battery Monitoring.md"));
   });
 
   it("rejects path traversal with ../", async () => {
-    const { resolveSafePath } = await import("../src/security.js");
+    const { resolveSafePath } = await import("@openclaw/obsidian-core");
     expect(() => resolveSafePath(VAULT_ROOT, "../../etc/passwd")).toThrow(/escapes vault root/);
   });
 
   it("rejects absolute paths", async () => {
-    const { resolveSafePath } = await import("../src/security.js");
+    const { resolveSafePath } = await import("@openclaw/obsidian-core");
     expect(() => resolveSafePath(VAULT_ROOT, "/etc/passwd")).toThrow(/absolute paths/);
   });
 
   it("rejects null bytes", async () => {
-    const { resolveSafePath } = await import("../src/security.js");
+    const { resolveSafePath } = await import("@openclaw/obsidian-core");
     expect(() => resolveSafePath(VAULT_ROOT, "file\0.md")).toThrow(/null bytes/);
   });
 
   it("rejects empty path", async () => {
-    const { resolveSafePath } = await import("../src/security.js");
+    const { resolveSafePath } = await import("@openclaw/obsidian-core");
     expect(() => resolveSafePath(VAULT_ROOT, "")).toThrow(/empty/);
   });
 
   it("validates index location is outside vault", async () => {
-    const { validateIndexLocation } = await import("../src/security.js");
+    const { validateIndexLocation } = await import("@openclaw/obsidian-core");
     expect(() => validateIndexLocation(VAULT_ROOT, join(VAULT_ROOT, "index.db")))
       .toThrow(/must not be inside vault root/);
   });
 
   it("allows index location outside vault", async () => {
-    const { validateIndexLocation } = await import("../src/security.js");
+    const { validateIndexLocation } = await import("@openclaw/obsidian-core");
     expect(() => validateIndexLocation(VAULT_ROOT, INDEX_PATH)).not.toThrow();
   });
 
   it("rejects symlink escaping vault", async () => {
-    const { resolveSafePath } = await import("../src/security.js");
+    const { resolveSafePath } = await import("@openclaw/obsidian-core");
     const linkPath = join(VAULT_ROOT, "escape-link.md");
     try {
       symlinkSync("/etc/hostname", linkPath);
@@ -230,67 +217,96 @@ describe("security", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Indexer tests
+// VaultReader tests (read-only query)
 // ---------------------------------------------------------------------------
 
-describe("indexer", () => {
-  let VaultIndex: typeof import("../src/indexer.js").VaultIndex;
-  let index: InstanceType<typeof import("../src/indexer.js").VaultIndex>;
+describe("VaultReader", () => {
+  let VaultReader: typeof import("../src/reader.js").VaultReader;
+  let reader: InstanceType<typeof import("../src/reader.js").VaultReader>;
 
   beforeAll(async () => {
-    const mod = await import("../src/indexer.js");
-    VaultIndex = mod.VaultIndex;
-    index = new VaultIndex({ vaultRoot: VAULT_ROOT, indexLocation: INDEX_PATH });
-    await index.startIndexing();
+    const mod = await import("../src/reader.js");
+    VaultReader = mod.VaultReader;
+    reader = new VaultReader(INDEX_PATH);
   });
 
-  afterAll(async () => {
-    await index.close();
+  afterAll(() => {
+    reader?.close();
   });
 
-  it("indexes all markdown files", () => {
-    expect(index.getNoteCount()).toBe(5);
+  it("reports ready status", () => {
+    expect(reader.ready).toBe(true);
+    const status = reader.getStatus();
+    expect(status.state).toBe("ready");
   });
 
-  it("marks index as ready", () => {
-    expect(index.ready).toBe(true);
-  });
-
-  it("searches for notes", () => {
-    const results = index.search("battery", 10);
+  it("searches for notes via FTS5", () => {
+    const results = reader.search("battery", 10);
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].path).toContain("Battery Monitoring");
   });
 
+  it("prefix-matches partial words", () => {
+    const results = reader.search("batter", 10);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].path).toContain("Battery Monitoring");
+  });
+
+  it("preserves explicit FTS5 operators", () => {
+    const results = reader.search("battery OR pasta", 10);
+    expect(results.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("falls back to LIKE for no FTS match", () => {
+    const results = reader.search("#iot", 10);
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it("searches for LG appliances", () => {
+    const results = reader.search("LG", 10);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.some((r) => r.path.includes("Appliances"))).toBe(true);
+  });
+
+  it("searches for washer", () => {
+    const results = reader.search("washer", 10);
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it("searches for washing machine", () => {
+    const results = reader.search("washing machine", 10);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.some((r) => r.path.includes("Appliances"))).toBe(true);
+  });
+
   it("returns empty for no-match search", () => {
-    const results = index.search("xyznonexistent123", 10);
+    const results = reader.search("xyznonexistent123", 10);
     expect(results).toHaveLength(0);
   });
 
   it("reads a note by path", () => {
-    const note = index.readNote("Projects/Battery Monitoring.md");
+    const note = reader.readNote("Projects/Battery Monitoring.md");
     expect(note).not.toBeNull();
     expect(note!.title).toBe("Battery Monitoring");
     expect(note!.content).toContain("Monitor battery levels");
   });
 
   it("returns null for nonexistent note", () => {
-    const note = index.readNote("nonexistent.md");
+    const note = reader.readNote("nonexistent.md");
     expect(note).toBeNull();
   });
 
   it("lists recent notes", () => {
-    const recent = index.listRecent(3);
+    const recent = reader.listRecent(3);
     expect(recent.length).toBeLessThanOrEqual(3);
     expect(recent.length).toBeGreaterThan(0);
-    // All should have mtime
     for (const r of recent) {
       expect(r.mtime_ms).toBeGreaterThan(0);
     }
   });
 
   it("lists all tags", () => {
-    const tags = index.listTags();
+    const tags = reader.listTags();
     expect(tags).toContain("homeassistant");
     expect(tags).toContain("iot");
     expect(tags).toContain("monitoring");
@@ -299,12 +315,12 @@ describe("indexer", () => {
   });
 
   it("does not include code-block tags", () => {
-    const tags = index.listTags();
+    const tags = reader.listTags();
     expect(tags).not.toContain("notag");
   });
 
   it("finds backlinks", () => {
-    const backlinks = index.getBacklinks("Battery Monitoring");
+    const backlinks = reader.getBacklinks("Battery Monitoring");
     expect(backlinks.length).toBeGreaterThanOrEqual(2);
     const paths = backlinks.map((b) => b.path);
     expect(paths).toContain("Projects/Zigbee Devices.md");
@@ -312,14 +328,66 @@ describe("indexer", () => {
   });
 
   it("finds related notes", () => {
-    const related = index.getRelatedNotes("Projects/Battery Monitoring.md");
+    const related = reader.getRelatedNotes("Projects/Battery Monitoring.md");
     expect(related.length).toBeGreaterThan(0);
     const paths = related.map((r) => r.path);
     expect(paths).toContain("Projects/Zigbee Devices.md");
-    // Each should have reasons
     for (const r of related) {
       expect(r.reasons.length).toBeGreaterThan(0);
     }
+  });
+
+  it("returns note count", () => {
+    expect(reader.getNoteCount()).toBe(6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// VaultReader — missing/empty index
+// ---------------------------------------------------------------------------
+
+describe("VaultReader (missing index)", () => {
+  it("reports index_missing when DB doesn't exist", async () => {
+    const { VaultReader } = await import("../src/reader.js");
+    const reader = new VaultReader("/nonexistent/path/index.db");
+    const status = reader.getStatus();
+    expect(status.state).toBe("index_missing");
+    expect(reader.ready).toBe(false);
+    // Should return empty results, not throw
+    expect(reader.search("test")).toEqual([]);
+    expect(reader.listTags()).toEqual([]);
+    expect(reader.readNote("test.md")).toBeNull();
+    reader.close();
+  });
+
+  it("reports index_empty when DB has schema but no notes", async () => {
+    const { VaultReader } = await import("../src/reader.js");
+    const emptyIndex = join(TEST_ROOT, "empty.db");
+    const db = new Database(emptyIndex);
+    db.pragma("journal_mode = WAL");
+    initSchema(db);
+    db.close();
+
+    const reader = new VaultReader(emptyIndex);
+    const status = reader.getStatus();
+    expect(status.state).toBe("index_empty");
+    expect(reader.ready).toBe(false);
+    reader.close();
+  });
+
+  it("reports schema_incompatible when version doesn't match", async () => {
+    const { VaultReader } = await import("../src/reader.js");
+    const badIndex = join(TEST_ROOT, "bad-version.db");
+    const db = new Database(badIndex);
+    db.pragma("user_version = 999");
+    db.exec("CREATE TABLE IF NOT EXISTS notes (path TEXT PRIMARY KEY, title TEXT, content TEXT, frontmatter_json TEXT, mtime_ms INTEGER)");
+    db.exec("INSERT INTO notes VALUES ('test.md', 'Test', 'content', '{}', 0)");
+    db.close();
+
+    const reader = new VaultReader(badIndex);
+    const status = reader.getStatus();
+    expect(status.state).toBe("schema_incompatible");
+    reader.close();
   });
 });
 
@@ -382,9 +450,6 @@ describe("plugin entry", () => {
       "vault_search",
       "vault_tags",
     ]);
-
-    // Cleanup the index db created during registration
-    try { rmSync(INDEX_PATH + ".reg-test", { force: true }); } catch { /* ignore */ }
   });
 });
 
@@ -395,64 +460,36 @@ describe("plugin entry", () => {
 describe("vault_read handler", () => {
   it("reads a note successfully", async () => {
     const { handleRead } = await import("../src/handlers.js");
-    const { VaultIndex } = await import("../src/indexer.js");
-    const idx = new VaultIndex({
-      vaultRoot: VAULT_ROOT,
-      indexLocation: INDEX_PATH + ".read-test",
-    });
-    await idx.startIndexing();
 
     const result = handleRead(
-      { vaultRoot: VAULT_ROOT, indexLocation: INDEX_PATH + ".read-test" },
-      idx,
+      { vaultRoot: VAULT_ROOT, indexLocation: INDEX_PATH },
       "Notes/Recipes/Pasta.md",
     ) as { output: Record<string, unknown> };
 
     expect(result.output.title).toBe("Pasta Recipe");
     expect(result.output.tags).toContain("cooking");
     expect(result.output.tags).toContain("food");
-
-    await idx.close();
-    try { rmSync(INDEX_PATH + ".read-test", { force: true }); } catch { /* ignore */ }
   });
 
   it("rejects path traversal", async () => {
     const { handleRead } = await import("../src/handlers.js");
-    const { VaultIndex } = await import("../src/indexer.js");
-    const idx = new VaultIndex({
-      vaultRoot: VAULT_ROOT,
-      indexLocation: INDEX_PATH + ".trav-test",
-    });
 
     const result = handleRead(
-      { vaultRoot: VAULT_ROOT, indexLocation: INDEX_PATH + ".trav-test" },
-      idx,
+      { vaultRoot: VAULT_ROOT, indexLocation: INDEX_PATH },
       "../../etc/passwd",
     ) as { error: string };
 
     expect(result.error).toContain("Access denied");
-
-    await idx.close();
-    try { rmSync(INDEX_PATH + ".trav-test", { force: true }); } catch { /* ignore */ }
   });
 
   it("returns error for nonexistent note", async () => {
     const { handleRead } = await import("../src/handlers.js");
-    const { VaultIndex } = await import("../src/indexer.js");
-    const idx = new VaultIndex({
-      vaultRoot: VAULT_ROOT,
-      indexLocation: INDEX_PATH + ".noent-test",
-    });
 
     const result = handleRead(
-      { vaultRoot: VAULT_ROOT, indexLocation: INDEX_PATH + ".noent-test" },
-      idx,
+      { vaultRoot: VAULT_ROOT, indexLocation: INDEX_PATH },
       "nonexistent.md",
     ) as { error: string };
 
     expect(result.error).toContain("not found");
-
-    await idx.close();
-    try { rmSync(INDEX_PATH + ".noent-test", { force: true }); } catch { /* ignore */ }
   });
 });

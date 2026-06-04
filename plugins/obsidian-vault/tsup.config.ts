@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/adapter.ts", "src/handlers.ts", "src/indexer.ts", "src/security.ts", "src/parser.ts"],
+  entry: ["src/index.ts", "src/adapter.ts", "src/handlers.ts", "src/reader.ts"],
   format: ["esm"],
   outDir: "dist",
   dts: false,

@@ -5,7 +5,9 @@
   "type": "module",
   "workspaces": [
     "libs/ts/mail_action_usps",
+    "libs/ts/obsidian-core",
     "services/fastmail-sse",
+    "services/obsidian-indexer",
     "plugins/fastmail",
     "plugins/glances",
     "plugins/homeassistant",
@@ -25,7 +27,7 @@
     "plugins/weightwatchers"
   ],
   "scripts": {
-    "build:libs": "npm run build --workspace libs/ts/mail_action_usps && npm run build --workspace services/fastmail-sse",
+    "build:libs": "npm run build --workspace libs/ts/mail_action_usps && npm run build --workspace libs/ts/obsidian-core && npm run build --workspace services/fastmail-sse && npm run build --workspace services/obsidian-indexer",
     "build:plugins": "npm run build --workspace plugins/fastmail --workspace plugins/glances --workspace plugins/homeassistant --workspace plugins/html-to-pdf --workspace plugins/ics-calendar --workspace plugins/llmvision --workspace plugins/md-to-html --workspace plugins/obsidian-vault --workspace plugins/outlook-calendar --workspace plugins/outlook-mail --workspace plugins/outlook-work-calendar --workspace plugins/printing-press --workspace plugins/spotify --workspace plugins/withings --workspace plugins/usps-mail --workspace plugins/octo-satellite --workspace plugins/weightwatchers",
     "build": "npm run build:libs && npm run build:plugins",
     "test:scripts": "python3 -m unittest scripts.tests.test_export_artifacts",

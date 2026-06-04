@@ -1,14 +1,19 @@
 /**
  * Obsidian Vault plugin — OpenClaw plugin shim.
  *
- * Constructs config from pluginConfig, registers tools that delegate to handlers.
+ * Read-only access to an Obsidian vault. Queries the FTS5 index
+ * maintained by the obsidian-indexer service.
  */
 
 import { Type } from "@sinclair/typebox";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
-import { canonicalizeVaultRoot, validateIndexLocation } from "./security.js";
-import { VaultIndex } from "./indexer.js";
+import {
+  canonicalizeVaultRoot,
+  validateIndexLocation,
+  type VaultConfig,
+} from "@openclaw/obsidian-core";
+import { VaultReader } from "./reader.js";
 import {
   handleSearch,
   handleRead,
@@ -16,7 +21,6 @@ import {
   handleTags,
   handleBacklinks,
   handleRelated,
-  type VaultConfig,
 } from "./handlers.js";
 
 // ---------------------------------------------------------------------------
@@ -106,12 +110,7 @@ function createEntry() {
     configSchema,
     register(api: PluginApi) {
       const config = buildConfig(api.pluginConfig);
-      const index = new VaultIndex(config);
-
-      // Start indexing in background — don't block plugin registration
-      index.startIndexing().catch((err) => {
-        console.error("[obsidian-vault] Indexing failed:", err);
-      });
+      const reader = new VaultReader(config.indexLocation);
 
       // -----------------------------------------------------------------------
       // vault_search
@@ -120,7 +119,10 @@ function createEntry() {
         name: "vault_search",
         label: "Vault Search",
         description:
-          "Full-text search across all notes in the Obsidian vault. Returns ranked results with snippets.",
+          "Full-text search across all notes in the Obsidian vault. Returns ranked results with snippets. " +
+          "Uses prefix matching by default (e.g. 'wash' finds 'washer', 'washing'). " +
+          "Falls back to substring search if no FTS results found. " +
+          "Tip: try multiple related terms with OR (e.g. 'washer OR washing OR laundry').",
         parameters: Type.Object({
           query: Type.String({
             description: "Search query string (FTS5 syntax supported)",
@@ -137,7 +139,7 @@ function createEntry() {
         async execute(_toolCallId: string, params: Record<string, unknown>) {
           const query = ((params.query as string) ?? "").trim();
           const limit = Math.min(Math.max(Number(params.limit) || 20, 1), 100);
-          return formatResult(handleSearch(index, query, limit));
+          return formatResult(handleSearch(reader, query, limit));
         },
       });
 
@@ -157,7 +159,7 @@ function createEntry() {
         }),
         async execute(_toolCallId: string, params: Record<string, unknown>) {
           const notePath = ((params.path as string) ?? "").trim();
-          return formatResult(handleRead(config, index, notePath));
+          return formatResult(handleRead(config, notePath));
         },
       });
 
@@ -180,7 +182,7 @@ function createEntry() {
         }),
         async execute(_toolCallId: string, params: Record<string, unknown>) {
           const limit = Math.min(Math.max(Number(params.limit) || 20, 1), 100);
-          return formatResult(handleRecent(index, limit));
+          return formatResult(handleRecent(reader, limit));
         },
       });
 
@@ -193,7 +195,7 @@ function createEntry() {
         description: "List all tags used across the Obsidian vault.",
         parameters: Type.Object({}),
         async execute(_toolCallId: string, _params: Record<string, unknown>) {
-          return formatResult(handleTags(index));
+          return formatResult(handleTags(reader));
         },
       });
 
@@ -212,7 +214,7 @@ function createEntry() {
         }),
         async execute(_toolCallId: string, params: Record<string, unknown>) {
           const notePath = ((params.path as string) ?? "").trim();
-          return formatResult(handleBacklinks(index, notePath));
+          return formatResult(handleBacklinks(reader, notePath));
         },
       });
 
@@ -232,7 +234,7 @@ function createEntry() {
         }),
         async execute(_toolCallId: string, params: Record<string, unknown>) {
           const notePath = ((params.path as string) ?? "").trim();
-          return formatResult(handleRelated(index, notePath));
+          return formatResult(handleRelated(reader, notePath));
         },
       });
     },

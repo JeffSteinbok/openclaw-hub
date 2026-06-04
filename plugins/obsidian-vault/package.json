@@ -11,10 +11,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@openclaw/obsidian-core": "*",
     "@sinclair/typebox": "^0.34.48",
-    "better-sqlite3": "^11.9.1",
-    "chokidar": "^4.0.3",
-    "gray-matter": "^4.0.3"
+    "better-sqlite3": "^11.9.1"
   },
   "devDependencies": {
     "carapace-plugin-sdk": "file:/home/openclaw/git/carapace-plugin-sdk",

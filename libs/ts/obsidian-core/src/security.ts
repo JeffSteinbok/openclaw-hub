@@ -38,7 +38,6 @@ export function resolveSafePath(vaultRoot: string, requestedPath: string): strin
     const code = (e as NodeJS.ErrnoException).code;
     if (code === "ENOENT") {
       // File doesn't exist yet — check the joined path directly
-      // Verify the non-symlink-resolved path is still inside vault
       const rel = relative(vaultRoot, joined);
       if (rel.startsWith("..") || rel.startsWith(sep + sep)) {
         throw new Error("Path escapes vault root");

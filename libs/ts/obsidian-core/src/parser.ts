@@ -5,23 +5,7 @@
  */
 
 import matter from "gray-matter";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface ParsedNote {
-  title: string;
-  content: string;
-  frontmatter: Record<string, unknown>;
-  tags: string[];
-  wikilinks: WikiLink[];
-}
-
-export interface WikiLink {
-  target: string;
-  alias: string | null;
-}
+import type { ParsedNote, WikiLink } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Frontmatter
@@ -86,7 +70,6 @@ export function extractTags(content: string, frontmatter: Record<string, unknown
 }
 
 function normalizeTag(tag: string): string {
-  // Remove leading # if present
   return tag.startsWith("#") ? tag.slice(1).toLowerCase() : tag.toLowerCase();
 }
 
