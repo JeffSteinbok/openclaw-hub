@@ -19,7 +19,7 @@ Public plugins, services, and shared libraries for [OpenClaw](https://jeffsteinb
 | 📅 | [ICS Calendar](plugins/ics-calendar/) | Read events from ICS feeds |
 | 👁️ | [LLMVision](plugins/llmvision/) | Image analysis workflows |
 | 📝 | [Markdown to HTML](plugins/md-to-html/) | Convert extended Markdown to styled HTML |
-| 🗂️ | [Obsidian Vault](plugins/obsidian-vault/) | Read-only access to an Obsidian vault — search, read, and explore notes |
+| 🗂️ | [Obsidian Vault](https://github.com/JeffSteinbok/carapace-obsidian) | Read-only access to an Obsidian vault — search, read, and explore notes *(standalone repo)* |
 | 🛰️ | [Octo Satellite](plugins/octo-satellite/) | Remote agent for running plugins on secondary machines |
 | 📆 | [Outlook Calendar](plugins/outlook-calendar/) | Query Outlook calendar data |
 | 📬 | [Outlook Mail](plugins/outlook-mail/) | Search and read Outlook mail |
@@ -39,9 +39,7 @@ All plugins use the [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapa
 | Component | Purpose |
 |-----------|---------|
 | 📮 [USPS Mail Action](libs/ts/mail_action_usps/) | USPS Informed Delivery digest processing |
-| 📓 [Obsidian Core](libs/ts/obsidian-core/) | Shared parsing, security, and schema for Obsidian vault integration |
 | ⚡ [FastMail SSE](services/fastmail-sse/) | Live FastMail listener that feeds the mail runtime |
-| 🔍 [Obsidian Indexer](services/obsidian-indexer/) | FTS5 search index builder/watcher for Obsidian vaults (systemd service) |
 
 ---
 
