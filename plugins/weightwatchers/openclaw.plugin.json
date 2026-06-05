@@ -22,33 +22,26 @@
       },
       "tld": {
         "type": "string",
-        "description": "WW regional TLD (for example `com`)",
+        "description": "WW regional TLD (e.g. 'com')",
         "default": "com"
       }
     }
   },
-  "setup": {
-    "providers": [
-      {
-        "id": "weightwatchers",
-        "authMethods": [
-          "jwt",
-          "password"
-        ],
-        "envVars": [
-          "WW_JWT",
-          "WW_EMAIL",
-          "WW_PASSWORD",
-          "WW_TLD"
-        ]
-      }
+  "contracts": {
+    "tools": [
+      "ww_daily",
+      "ww_search",
+      "ww_log",
+      "ww_points",
+      "ww_budget",
+      "ww_quick_add",
+      "ww_delete",
+      "ww_search_meals",
+      "ww_log_meal"
     ]
   },
   "activation": {
     "onStartup": true
   },
-  "source": {
-    "canonicalRepo": "JeffSteinbok/openclaw-hub",
-    "canonicalPath": "plugins/weightwatchers"
-  }
+  "openclaw": {}
 }

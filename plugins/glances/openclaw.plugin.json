@@ -1,8 +1,8 @@
 {
   "id": "glances",
   "name": "Glances",
-  "version": "1.0.0",
   "description": "Read CPU, memory, disk, and summary metrics from a Glances server",
+  "version": "1.0.0",
   "entry": "./dist/adapter.js",
   "configSchema": {
     "type": "object",
@@ -15,14 +15,13 @@
       }
     }
   },
-  "source": {
-    "canonicalRepo": "JeffSteinbok/octo",
-    "canonicalPath": "plugins/glances",
-    "mirrors": [
-      {
-        "repo": "JeffSteinbok/openclaw-hub",
-        "path": "plugins/glances"
-      }
+  "contracts": {
+    "tools": [
+      "glances_summary_get",
+      "glances_cpu_get",
+      "glances_memory_get",
+      "glances_disk_get",
+      "glances_endpoint_get"
     ]
   },
   "activation": {

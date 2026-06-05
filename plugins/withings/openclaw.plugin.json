@@ -1,46 +1,41 @@
 {
   "id": "withings",
   "name": "Withings",
-  "version": "1.0.0",
   "description": "Fetch health data from Withings devices (weight, body composition, heart rate, sleep, activity)",
-  "entry": "dist/index.js",
-  "tools": "src/tools.py",
+  "version": "1.0.0",
+  "entry": "./dist/adapter.js",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
       "clientId": {
         "type": "string",
-        "description": "Withings OAuth2 App Client ID"
+        "description": "Withings OAuth2 client ID"
       },
       "clientSecret": {
         "type": "string",
-        "description": "Withings OAuth2 App Client Secret (use env var WITHINGS_CLIENT_SECRET)"
+        "description": "Withings OAuth2 client secret"
       },
       "redirectUri": {
         "type": "string",
-        "description": "OAuth redirect URI registered with the Withings developer app"
+        "description": "OAuth2 redirect URI"
       }
     }
   },
-  "setup": {
-    "providers": [
-      {
-        "id": "withings",
-        "authMethods": ["oauth2"],
-        "envVars": [
-          "WITHINGS_CLIENT_ID",
-          "WITHINGS_CLIENT_SECRET",
-          "WITHINGS_REDIRECT_URI"
-        ]
-      }
+  "contracts": {
+    "tools": [
+      "withings_auth_url",
+      "withings_auth_complete",
+      "withings_auth_status",
+      "withings_tokens",
+      "withings_get_measurements",
+      "withings_get_activity",
+      "withings_get_heart",
+      "withings_get_sleep"
     ]
-  },
-  "source": {
-    "canonicalRepo": "JeffSteinbok/openclaw-hub",
-    "canonicalPath": "plugins/withings"
   },
   "activation": {
     "onStartup": true
-  }
+  },
+  "openclaw": {}
 }

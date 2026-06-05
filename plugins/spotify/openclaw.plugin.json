@@ -2,6 +2,8 @@
   "id": "spotify",
   "name": "Spotify",
   "description": "Control Spotify playback, search music, and manage playlists",
+  "version": "1.0.1",
+  "entry": "./dist/adapter.js",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -16,24 +18,25 @@
       },
       "redirectUri": {
         "type": "string",
-        "description": "Spotify OAuth redirect URI",
-        "default": "http://127.0.0.1:8888/callback"
+        "description": "OAuth2 redirect URI"
       }
     }
   },
-  "source": {
-    "canonicalRepo": "JeffSteinbok/octo",
-    "canonicalPath": "plugins/spotify",
-    "mirrors": [
-      {
-        "repo": "JeffSteinbok/openclaw-hub",
-        "path": "plugins/spotify"
-      }
+  "contracts": {
+    "tools": [
+      "spotify_now_playing",
+      "spotify_play",
+      "spotify_pause",
+      "spotify_next",
+      "spotify_previous",
+      "spotify_search",
+      "spotify_get_devices",
+      "spotify_get_playlists",
+      "spotify_add_to_playlist"
     ]
   },
-  "version": "1.0.1",
   "activation": {
     "onStartup": true
   },
-  "entry": "dist/index.js"
+  "openclaw": {}
 }
