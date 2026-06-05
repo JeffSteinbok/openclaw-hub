@@ -16,7 +16,7 @@
           "properties": {
             "name": {
               "type": "string",
-              "description": "Short identifier for this CLI (e.g. 'linear')"
+              "description": "Short identifier for this CLI (e.g. 'weather')"
             },
             "binaryPath": {
               "type": "string",
@@ -24,7 +24,7 @@
             },
             "manifestPath": {
               "type": "string",
-              "description": "Path to tools-manifest.json"
+              "description": "Path to tools-manifest.json (optional — uses CLI introspection if omitted)"
             },
             "env": {
               "type": "object",
@@ -32,11 +32,15 @@
             },
             "allowedTools": {
               "type": "array",
-              "description": "Whitelist of tool names to register (registers all GET tools if omitted)"
+              "description": "Whitelist of tool names to register (registers all tools if omitted)"
             },
             "blockedMethods": {
               "type": "array",
-              "description": "HTTP methods to block (default: DELETE, PUT, PATCH)"
+              "description": "HTTP methods to block for manifest mode (default: DELETE, PUT, PATCH)"
+            },
+            "blockedCommands": {
+              "type": "array",
+              "description": "Additional commands to skip in introspection mode"
             },
             "timeout": {
               "type": "number",
@@ -49,8 +53,7 @@
           },
           "required": [
             "name",
-            "binaryPath",
-            "manifestPath"
+            "binaryPath"
           ]
         }
       }

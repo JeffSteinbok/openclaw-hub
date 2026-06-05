@@ -1,8 +1,8 @@
 {
   "id": "homeassistant",
   "name": "Home Assistant",
-  "version": "1.0.1",
   "description": "Control devices, query state, and inspect activity in Home Assistant",
+  "version": "1.0.1",
   "entry": "./dist/adapter.js",
   "configSchema": {
     "type": "object",
@@ -10,7 +10,7 @@
     "properties": {
       "server": {
         "type": "string",
-        "description": "Home Assistant server URL"
+        "description": "Home Assistant server URL (e.g. http://192.168.1.76:8123)"
       },
       "token": {
         "type": "string",
@@ -18,14 +18,19 @@
       }
     }
   },
-  "source": {
-    "canonicalRepo": "JeffSteinbok/octo",
-    "canonicalPath": "plugins/homeassistant",
-    "mirrors": [
-      {
-        "repo": "JeffSteinbok/openclaw-hub",
-        "path": "plugins/homeassistant"
-      }
+  "contracts": {
+    "tools": [
+      "hass_state_get",
+      "hass_state_list",
+      "hass_service_call",
+      "hass_event_list",
+      "hass_person_find",
+      "hass_speaker_volume_get",
+      "hass_speaker_volume_set",
+      "hass_logbook",
+      "hass_camera_list",
+      "hass_camera_snapshot",
+      "hass_camera_collage"
     ]
   },
   "activation": {

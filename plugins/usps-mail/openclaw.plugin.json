@@ -1,7 +1,7 @@
 {
   "id": "usps-mail",
   "name": "USPS Mail Analyzer",
-  "description": "Analyze USPS Informed Delivery digest emails: parse mailpiece scans, vision-classify, apply rules, write memory, send notifications",
+  "description": "Analyze USPS Informed Delivery digest emails: parse, vision-classify, apply rules, write memory, send notifications",
   "version": "1.0.0",
   "entry": "./dist/adapter.js",
   "configSchema": {
@@ -9,14 +9,14 @@
     "additionalProperties": false,
     "properties": {}
   },
-  "source": {
-    "canonicalRepo": "JeffSteinbok/octo",
-    "canonicalPath": "plugins/usps-mail",
-    "mirrors": [
-      {
-        "repo": "JeffSteinbok/openclaw-hub",
-        "path": "plugins/usps-mail"
-      }
+  "contracts": {
+    "tools": [
+      "usps_process_digest",
+      "usps_lookup",
+      "usps_update_rule",
+      "usps_rules",
+      "usps_stats",
+      "usps_status"
     ]
   },
   "activation": {

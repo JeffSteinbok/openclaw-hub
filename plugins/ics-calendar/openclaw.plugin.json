@@ -1,52 +1,29 @@
 {
   "id": "ics-calendar",
   "name": "ICS Calendar",
-  "version": "1.0.1",
   "description": "Fetch upcoming events from a published ICS calendar feed",
-  "entry": "dist/index.js",
+  "version": "1.0.1",
+  "entry": "./dist/adapter.js",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
     "properties": {
       "calendars": {
         "type": "array",
-        "description": "Configured ICS feeds available by id",
         "items": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": "string",
-              "description": "Stable calendar identifier used by tool calls"
-            },
-            "label": {
-              "type": "string",
-              "description": "Friendly display name used in output"
-            },
-            "url": {
-              "type": "string",
-              "description": "Published ICS feed URL"
-            }
-          },
-          "required": [
-            "id",
-            "url"
-          ]
-        }
+          "type": "object"
+        },
+        "description": "List of calendar configs with id, label, url"
       }
     }
   },
-  "source": {
-    "canonicalRepo": "JeffSteinbok/octo",
-    "canonicalPath": "plugins/ics-calendar",
-    "mirrors": [
-      {
-        "repo": "JeffSteinbok/openclaw-hub",
-        "path": "plugins/ics-calendar"
-      }
+  "contracts": {
+    "tools": [
+      "ics_calendar_fetch"
     ]
   },
   "activation": {
     "onStartup": true
-  }
+  },
+  "openclaw": {}
 }
