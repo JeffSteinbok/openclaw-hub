@@ -13,8 +13,8 @@ function makeApi() {
   const tools: Record<string, ToolDef> = {};
   return {
     pluginConfig: { token: "test-token", baseUrl: "http://localhost:9000" },
-    registerTool(tool: unknown) {
-      tools[(tool as ToolDef).name] = tool as ToolDef;
+    registerTool(tool: ToolDef) {
+      tools[tool.name] = tool;
     },
     tools,
   };
