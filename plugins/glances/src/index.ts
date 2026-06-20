@@ -109,6 +109,9 @@ export const createEntry = definePlugin({
           return { error: "path must be a string" };
         }
         const trimmedPath = path.trim();
+        if (!trimmedPath) {
+          return { error: "path is required" };
+        }
         return await handleEndpointGet(url, trimmedPath);
       },
     }),
