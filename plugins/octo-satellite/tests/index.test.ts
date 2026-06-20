@@ -31,11 +31,8 @@ async function loadPlugin() {
 describe("satellite plugin", () => {
   let tools: Record<string, ToolDef>;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   beforeEach(async () => {
+    vi.clearAllMocks();
     const { api } = await loadPlugin();
     tools = api.tools;
   });
