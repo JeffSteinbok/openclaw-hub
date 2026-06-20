@@ -24,6 +24,10 @@ import {
   type SatelliteConfig,
 } from "./handlers.js";
 
+function getTrimmedString(value: unknown): string | undefined {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
+}
+
 export const createEntry = definePlugin({
   id: "octo-satellite",
   name: "Octo Satellite",
@@ -83,7 +87,7 @@ export const createEntry = definePlugin({
         }),
       }),
       async execute({ order_id }, config) {
-        const orderId = order_id.trim();
+        const orderId = getTrimmedString(order_id);
         if (!orderId) return { error: "order_id is required" };
 
         const satelliteConfig: SatelliteConfig = {
@@ -107,7 +111,7 @@ export const createEntry = definePlugin({
         ),
       }),
       async execute({ q, page }, config) {
-        const query = q.trim();
+        const query = getTrimmedString(q);
         if (!query) return { error: "q (search query) is required" };
 
         const satelliteConfig: SatelliteConfig = {
@@ -133,7 +137,7 @@ export const createEntry = definePlugin({
         }),
       }),
       async execute({ asin }, config) {
-        const trimmedAsin = asin.trim();
+        const trimmedAsin = getTrimmedString(asin);
         if (!trimmedAsin) return { error: "asin is required" };
 
         const satelliteConfig: SatelliteConfig = {
@@ -168,7 +172,7 @@ export const createEntry = definePlugin({
         }),
       }),
       async execute({ asin }, config) {
-        const trimmedAsin = asin.trim();
+        const trimmedAsin = getTrimmedString(asin);
         if (!trimmedAsin) return { error: "asin is required" };
 
         const satelliteConfig: SatelliteConfig = {
@@ -191,7 +195,7 @@ export const createEntry = definePlugin({
         }),
       }),
       async execute({ item_id }, config) {
-        const itemId = item_id.trim();
+        const itemId = getTrimmedString(item_id);
         if (!itemId) return { error: "item_id is required" };
 
         const satelliteConfig: SatelliteConfig = {
