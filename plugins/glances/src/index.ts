@@ -105,7 +105,8 @@ export const createEntry = definePlugin({
       }),
       async execute({ path }, config) {
         const url = config.url?.trim() || "http://127.0.0.1:61208";
-        return await handleEndpointGet(url, path.trim());
+        const trimmedPath = typeof path === "string" ? path.trim() : "";
+        return await handleEndpointGet(url, trimmedPath);
       },
     }),
   ],
