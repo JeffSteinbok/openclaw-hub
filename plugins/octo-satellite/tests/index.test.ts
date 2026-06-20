@@ -4,22 +4,40 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
-// Dynamic import to pick up the mock
-const mod = await import("../src/index.js");
-const plugin = mod.default;
+interface ToolDef {
+  name: string;
+  execute: (id: string, params: Record<string, unknown>) => Promise<unknown>;
+}
+
+function makeApi() {
+  const tools: Record<string, ToolDef> = {};
+  return {
+    pluginConfig: { token: "test-token", baseUrl: "http://localhost:9000" },
+    registerTool(tool: unknown) {
+      tools[(tool as ToolDef).name] = tool as ToolDef;
+    },
+    tools,
+  };
+}
+
+async function loadPlugin() {
+  const { createEntry } = await import("../src/index.js");
+  const entry = createEntry();
+  const api = makeApi();
+  entry.register(api);
+  return { entry, api };
+}
 
 describe("satellite plugin", () => {
-  const tools: Record<string, { execute: (id: string, params: Record<string, unknown>) => Promise<unknown> }> = {};
-  const api = {
-    registerTool: (tool: { name: string; execute: unknown }) => {
-      tools[tool.name] = tool as typeof tools[string];
-    },
-    pluginConfig: { token: "test-token", baseUrl: "http://localhost:9000" },
-  };
+  let tools: Record<string, ToolDef>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    plugin.register(api);
+  });
+
+  beforeEach(async () => {
+    const { api } = await loadPlugin();
+    tools = api.tools;
   });
 
   describe("amazon_list_orders", () => {
