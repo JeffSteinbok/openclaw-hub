@@ -1,7 +1,7 @@
 /**
  * USPS mail action registration for the shared mail runtime.
  */
-import type { ActionContext, ActionRegistry, ActionResult } from "carapace-mail-runtime";
+import type { ActionContext, ActionRegistry, ActionResult } from "@openclaw/mail-runtime-core";
 /**
  * Run the USPS analyzer on downloaded digest assets and hand results to the configured agent.
  */
