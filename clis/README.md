@@ -25,14 +25,14 @@ clis/
 
 1. Create `clis/<name>/<name>.py` (or whatever language)
 2. Make it executable: `chmod +x clis/<name>/<name>.py`
-3. Symlink to `~/bin/`: `ln -sf $(pwd)/clis/<name>/<name>.py ~/bin/<name>`
-4. Add to safebin in `openclaw.json` (already configured to allow `~/bin/*`)
+3. Symlink to `~/safebin/`: `ln -sf $(pwd)/clis/<name>/<name>.py ~/safebin/<name>`
+4. Add to safebin in `openclaw.json` (already configured to allow `~/safebin/*`)
 5. Add to `TOOLS.md` so the agent knows it exists
 
 ## Naming convention
 
 - All lowercase, no hyphens: `waitlistme` (easy to type, consistent everywhere)
-- Directory matches binary name: `clis/waitlistme/waitlistme.py` → `~/bin/waitlistme`
+- Directory matches binary name: `clis/waitlistme/waitlistme.py` → `~/safebin/waitlistme`
 
 ## Available CLIs
 

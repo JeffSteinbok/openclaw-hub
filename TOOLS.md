@@ -8,7 +8,7 @@ Registered plugin tools are listed in each plugin's `openclaw.plugin.json` manif
 
 ## CLIs
 
-Binaries in `~/bin/` available via the `exec` tool (safebin):
+Binaries in `~/safebin/` available via the `exec` tool (safebin):
 
 | CLI | Description | Usage |
 |-----|-------------|-------|
