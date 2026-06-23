@@ -6,7 +6,7 @@ vi.stubGlobal("fetch", mockFetch);
 
 // Dynamic import to pick up the mock
 const mod = await import("../src/index.js");
-const plugin = mod.createEntry;
+const plugin = mod.createEntry();
 
 describe("satellite plugin", () => {
   const tools: Record<string, { execute: (id: string, params: Record<string, unknown>) => Promise<unknown> }> = {};
