@@ -105,6 +105,7 @@ export const createEntry = definePlugin({
       }),
       async execute({ path }, config) {
         const url = config.url?.trim() || "http://127.0.0.1:61208";
+        if (!path) { return { error: "path parameter is required" }; }
         return await handleEndpointGet(url, path.trim());
       },
     }),
