@@ -20,7 +20,6 @@
     "plugins/withings",
     "plugins/usps-mail",
     "plugins/octo-satellite",
-    "plugins/printing-press",
     "plugins/weightwatchers"
   ],
   "scripts": {
