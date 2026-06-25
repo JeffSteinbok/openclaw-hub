@@ -1,29 +1,38 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock fetch globally
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
-// Dynamic import to pick up the mock
-const mod = await import("../src/index.js");
-const plugin = mod.createEntry();
+type ToolDef = { name: string; execute: (id: string, params: Record<string, unknown>) => Promise<unknown> };
+
+function makeApi(config: Record<string, unknown> = {}) {
+  const tools: Record<string, ToolDef> = {};
+  return {
+    pluginConfig: { ...config },
+    registerTool(t: unknown) { tools[(t as ToolDef).name] = t as ToolDef; },
+    tools,
+  };
+}
+
+async function loadPlugin(config: Record<string, unknown> = {}) {
+  const { createEntry } = await import("../src/index.js");
+  const entry = createEntry();
+  const api = makeApi(config);
+  entry.register(api);
+  return { entry, api };
+}
+
+afterEach(() => vi.restoreAllMocks());
 
 describe("satellite plugin", () => {
-  const tools: Record<string, { execute: (id: string, params: Record<string, unknown>) => Promise<unknown> }> = {};
-  const api = {
-    registerTool: (tool: { name: string; execute: unknown }) => {
-      tools[tool.name] = tool as typeof tools[string];
-    },
-    pluginConfig: { token: "test-token", baseUrl: "http://localhost:9000" },
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
-    plugin.register(api);
   });
 
   describe("amazon_list_orders", () => {
     it("returns orders from satellite", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       const fakeResponse = {
         orders: [{ id: "113-111-222", date: "2026-05-01", total: "$29.99", status: "Delivered", items: ["Widget"] }],
         total: 1,
@@ -34,24 +43,26 @@ describe("satellite plugin", () => {
         json: async () => fakeResponse,
       });
 
-      const result = await tools.amazon_list_orders.execute("call1", {});
+      const result = await api.tools.amazon_list_orders.execute("call1", {});
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.orders).toHaveLength(1);
       expect(parsed.orders[0].id).toBe("113-111-222");
     });
 
     it("passes page parameter", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ orders: [], total: 0, page: 2 }),
       });
 
-      await tools.amazon_list_orders.execute("call1b", { page: 2 });
+      await api.tools.amazon_list_orders.execute("call1b", { page: 2 });
       const url = mockFetch.mock.calls[0][0] as string;
       expect(url).toContain("page=2");
     });
 
     it("returns error on fetch failure", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 503,
@@ -59,7 +70,7 @@ describe("satellite plugin", () => {
         text: async () => "down",
       });
 
-      const result = await tools.amazon_list_orders.execute("call2", {});
+      const result = await api.tools.amazon_list_orders.execute("call2", {});
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.error).toContain("503");
     });
@@ -67,6 +78,7 @@ describe("satellite plugin", () => {
 
   describe("amazon_get_order", () => {
     it("returns order details", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       const fakeOrder = {
         id: "113-111-222",
         status: "Shipped",
@@ -75,14 +87,15 @@ describe("satellite plugin", () => {
       };
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => fakeOrder });
 
-      const result = await tools.amazon_get_order.execute("call3", { order_id: "113-111-222" });
+      const result = await api.tools.amazon_get_order.execute("call3", { order_id: "113-111-222" });
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.id).toBe("113-111-222");
       expect(parsed.tracking[0].carrier).toBe("UPS");
     });
 
     it("errors when order_id is missing", async () => {
-      const result = await tools.amazon_get_order.execute("call4", {});
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
+      const result = await api.tools.amazon_get_order.execute("call4", {});
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.error).toBe("order_id is required");
     });
@@ -90,16 +103,18 @@ describe("satellite plugin", () => {
 
   describe("amazon_search", () => {
     it("searches products", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       const fakeResults = { results: [{ asin: "B0TEST", title: "Test Product", price: "$9.99" }] };
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => fakeResults });
 
-      const result = await tools.amazon_search.execute("call7", { q: "test widget" });
+      const result = await api.tools.amazon_search.execute("call7", { q: "test widget" });
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.results[0].asin).toBe("B0TEST");
     });
 
     it("errors when q is missing", async () => {
-      const result = await tools.amazon_search.execute("call8", {});
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
+      const result = await api.tools.amazon_search.execute("call8", {});
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.error).toContain("q");
     });
@@ -107,10 +122,11 @@ describe("satellite plugin", () => {
 
   describe("amazon_get_product", () => {
     it("returns product details", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       const fakeProduct = { asin: "B0TEST", title: "Widget", price: "$19.99", rating: 4.5 };
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => fakeProduct });
 
-      const result = await tools.amazon_get_product.execute("call9", { asin: "B0TEST" });
+      const result = await api.tools.amazon_get_product.execute("call9", { asin: "B0TEST" });
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.asin).toBe("B0TEST");
       expect(parsed.rating).toBe(4.5);
@@ -119,10 +135,11 @@ describe("satellite plugin", () => {
 
   describe("amazon_get_cart", () => {
     it("returns cart contents", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       const fakeCart = { items: [{ item_id: "abc", title: "Widget", quantity: 1 }] };
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => fakeCart });
 
-      const result = await tools.amazon_get_cart.execute("call10", {});
+      const result = await api.tools.amazon_get_cart.execute("call10", {});
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.items[0].item_id).toBe("abc");
     });
@@ -130,9 +147,10 @@ describe("satellite plugin", () => {
 
   describe("amazon_add_to_cart", () => {
     it("adds item to cart", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) });
 
-      const result = await tools.amazon_add_to_cart.execute("call11", { asin: "B0TEST" });
+      const result = await api.tools.amazon_add_to_cart.execute("call11", { asin: "B0TEST" });
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.success).toBe(true);
       expect(mockFetch.mock.calls[0][1].method).toBe("POST");
@@ -141,9 +159,10 @@ describe("satellite plugin", () => {
 
   describe("amazon_remove_from_cart", () => {
     it("removes item from cart", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) });
 
-      const result = await tools.amazon_remove_from_cart.execute("call12", { item_id: "abc" });
+      const result = await api.tools.amazon_remove_from_cart.execute("call12", { item_id: "abc" });
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.success).toBe(true);
       expect(mockFetch.mock.calls[0][1].method).toBe("DELETE");
@@ -152,6 +171,7 @@ describe("satellite plugin", () => {
 
   describe("monarch_get_accounts", () => {
     it("returns accounts grouped by type", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       const fakeAccounts = {
         provider: "monarch",
         accounts: {
@@ -163,7 +183,7 @@ describe("satellite plugin", () => {
         json: async () => fakeAccounts,
       });
 
-      const result = await tools.monarch_get_accounts.execute("call5", {});
+      const result = await api.tools.monarch_get_accounts.execute("call5", {});
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.provider).toBe("monarch");
       expect(parsed.accounts.Investments.total).toBe(100000);
@@ -172,13 +192,14 @@ describe("satellite plugin", () => {
 
   describe("monarch_get_net_worth", () => {
     it("returns net worth summary", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       const fakeNetWorth = { provider: "monarch", assets: 500000, liabilities: 100000, net_worth: 400000 };
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => fakeNetWorth,
       });
 
-      const result = await tools.monarch_get_net_worth.execute("call6", {});
+      const result = await api.tools.monarch_get_net_worth.execute("call6", {});
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.net_worth).toBe(400000);
       expect(parsed.assets).toBe(500000);
@@ -187,6 +208,7 @@ describe("satellite plugin", () => {
 
   describe("monarch_get_spending", () => {
     it("returns spending trends with default months", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       const fakeSpending = {
         provider: "monarch",
         months: [
@@ -200,7 +222,7 @@ describe("satellite plugin", () => {
         json: async () => fakeSpending,
       });
 
-      const result = await tools.monarch_get_spending.execute("call7", {});
+      const result = await api.tools.monarch_get_spending.execute("call7", {});
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.provider).toBe("monarch");
       expect(parsed.months).toHaveLength(3);
@@ -208,25 +230,27 @@ describe("satellite plugin", () => {
     });
 
     it("passes custom months parameter", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ provider: "monarch", months: [] }),
       });
 
-      await tools.monarch_get_spending.execute("call8", { months: 6 });
+      await api.tools.monarch_get_spending.execute("call8", { months: 6 });
       expect(mockFetch.mock.calls[0][0]).toContain("/monarch/spending?months=6");
     });
   });
 
   describe("monarch_get_health", () => {
     it("returns health status", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       const fakeHealth = { provider: "monarch", status: "authenticated" };
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => fakeHealth,
       });
 
-      const result = await tools.monarch_get_health.execute("call9", {});
+      const result = await api.tools.monarch_get_health.execute("call9", {});
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.status).toBe("authenticated");
       expect(mockFetch.mock.calls[0][0]).toContain("/monarch/health");
@@ -235,6 +259,7 @@ describe("satellite plugin", () => {
 
   describe("monarch_get_sync_status", () => {
     it("returns sync status for accounts", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       const fakeSyncStatus = {
         provider: "monarch",
         accounts: [
@@ -246,7 +271,7 @@ describe("satellite plugin", () => {
         json: async () => fakeSyncStatus,
       });
 
-      const result = await tools.monarch_get_sync_status.execute("call10", {});
+      const result = await api.tools.monarch_get_sync_status.execute("call10", {});
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.accounts).toHaveLength(1);
       expect(parsed.accounts[0].status).toBe("healthy");
@@ -256,13 +281,14 @@ describe("satellite plugin", () => {
 
   describe("monarch_refresh_accounts", () => {
     it("triggers account refresh", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
       const fakeRefresh = { provider: "monarch", status: "refresh_requested" };
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => fakeRefresh,
       });
 
-      const result = await tools.monarch_refresh_accounts.execute("call11", {});
+      const result = await api.tools.monarch_refresh_accounts.execute("call11", {});
       const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
       expect(parsed.status).toBe("refresh_requested");
       expect(mockFetch.mock.calls[0][0]).toContain("/monarch/refresh");
