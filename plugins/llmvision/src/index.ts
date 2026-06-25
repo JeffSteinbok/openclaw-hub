@@ -9,6 +9,11 @@ import {
   timelineGet, getImage, analyzeImage, createEvent,
 } from "./handlers.js";
 
+function stripTrailingSlashes(s: string): string {
+  while (s.endsWith("/")) s = s.slice(0, -1);
+  return s;
+}
+
 export const createEntry = definePlugin({
   id: "llmvision",
   name: "Home Assistant – LLM Vision",
@@ -34,7 +39,7 @@ export const createEntry = definePlugin({
       async execute({ days, limit, start_time, end_time }, config) {
         try {
           const pluginConfig: LlmVisionConfig = {
-            server: config.server?.trim().replace(/\/+$/, "") || "http://192.168.1.76:8123",
+            server: stripTrailingSlashes(config.server?.trim() || "") || "http://192.168.1.76:8123",
             token: config.token ?? "",
             keyframeDir: config.keyframeDir?.trim() || "/tmp/openclaw/llmvision_keyframes",
           };
@@ -53,7 +58,7 @@ export const createEntry = definePlugin({
       async execute({ key_frame }, config) {
         try {
           const pluginConfig: LlmVisionConfig = {
-            server: config.server?.trim().replace(/\/+$/, "") || "http://192.168.1.76:8123",
+            server: stripTrailingSlashes(config.server?.trim() || "") || "http://192.168.1.76:8123",
             token: config.token ?? "",
             keyframeDir: config.keyframeDir?.trim() || "/tmp/openclaw/llmvision_keyframes",
           };
@@ -82,7 +87,7 @@ export const createEntry = definePlugin({
       async execute({ camera_entity, message, provider, model, store_in_timeline, expose_images, generate_title, response_format, max_tokens }, config) {
         try {
           const pluginConfig: LlmVisionConfig = {
-            server: config.server?.trim().replace(/\/+$/, "") || "http://192.168.1.76:8123",
+            server: stripTrailingSlashes(config.server?.trim() || "") || "http://192.168.1.76:8123",
             token: config.token ?? "",
             keyframeDir: config.keyframeDir?.trim() || "/tmp/openclaw/llmvision_keyframes",
           };
@@ -119,7 +124,7 @@ export const createEntry = definePlugin({
       async execute({ title, description, label, image_path, camera_entity, start_time, end_time }, config) {
         try {
           const pluginConfig: LlmVisionConfig = {
-            server: config.server?.trim().replace(/\/+$/, "") || "http://192.168.1.76:8123",
+            server: stripTrailingSlashes(config.server?.trim() || "") || "http://192.168.1.76:8123",
             token: config.token ?? "",
             keyframeDir: config.keyframeDir?.trim() || "/tmp/openclaw/llmvision_keyframes",
           };

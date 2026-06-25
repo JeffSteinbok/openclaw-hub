@@ -140,7 +140,12 @@ export function saveToAnalysis(
 ): void {
   const data = loadAnalysis(workspaceAgent);
   const existing = data[dateStr] ?? {};
-  Object.assign(existing, items);
+  // Guard against prototype pollution
+  for (const [key, value] of Object.entries(items)) {
+    if (key !== "__proto__" && key !== "constructor" && key !== "prototype") {
+      existing[key] = value;
+    }
+  }
   data[dateStr] = existing;
   saveAnalysis(data, workspaceAgent);
 }

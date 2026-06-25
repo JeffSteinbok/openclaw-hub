@@ -14,6 +14,11 @@ import {
 
 const CAPTURE_DIR = "/tmp/openclaw/camera_captures";
 
+function stripTrailingSlashes(s: string): string {
+  while (s.endsWith("/")) s = s.slice(0, -1);
+  return s;
+}
+
 export const createEntry = definePlugin({
   id: "homeassistant",
   name: "Home Assistant",
@@ -42,7 +47,7 @@ export const createEntry = definePlugin({
       async execute({ entity_id }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: (config.server?.trim() || "http://192.168.1.76:8123").replace(/\/+$/, ""),
+            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -63,7 +68,7 @@ export const createEntry = definePlugin({
       async execute({ domain }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: (config.server?.trim() || "http://192.168.1.76:8123").replace(/\/+$/, ""),
+            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -89,7 +94,7 @@ export const createEntry = definePlugin({
       async execute({ domain, service, entity_id, data }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: (config.server?.trim() || "http://192.168.1.76:8123").replace(/\/+$/, ""),
+            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -115,7 +120,7 @@ export const createEntry = definePlugin({
       async execute({ entity_id }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: (config.server?.trim() || "http://192.168.1.76:8123").replace(/\/+$/, ""),
+            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -137,7 +142,7 @@ export const createEntry = definePlugin({
       async execute({ name, entity_id }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: (config.server?.trim() || "http://192.168.1.76:8123").replace(/\/+$/, ""),
+            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -158,7 +163,7 @@ export const createEntry = definePlugin({
       async execute({ entity_id }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: (config.server?.trim() || "http://192.168.1.76:8123").replace(/\/+$/, ""),
+            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -180,7 +185,7 @@ export const createEntry = definePlugin({
       async execute({ entity_id, volume_level }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: (config.server?.trim() || "http://192.168.1.76:8123").replace(/\/+$/, ""),
+            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -209,7 +214,7 @@ export const createEntry = definePlugin({
       async execute({ entity_id, hours, start_time, end_time, keyword, limit }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: (config.server?.trim() || "http://192.168.1.76:8123").replace(/\/+$/, ""),
+            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -254,7 +259,7 @@ export const createEntry = definePlugin({
       async execute({ camera_name }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: (config.server?.trim() || "http://192.168.1.76:8123").replace(/\/+$/, ""),
+            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -280,7 +285,7 @@ export const createEntry = definePlugin({
       async execute({ camera_names, label }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: (config.server?.trim() || "http://192.168.1.76:8123").replace(/\/+$/, ""),
+            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
