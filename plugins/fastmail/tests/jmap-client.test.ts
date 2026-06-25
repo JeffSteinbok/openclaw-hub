@@ -8,6 +8,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const mockFetch = vi.fn();
 
 beforeEach(() => {
+  vi.resetModules();
+  vi.clearAllMocks();
   vi.stubGlobal("fetch", mockFetch);
 });
 
