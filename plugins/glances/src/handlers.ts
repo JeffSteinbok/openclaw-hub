@@ -57,7 +57,9 @@ export function httpGet(url: string, timeoutMs = 10_000): Promise<string> {
 // ---------------------------------------------------------------------------
 
 export function normalizeBaseUrl(url: string): string {
-  return (url ?? "").trim().replace(/\/+$/, "");
+  let s = (url ?? "").trim();
+  while (s.endsWith("/")) s = s.slice(0, -1);
+  return s;
 }
 
 export async function apiGet(
