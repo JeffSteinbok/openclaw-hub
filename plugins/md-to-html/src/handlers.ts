@@ -104,18 +104,23 @@ export function parseBlocks(md: string): Block[] {
     }
 
     // Directive: <!-- note: text -->
-    const noteMatch = line.trim().match(/^<!--\s*note:\s*(.+?)\s*-->$/);
-    if (noteMatch) {
-      blocks.push({ type: "directive", kind: "note", content: noteMatch[1] });
-      i++;
-      continue;
+    // ReDoS-safe: use explicit non-greedy pattern with bounded content
+    const trimmedLine = line.trim();
+    if (trimmedLine.startsWith("<!--") && trimmedLine.endsWith("-->")) {
+      const inner = trimmedLine.slice(4, -3).trim();
+      if (inner.startsWith("note:")) {
+        const content = inner.slice(5).trim();
+        blocks.push({ type: "directive", kind: "note", content });
+        i++;
+        continue;
+      }
     }
 
-    // Heading
-    const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const text = headingMatch[2];
+    // Heading - ReDoS-safe: use string operations instead of regex with .+
+    const hashMatch = line.match(/^(#{1,3})\s+/);
+    if (hashMatch) {
+      const level = hashMatch[1].length;
+      const text = line.slice(hashMatch[0].length);
       let id: string | undefined;
       const numMatch = text.match(/^(\d+)\.\s/);
       if (numMatch && level === 2) {
@@ -477,12 +482,26 @@ function renderBlockList(blocks: Block[]): string {
 // ---------------------------------------------------------------------------
 
 export function extractStyles(templateHtml: string): string {
+  // ReDoS-safe: use string operations instead of regex with [^>]* and [\s\S]*?
   const styleBlocks: string[] = [];
-  const re = /<style[^>]*>([\s\S]*?)<\/style>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(templateHtml)) !== null) {
-    styleBlocks.push(match[1]);
+  let searchPos = 0;
+  const lowerHtml = templateHtml.toLowerCase();
+
+  while (true) {
+    const styleStart = lowerHtml.indexOf("<style", searchPos);
+    if (styleStart === -1) break;
+
+    const tagEnd = lowerHtml.indexOf(">", styleStart);
+    if (tagEnd === -1) break;
+
+    const contentStart = tagEnd + 1;
+    const styleEnd = lowerHtml.indexOf("</style>", contentStart);
+    if (styleEnd === -1) break;
+
+    styleBlocks.push(templateHtml.slice(contentStart, styleEnd));
+    searchPos = styleEnd + 8; // length of "</style>"
   }
+
   if (styleBlocks.length === 0) {
     throw new Error("No <style> block found in template");
   }
