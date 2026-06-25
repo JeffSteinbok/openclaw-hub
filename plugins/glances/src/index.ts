@@ -104,8 +104,10 @@ export const createEntry = definePlugin({
         }),
       }),
       async execute({ path }, config) {
+        const trimmedPath = path?.trim();
+        if (!trimmedPath) return { error: "path is required" };
         const url = config.url?.trim() || "http://127.0.0.1:61208";
-        return await handleEndpointGet(url, path.trim());
+        return await handleEndpointGet(url, trimmedPath);
       },
     }),
   ],

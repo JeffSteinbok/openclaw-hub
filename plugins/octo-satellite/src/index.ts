@@ -83,7 +83,7 @@ export const createEntry = definePlugin({
         }),
       }),
       async execute({ order_id }, config) {
-        const orderId = order_id.trim();
+        const orderId = order_id?.trim();
         if (!orderId) return { error: "order_id is required" };
 
         const satelliteConfig: SatelliteConfig = {
@@ -107,7 +107,7 @@ export const createEntry = definePlugin({
         ),
       }),
       async execute({ q, page }, config) {
-        const query = q.trim();
+        const query = q?.trim();
         if (!query) return { error: "q (search query) is required" };
 
         const satelliteConfig: SatelliteConfig = {
