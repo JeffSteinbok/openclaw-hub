@@ -16,6 +16,7 @@
     "plugins/outlook-calendar",
     "plugins/outlook-mail",
     "plugins/outlook-work-calendar",
+    "plugins/screenshot-capture",
     "plugins/spotify",
     "plugins/withings",
     "plugins/usps-mail",
