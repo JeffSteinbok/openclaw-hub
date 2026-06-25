@@ -10,6 +10,18 @@
 const NS_DAV = "DAV:";
 const NS_CALDAV = "urn:ietf:params:xml:ns:caldav";
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+function stripTrailingSlashes(s: string): string {
+  while (s.endsWith("/")) s = s.slice(0, -1);
+  return s;
+}
+
+function stripLeadingSlashes(s: string): string {
+  while (s.startsWith("/")) s = s.slice(1);
+  return s;
+}
+
 // ── Exceptions ──────────────────────────────────────────────────────────────
 
 export class CalDAVError extends Error {
@@ -320,7 +332,7 @@ export class CalDAVClient {
   private _auth: string;
 
   constructor(baseUrl: string, username: string, password: string, timeout = 30) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "") + "/";
+    this.baseUrl = stripTrailingSlashes(baseUrl) + "/";
     this.username = username;
     this.password = password;
     this.timeout = timeout;
@@ -331,7 +343,7 @@ export class CalDAVClient {
     if (path.startsWith("http://") || path.startsWith("https://")) {
       return path;
     }
-    return this.baseUrl + path.replace(/^\/+/, "");
+    return this.baseUrl + stripLeadingSlashes(path);
   }
 
   private async _request(
@@ -543,7 +555,7 @@ export class CalDAVClient {
 
   async createEvent(calendarPath: string, uid: string, icalData: string): Promise<string> {
     const safeUid = uid.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const resourcePath = calendarPath.replace(/\/+$/, "") + `/${safeUid}.ics`;
+    const resourcePath = stripTrailingSlashes(calendarPath) + `/${safeUid}.ics`;
     await this.put(resourcePath, icalData, "*");
     return resourcePath;
   }

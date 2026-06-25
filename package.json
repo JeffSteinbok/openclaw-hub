@@ -16,13 +16,14 @@
     "plugins/outlook-calendar",
     "plugins/outlook-mail",
     "plugins/outlook-work-calendar",
-    "plugins/spotify",
-    "plugins/withings",
-    "plugins/usps-mail",
-    "plugins/obsidian-vault",
-    "plugins/octo-satellite",
-    "plugins/weightwatchers"
-  ],
+      "plugins/screenshot-capture",
+      "plugins/spotify",
+      "plugins/withings",
+      "plugins/usps-mail",
+      "plugins/obsidian-vault",
+      "plugins/octo-satellite",
+      "plugins/weightwatchers"
+    ],
   "scripts": {
     "build:libs": "npm run build --workspace libs/ts/mail_action_usps && npm run build --workspace services/fastmail-sse",
     "build:plugins": "npm run build --workspace plugins/fastmail --workspace plugins/glances --workspace plugins/homeassistant --workspace plugins/html-to-pdf --workspace plugins/ics-calendar --workspace plugins/llmvision --workspace plugins/md-to-html --workspace plugins/obsidian-vault --workspace plugins/outlook-calendar --workspace plugins/outlook-mail --workspace plugins/outlook-work-calendar --workspace plugins/spotify --workspace plugins/withings --workspace plugins/usps-mail --workspace plugins/octo-satellite --workspace plugins/weightwatchers",
