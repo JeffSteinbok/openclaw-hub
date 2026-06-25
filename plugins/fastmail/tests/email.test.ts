@@ -8,6 +8,8 @@ import type { FastmailConfig } from "../src/config.js";
 const mockFetch = vi.fn();
 
 beforeEach(() => {
+  vi.resetModules();
+  vi.clearAllMocks();
   vi.stubGlobal("fetch", mockFetch);
 });
 

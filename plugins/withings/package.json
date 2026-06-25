@@ -18,7 +18,7 @@
     "typescript": "^6",
     "@types/node": "^25",
     "tsup": "^8.3.0",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.6"
   },
   "openclaw": {
     "extensions": [
