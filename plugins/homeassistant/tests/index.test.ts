@@ -89,6 +89,11 @@ function mockHttpSequence(steps: Array<{
   statusCode?: number;
   inspect?: (request: { url: string; method: string; body: string }) => void;
 }>) {
+  function requestMethod(opts: unknown): string {
+    if (typeof opts !== "object" || !opts || !("method" in opts)) return "";
+    return String((opts as { method?: string }).method ?? "");
+  }
+
   vi.spyOn(http, "request").mockImplementation((url, opts, cb) => {
     const step = steps.shift();
     if (!step) throw new Error("Unexpected HTTP request");
@@ -104,7 +109,7 @@ function mockHttpSequence(steps: Array<{
     setTimeout(() => {
       step.inspect?.({
         url: String(url),
-        method: typeof opts === "object" && opts && "method" in opts ? String((opts as { method?: string }).method ?? "") : "",
+        method: requestMethod(opts),
         body: requestBody,
       });
       mock.flush();

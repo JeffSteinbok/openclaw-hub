@@ -130,7 +130,7 @@ interface LovelaceDashboard {
   url_path?: string;
 }
 
-function normalizeLovelaceKey(value: string): string {
+function normalizeLovelaceNameOrPath(value: string): string {
   return value.trim().toLowerCase().replace(/^\/+|\/+$/g, "");
 }
 
@@ -138,12 +138,16 @@ function lovelaceConfigPath(dashboardId?: string): string {
   return dashboardId ? `/api/lovelace/${encodeURIComponent(dashboardId)}/config` : "/api/lovelace/config";
 }
 
+function extractDashboardId(match: LovelaceDashboard, fallback: string): string {
+  return String(match.url_path ?? match.id ?? match.path ?? fallback).trim();
+}
+
 async function resolveLovelaceDashboard(
   config: HomeAssistantConfig,
   dashboard?: string,
 ): Promise<{ path: string; dashboard?: string; title?: string } | { error: string }> {
   const selected = dashboard?.trim() ?? "";
-  const normalized = normalizeLovelaceKey(selected);
+  const normalized = normalizeLovelaceNameOrPath(selected);
   if (!selected || normalized === "default" || normalized === "lovelace") {
     return { path: lovelaceConfigPath() };
   }
@@ -155,12 +159,12 @@ async function resolveLovelaceDashboard(
   const match = dashboards.find((entry) =>
     [entry.url_path, entry.title, entry.id, entry.path]
       .filter((value): value is string => typeof value === "string")
-      .some((value) => normalizeLovelaceKey(value) === normalized),
+      .some((value) => normalizeLovelaceNameOrPath(value) === normalized),
   );
 
   if (!match) return { path: lovelaceConfigPath(selected), dashboard: selected };
 
-  const dashboardId = String(match.url_path ?? match.id ?? match.path ?? selected).trim();
+  const dashboardId = extractDashboardId(match, selected);
   return { path: lovelaceConfigPath(dashboardId), dashboard: dashboardId, title: match.title };
 }
 
@@ -294,14 +298,14 @@ export async function lovelaceGet(
 
   const views = (res.output as { views?: Array<Record<string, unknown>> })?.views;
   if (!Array.isArray(views)) {
-    return { error: "Dashboard config does not contain views" };
+    return { error: "Dashboard config does not contain a views array" };
   }
 
-  const normalized = normalizeLovelaceKey(viewName);
+  const normalized = normalizeLovelaceNameOrPath(viewName);
   const match = views.find((view) =>
     [view.title, view.path]
       .filter((value): value is string => typeof value === "string")
-      .some((value) => normalizeLovelaceKey(value) === normalized),
+      .some((value) => normalizeLovelaceNameOrPath(value) === normalized),
   );
 
   if (!match) {
@@ -326,7 +330,7 @@ export async function lovelaceSet(
   params: { dashboard?: string; config: Record<string, unknown> },
 ): Promise<unknown> {
   if (!params.config || typeof params.config !== "object" || Array.isArray(params.config)) {
-    return { error: "config is required" };
+    return { error: "config must be a non-null object" };
   }
 
   const resolved = await resolveLovelaceDashboard(config, params.dashboard);
