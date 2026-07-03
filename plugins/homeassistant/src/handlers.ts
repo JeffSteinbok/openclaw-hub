@@ -22,7 +22,7 @@ export interface HomeAssistantConfig {
 // ---------------------------------------------------------------------------
 
 function httpRequest(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PUT",
   url: string,
   headers: Record<string, string>,
   body?: string,
@@ -89,6 +89,28 @@ export async function apiPost(
   }
 }
 
+export async function apiPut(
+  baseUrl: string,
+  token: string,
+  apiPath: string,
+  body: Record<string, unknown> = {},
+  timeoutMs = 30_000,
+): Promise<{ output: unknown } | { error: string }> {
+  const url = `${baseUrl}${apiPath}`;
+  try {
+    const res = await httpRequest("PUT", url, {
+      Authorization: "Bearer " + token,
+      "Content-Type": "application/json",
+    }, JSON.stringify(body), timeoutMs);
+    if (res.status < 200 || res.status >= 300) {
+      return { error: `HTTP ${res.status}: ${res.body.slice(0, 500)}` };
+    }
+    return { output: JSON.parse(res.body) };
+  } catch (e: unknown) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Entity helpers
 // ---------------------------------------------------------------------------
@@ -99,6 +121,51 @@ export interface HassEntity {
   attributes?: Record<string, unknown>;
   context?: unknown;
   [key: string]: unknown;
+}
+
+interface LovelaceDashboard {
+  id?: string;
+  path?: string;
+  title?: string;
+  url_path?: string;
+}
+
+function normalizeLovelaceNameOrPath(value: string): string {
+  return value.trim().toLowerCase().replace(/^\/+|\/+$/g, "");
+}
+
+function lovelaceConfigPath(dashboardId?: string): string {
+  return dashboardId ? `/api/lovelace/${encodeURIComponent(dashboardId)}/config` : "/api/lovelace/config";
+}
+
+function extractDashboardId(match: LovelaceDashboard, fallback: string): string {
+  return String(match.url_path ?? match.id ?? match.path ?? fallback).trim();
+}
+
+async function resolveLovelaceDashboard(
+  config: HomeAssistantConfig,
+  dashboard?: string,
+): Promise<{ path: string; dashboard?: string; title?: string } | { error: string }> {
+  const selected = dashboard?.trim() ?? "";
+  const normalized = normalizeLovelaceNameOrPath(selected);
+  if (!selected || normalized === "default" || normalized === "lovelace") {
+    return { path: lovelaceConfigPath() };
+  }
+
+  const res = await apiGet(config.server, config.token, "/api/lovelace/dashboards");
+  if ("error" in res) return res;
+
+  const dashboards = Array.isArray(res.output) ? res.output as LovelaceDashboard[] : [];
+  const match = dashboards.find((entry) =>
+    [entry.url_path, entry.title, entry.id, entry.path]
+      .filter((value): value is string => typeof value === "string")
+      .some((value) => normalizeLovelaceNameOrPath(value) === normalized),
+  );
+
+  if (!match) return { path: lovelaceConfigPath(selected), dashboard: selected };
+
+  const dashboardId = extractDashboardId(match, selected);
+  return { path: lovelaceConfigPath(dashboardId), dashboard: dashboardId, title: match.title };
 }
 
 export function cleanEntity(entity: HassEntity, compact = false): unknown {
@@ -208,6 +275,74 @@ export async function serviceCall(config: HomeAssistantConfig, params: { domain:
   const res = await apiPost(server, token, `/api/services/${domain}/${service}`, body);
   if ("error" in res) return res;
   return { output: res.output };
+}
+
+export async function lovelaceGet(
+  config: HomeAssistantConfig,
+  params: { dashboard?: string; view?: string },
+): Promise<unknown> {
+  const resolved = await resolveLovelaceDashboard(config, params.dashboard);
+  if ("error" in resolved) return resolved;
+
+  const res = await apiGet(config.server, config.token, resolved.path, 60_000);
+  if ("error" in res) return res;
+
+  const viewName = params.view?.trim() ?? "";
+  if (!viewName) {
+    return {
+      output: res.output,
+      ...(resolved.dashboard ? { dashboard: resolved.dashboard } : {}),
+      ...(resolved.title ? { title: resolved.title } : {}),
+    };
+  }
+
+  const views = (res.output as { views?: Array<Record<string, unknown>> })?.views;
+  if (!Array.isArray(views)) {
+    return { error: "Dashboard config does not contain a views array" };
+  }
+
+  const normalized = normalizeLovelaceNameOrPath(viewName);
+  const match = views.find((view) =>
+    [view.title, view.path]
+      .filter((value): value is string => typeof value === "string")
+      .some((value) => normalizeLovelaceNameOrPath(value) === normalized),
+  );
+
+  if (!match) {
+    return {
+      error: `View '${viewName}' not found`,
+      available_views: views
+        .map((view) => typeof view.title === "string" ? view.title : typeof view.path === "string" ? view.path : null)
+        .filter((value): value is string => value !== null),
+    };
+  }
+
+  return {
+    output: match,
+    view: typeof match.title === "string" ? match.title : typeof match.path === "string" ? match.path : viewName,
+    ...(resolved.dashboard ? { dashboard: resolved.dashboard } : {}),
+    ...(resolved.title ? { title: resolved.title } : {}),
+  };
+}
+
+export async function lovelaceSet(
+  config: HomeAssistantConfig,
+  params: { dashboard?: string; config: Record<string, unknown> },
+): Promise<unknown> {
+  if (!params.config || typeof params.config !== "object" || Array.isArray(params.config)) {
+    return { error: "config must be a non-null object" };
+  }
+
+  const resolved = await resolveLovelaceDashboard(config, params.dashboard);
+  if ("error" in resolved) return resolved;
+
+  const res = await apiPut(config.server, config.token, resolved.path, params.config, 60_000);
+  if ("error" in res) return res;
+  return {
+    output: res.output,
+    ...(resolved.dashboard ? { dashboard: resolved.dashboard } : {}),
+    ...(resolved.title ? { title: resolved.title } : {}),
+  };
 }
 
 export async function eventList(config: HomeAssistantConfig, params: { entity_id?: string }): Promise<unknown> {

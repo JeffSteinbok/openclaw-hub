@@ -7,7 +7,7 @@ import { Type } from "@sinclair/typebox";
 import {
   type HomeAssistantConfig,
   CAMERAS, DEFAULT_COLLAGE_CAMERAS,
-  stateGet, stateList, serviceCall, eventList, personFind,
+  stateGet, stateList, serviceCall, lovelaceGet, lovelaceSet, eventList, personFind,
   speakerVolumeGet, speakerVolumeSet, logbook, cameraList,
   cameraSnapshotHandler, cameraCollageHandler,
 } from "./handlers.js";
@@ -103,6 +103,61 @@ export const createEntry = definePlugin({
             service: String(service ?? ""),
             entity_id,
             data,
+          });
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      },
+    }),
+
+    tool({
+      name: "hass_lovelace_get",
+      label: "HA Lovelace Get",
+      description: "Read a Home Assistant Lovelace dashboard config or a single view.",
+      parameters: Type.Object({
+        dashboard: Type.Optional(Type.String({
+          description: "Optional dashboard ID or title. Defaults to the main Lovelace dashboard.",
+        })),
+        view: Type.Optional(Type.String({
+          description: "Optional Lovelace view title or path to return from the dashboard config.",
+        })),
+      }),
+      async execute({ dashboard, view }, config) {
+        try {
+          const resolvedConfig: HomeAssistantConfig = {
+            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            token: config.token ?? "",
+            captureDir: CAPTURE_DIR,
+          };
+          return await lovelaceGet(resolvedConfig, { dashboard, view });
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      },
+    }),
+
+    tool({
+      name: "hass_lovelace_set",
+      label: "HA Lovelace Set",
+      description: "Write a Home Assistant Lovelace dashboard config.",
+      parameters: Type.Object({
+        dashboard: Type.Optional(Type.String({
+          description: "Optional dashboard ID or title. Defaults to the main Lovelace dashboard.",
+        })),
+        config: Type.Record(Type.String(), Type.Unknown(), {
+          description: "Full Lovelace dashboard config object to write.",
+        }),
+      }),
+      async execute({ dashboard, config: dashboardConfig }, config) {
+        try {
+          const resolvedConfig: HomeAssistantConfig = {
+            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            token: config.token ?? "",
+            captureDir: CAPTURE_DIR,
+          };
+          return await lovelaceSet(resolvedConfig, {
+            dashboard,
+            config: dashboardConfig as Record<string, unknown>,
           });
         } catch (e) {
           return { error: (e as Error).message };
