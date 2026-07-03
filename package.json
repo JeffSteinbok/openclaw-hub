@@ -32,6 +32,6 @@
     "export:release": "python3 scripts/export_artifacts.py --all-plugins --all-services"
   },
   "devDependencies": {
-    "tsx": "^4.22.3"
+    "tsx": "^4.23.0"
   }
 }
