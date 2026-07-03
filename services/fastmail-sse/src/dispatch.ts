@@ -35,23 +35,22 @@ export function deliver(
 
 // ── Agent handoff ────────────────────────────────────────────
 
-export function handoffToAgent(agent: string, message: string): void {
+export function handoffToAgent(agent: string, message: string, sessionKey?: string): void {
   try {
-    execFileSync(
-      "openclaw",
-      [
-        "agent",
-        "--agent",
-        agent,
-        "--json",
-        "--timeout",
-        "120",
-        "--message",
-        message,
-      ],
-      { timeout: 150_000, stdio: "pipe" },
-    );
-    log(`handoff delivered to agent ${agent}`);
+    const args = [
+      "agent",
+      "--agent",
+      agent,
+      "--json",
+      "--deliver",
+      "--timeout",
+      "120",
+      ...(sessionKey ? ["--session-key", sessionKey] : []),
+      "--message",
+      message,
+    ];
+    execFileSync("openclaw", args, { timeout: 150_000, stdio: "pipe" });
+    log(`handoff delivered to agent ${agent}${sessionKey ? ` (session=${sessionKey})` : ""}`);
   } catch (e: unknown) {
     const err = e as { stderr?: Buffer | string; message?: string };
     if (err.stderr) {
@@ -81,6 +80,7 @@ export function dispatchResults(
         handoffToAgent(
           (payload["agent"] as string) ?? "main",
           payload["message"] as string,
+          payload["session"] as string | undefined,
         ),
     },
   });

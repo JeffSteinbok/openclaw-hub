@@ -9,6 +9,7 @@ import { emailToEnvelope } from "./email.js";
 import { FastmailProviderClient } from "./provider.js";
 import { loadState, saveState, type SseState } from "./state.js";
 import { dispatchResults } from "./dispatch.js";
+import { logPipelineEvent } from "./logger.js";
 import type { ActionRegistry } from "carapace-mail-runtime";
 import { executeRules } from "carapace-mail-runtime";
 import { homedir } from "node:os";
@@ -60,7 +61,7 @@ async function notify(
 ): Promise<void> {
   const envelope = emailToEnvelope(email, options.accountId);
   const provider = new FastmailProviderClient(options.token, log);
-  const [, results] = await executeRules(
+  const [matched, results] = await executeRules(
     envelope,
     options.pipelineRules,
     options.registry,
@@ -71,6 +72,7 @@ async function notify(
       config: options.runtimeConfig,
     },
   );
+  logPipelineEvent(envelope, matched as MailRule[], results);
   dispatchResults(results, {
     channel: options.notifyChannel,
     target: options.notifyTarget,

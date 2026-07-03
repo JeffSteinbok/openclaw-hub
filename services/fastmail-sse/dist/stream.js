@@ -7,6 +7,7 @@ import { emailToEnvelope } from "./email.js";
 import { FastmailProviderClient } from "./provider.js";
 import { loadState, saveState } from "./state.js";
 import { dispatchResults } from "./dispatch.js";
+import { logPipelineEvent } from "./logger.js";
 import { executeRules } from "carapace-mail-runtime";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -38,11 +39,12 @@ function pruneDedup() {
 async function notify(email, options) {
     const envelope = emailToEnvelope(email, options.accountId);
     const provider = new FastmailProviderClient(options.token, log);
-    const [, results] = await executeRules(envelope, options.pipelineRules, options.registry, provider, {
+    const [matched, results] = await executeRules(envelope, options.pipelineRules, options.registry, provider, {
         workspace: PIPELINE_WORKSPACE,
         logger: log,
         config: options.runtimeConfig,
     });
+    logPipelineEvent(envelope, matched, results);
     dispatchResults(results, {
         channel: options.notifyChannel,
         target: options.notifyTarget,

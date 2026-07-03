@@ -3,7 +3,7 @@
  */
 import type { ActionResult } from "carapace-mail-runtime";
 export declare function deliver(msg: string, channel: string, target: string): void;
-export declare function handoffToAgent(agent: string, message: string): void;
+export declare function handoffToAgent(agent: string, message: string, sessionKey?: string): void;
 export declare function dispatchResults(results: ActionResult[], config: {
     channel: string;
     target: string;
