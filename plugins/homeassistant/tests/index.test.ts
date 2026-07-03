@@ -117,6 +117,17 @@ const ENTITY_SPEAKER = {
   context: { id: "ctx-4" },
 };
 
+const ENTITY_DREO_FAN = {
+  entity_id: "fan.bedroom_dreo",
+  state: "on",
+  attributes: {
+    friendly_name: "Bedroom Dreo",
+    preset_mode: "fan_2in1_breeze",
+    preset_modes: ["fan_normal", "fan_2in1_breeze", "fan_custom_mix"],
+  },
+  context: { id: "ctx-5" },
+};
+
 // ---------------------------------------------------------------------------
 // Plugin registration
 // ---------------------------------------------------------------------------
@@ -183,6 +194,21 @@ describe("hass_state_get", () => {
 
     const data = resultText(await api.tools["hass_state_get"].execute("id", { entity_id: "sensor.missing" }));
     expect(data).toHaveProperty("error");
+  });
+
+  it("adds resilient labels for preset modes", async () => {
+    const { api } = await loadPlugin();
+    mockHttp(JSON.stringify(ENTITY_DREO_FAN));
+
+    const data = resultText(await api.tools["hass_state_get"].execute("id", { entity_id: "fan.bedroom_dreo" })) as {
+      output: { attributes: Record<string, unknown> };
+    };
+    expect(data.output.attributes.preset_mode_label).toBe("2-in-1 Breeze Mode");
+    expect(data.output.attributes.preset_mode_labels).toEqual([
+      "Normal",
+      "2-in-1 Breeze Mode",
+      "Custom Mix",
+    ]);
   });
 });
 

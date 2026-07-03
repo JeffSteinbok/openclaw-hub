@@ -101,9 +101,43 @@ export interface HassEntity {
   [key: string]: unknown;
 }
 
+const DREO_PRESET_MODE_LABELS: Record<string, string> = {
+  fan_2in1_breeze: "2-in-1 Breeze Mode",
+};
+
+function toTitleWord(word: string): string {
+  if (!word) return word;
+  if (/^\d+$/.test(word)) return word;
+  return word[0].toUpperCase() + word.slice(1);
+}
+
+function presetModeLabel(mode: string): string {
+  const known = DREO_PRESET_MODE_LABELS[mode];
+  if (known) return known;
+  const normalized = mode.replace(/^fan_/, "");
+  const words = normalized.split("_").filter(Boolean);
+  if (!words.length) return mode;
+  return words.map(toTitleWord).join(" ");
+}
+
+function withPresetModeLabels(attributes: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...attributes };
+  if (typeof next.preset_mode === "string") {
+    next.preset_mode_label = presetModeLabel(next.preset_mode);
+  }
+  if (Array.isArray(next.preset_modes)) {
+    next.preset_mode_labels = next.preset_modes
+      .filter((mode): mode is string => typeof mode === "string")
+      .map((mode) => presetModeLabel(mode));
+  }
+  return next;
+}
+
 export function cleanEntity(entity: HassEntity, compact = false): unknown {
   if (typeof entity !== "object" || entity === null) return entity;
   const { context: _ctx, ...rest } = entity;
+  const attrs = rest.attributes as Record<string, unknown> | undefined;
+  if (attrs) rest.attributes = withPresetModeLabels(attrs);
   if (compact) {
     return {
       entity_id: rest.entity_id,
