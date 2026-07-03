@@ -10,6 +10,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import http from "node:http";
 import { EventEmitter } from "node:events";
 
+beforeEach(() => {
+  vi.restoreAllMocks();
+});
+
 // ---------------------------------------------------------------------------
 // HTTP mock helpers
 // ---------------------------------------------------------------------------
@@ -80,6 +84,35 @@ function mockHttp(body: string, statusCode = 200) {
   return mock;
 }
 
+function mockHttpSequence(steps: Array<{
+  body: string;
+  statusCode?: number;
+  inspect?: (request: { url: string; method: string; body: string }) => void;
+}>) {
+  vi.spyOn(http, "request").mockImplementation((url, opts, cb) => {
+    const step = steps.shift();
+    if (!step) throw new Error("Unexpected HTTP request");
+
+    const mock = makeMockHttpRequest(step.body, step.statusCode ?? 200);
+    let requestBody = "";
+    mock.req.write = vi.fn((chunk?: string | Buffer) => {
+      if (typeof chunk === "string") requestBody += chunk;
+      else if (chunk) requestBody += chunk.toString("utf8");
+    });
+
+    if (cb) cb(mock.res as Parameters<typeof cb>[0]);
+    setTimeout(() => {
+      step.inspect?.({
+        url: String(url),
+        method: typeof opts === "object" && opts && "method" in opts ? String((opts as { method?: string }).method ?? "") : "",
+        body: requestBody,
+      });
+      mock.flush();
+    }, 0);
+    return mock.req as unknown as ReturnType<typeof http.request>;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
@@ -137,6 +170,8 @@ describe("plugin entry", () => {
       "hass_camera_snapshot",
       "hass_event_list",
       "hass_logbook",
+      "hass_lovelace_get",
+      "hass_lovelace_set",
       "hass_person_find",
       "hass_service_call",
       "hass_speaker_volume_get",
@@ -262,6 +297,94 @@ describe("hass_service_call", () => {
       entity_id: "light.living_room",
     });
     expect(capturedUrl).toContain("/api/services/light/turn_on");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hass_lovelace_get
+// ---------------------------------------------------------------------------
+
+describe("hass_lovelace_get", () => {
+  it("reads the default Lovelace config", async () => {
+    const { api } = await loadPlugin();
+    let capturedUrl = "";
+    const mock = makeMockHttpRequest(JSON.stringify({ title: "Home", views: [] }));
+    vi.spyOn(http, "request").mockImplementationOnce((url, _opts, cb) => {
+      capturedUrl = url as string;
+      if (cb) cb(mock.res as Parameters<typeof cb>[0]);
+      setTimeout(mock.flush, 0);
+      return mock.req as unknown as ReturnType<typeof http.request>;
+    });
+
+    const data = resultText(await api.tools["hass_lovelace_get"].execute("id", {})) as { output: Record<string, unknown> };
+    expect(capturedUrl).toContain("/api/lovelace/config");
+    expect(data.output.title).toBe("Home");
+  });
+
+  it("resolves dashboard title and returns a matching view", async () => {
+    const { api } = await loadPlugin();
+    const seenUrls: string[] = [];
+    mockHttpSequence([
+      {
+        body: JSON.stringify([{ url_path: "system", title: "System" }]),
+        inspect: ({ url }) => { seenUrls.push(url); },
+      },
+      {
+        body: JSON.stringify({
+          title: "System",
+          views: [
+            { title: "Matter", path: "matter", cards: [{ type: "entities" }] },
+            { title: "Other", path: "other", cards: [] },
+          ],
+        }),
+        inspect: ({ url }) => { seenUrls.push(url); },
+      },
+    ]);
+
+    const data = resultText(await api.tools["hass_lovelace_get"].execute("id", {
+      dashboard: "System",
+      view: "Matter",
+    })) as { dashboard: string; view: string; output: Record<string, unknown> };
+
+    expect(seenUrls[0]).toContain("/api/lovelace/dashboards");
+    expect(seenUrls[1]).toContain("/api/lovelace/system/config");
+    expect(data.dashboard).toBe("system");
+    expect(data.view).toBe("Matter");
+    expect(data.output.path).toBe("matter");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hass_lovelace_set
+// ---------------------------------------------------------------------------
+
+describe("hass_lovelace_set", () => {
+  it("returns error when config is missing", async () => {
+    const { api } = await loadPlugin();
+    const data = resultText(await api.tools["hass_lovelace_set"].execute("id", {}));
+    expect(data).toMatchObject({ error: expect.stringContaining("config") });
+  });
+
+  it("writes the default Lovelace config with PUT", async () => {
+    const { api } = await loadPlugin();
+    const seen: Array<{ url: string; method: string; body: string }> = [];
+    mockHttpSequence([
+      {
+        body: JSON.stringify({ status: "ok" }),
+        inspect: (request) => { seen.push(request); },
+      },
+    ]);
+
+    const payload = { title: "Home", views: [{ title: "Matter", path: "matter" }] };
+    const data = resultText(await api.tools["hass_lovelace_set"].execute("id", {
+      config: payload,
+    })) as { output: Record<string, unknown> };
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0].url).toContain("/api/lovelace/config");
+    expect(seen[0].method).toBe("PUT");
+    expect(JSON.parse(seen[0].body)).toEqual(payload);
+    expect(data.output.status).toBe("ok");
   });
 });
 
