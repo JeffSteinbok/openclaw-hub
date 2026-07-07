@@ -1,0 +1,33 @@
+{
+  "name": "goodreads",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsup",
+    "test": "echo \"No tests yet\""
+  },
+  "dependencies": {
+    "carapace-plugin-sdk": "^1.0.3",
+    "@sinclair/typebox": "^0.34.49",
+    "playwright": "^1.48.0"
+  },
+  "devDependencies": {
+    "typescript": "^6",
+    "@types/node": "^25",
+    "tsup": "^8.3.0"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/adapter.js"
+    ]
+  },
+  "peerDependencies": {
+    "openclaw": "^2026.4.23"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  }
+}
