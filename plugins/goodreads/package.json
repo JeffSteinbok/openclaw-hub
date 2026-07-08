@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "goodreads": "./dist/bin/goodreads.js"
+  },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
     "test": "echo \"No tests yet\""
   },
   "dependencies": {
