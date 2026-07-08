@@ -4,7 +4,7 @@ All shared libraries live in `libs/ts/` and are pure TypeScript with no Python d
 
 ## Architecture
 
-Libraries are npm workspaces consumed by plugins and services via standard package references (e.g., `"@openclaw/mail-runtime-core": "*"`). Each lib:
+Libraries are npm workspaces consumed by plugins and services via standard package references (e.g., `"@openclaw/mail-action-usps": "*"`). Each lib:
 
 - Exports compiled JS from `dist/` for runtime use
 - Exports TypeScript source from `src/` for type information
@@ -24,9 +24,7 @@ Libraries are npm workspaces consumed by plugins and services via standard packa
 
 | Library | Purpose |
 |---------|---------|
-| `mail_runtime_core` | Rule engine, action registry, envelope types, result dispatch. Used by `fastmail-sse` service and `usps-mail` plugin. |
-| `mail_action_usps` | USPS Informed Delivery processing — digest parsing, vision analysis, memory, rules. Registered as builtin actions in the mail runtime. |
-| `package_tracking_core` | Carrier detection, tracking URL generation, package storage. Used by `package-tracking` plugin and mail runtime's delivery detection. |
+| `mail_action_usps` | USPS Informed Delivery processing — digest parsing, vision analysis, memory, rules. Registered as builtin actions in the [Carapace Mail Runtime](https://github.com/JeffSteinbok/carapace-mail-runtime). |
 
 ## Building
 
@@ -34,7 +32,7 @@ Libraries are built as part of the workspace:
 
 ```bash
 # Build a specific lib
-npm run build -w libs/ts/mail_runtime_core
+npm run build -w libs/ts/mail_action_usps
 
 # Or build everything (plugins depend on libs via workspace links)
 npm run build

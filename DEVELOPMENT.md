@@ -23,7 +23,7 @@ npm test
 Individual packages:
 
 ```bash
-npm run test --workspace libs/ts/mail_runtime_core
+npm run test --workspace libs/ts/mail_action_usps
 ```
 
 ## Project structure
@@ -43,7 +43,7 @@ For plugins that remain in this monorepo, add to the `workspaces` and `build:plu
 
 ## Adding a new mail action
 
-See [`libs/ts/mail_runtime_core/README.md`](libs/ts/mail_runtime_core/README.md) — specifically the "Writing a custom action" section.
+See the [Carapace Mail Runtime](https://github.com/JeffSteinbok/carapace-mail-runtime) — specifically the "Writing a custom action" section.
 
 ## Release bundles
 

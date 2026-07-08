@@ -88,7 +88,7 @@ my-action-plugin/
   "main": "dist/index.js",
   "scripts": { "build": "tsc" },
   "devDependencies": {
-    "@openclaw/mail-runtime-core": "file:../../openclaw-hub/libs/ts/mail_runtime_core",
+    "@openclaw/mail-runtime-core": "github:JeffSteinbok/carapace-mail-runtime",
     "typescript": "^6"
   }
 }

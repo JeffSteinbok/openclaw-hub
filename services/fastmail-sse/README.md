@@ -1,11 +1,10 @@
 # ⚡ FastMail SSE Service
 
-Real-time email ingestion daemon that acts as the FastMail-specific adapter over the [shared mail runtime](../../libs/ts/mail_runtime_core/README.md). It connects to FastMail's JMAP EventSource, normalizes each new message into a provider-agnostic mail envelope, matches deterministic rules, and invokes shared/runtime-registered mail actions. The current source is FastMail SSE, but the underlying mail runtime is designed to be reused by future Outlook poll/webhook sources.
+Real-time email ingestion daemon that acts as the FastMail-specific adapter over the [Carapace Mail Runtime](https://github.com/JeffSteinbok/carapace-mail-runtime). It connects to FastMail's JMAP EventSource, normalizes each new message into a provider-agnostic mail envelope, matches deterministic rules, and invokes shared/runtime-registered mail actions. The current source is FastMail SSE, but the underlying mail runtime is designed to be reused by future Outlook poll/webhook sources.
 
 Core shared code lives in:
 
-- [`libs/ts/mail_runtime_core/`](../../libs/ts/mail_runtime_core/README.md) — provider-agnostic envelope/rule/action runtime, built-in actions (`notify_email`, `detect_tracking`), result dispatch
-- [`libs/ts/package_tracking_core/`](../../libs/ts/package_tracking_core/README.md) — shared tracking detection, storage, and URL extraction logic
+- [Carapace Mail Runtime](https://github.com/JeffSteinbok/carapace-mail-runtime) — provider-agnostic envelope/rule/action runtime, built-in actions (`notify_email`, `detect_tracking`), result dispatch
 - [`libs/ts/mail_action_usps/`](../../libs/ts/mail_action_usps/README.md) — reusable USPS mail action module (rules, memory, vision analysis)
 
 `services/fastmail-sse/` is the FastMail source/adapter layer that invokes the shared runtime.
@@ -135,7 +134,7 @@ Create `~/.openclaw/services/fastmail-sse-config.json` (see `config.example.json
 
 **Label**: Human-readable label for the account (displayed in multi-account notifications)
 
-Generic `mail_rules` syntax, match fields, ordering, and reusable examples live in [`libs/ts/mail_runtime_core/`](../../libs/ts/mail_runtime_core/README.md#-rule-engine).
+Generic `mail_rules` syntax, match fields, ordering, and reusable examples live in the [Carapace Mail Runtime](https://github.com/JeffSteinbok/carapace-mail-runtime).
 
 ### FastMail-exposed actions
 
@@ -313,8 +312,6 @@ For each incoming email the daemon:
 - When a delivery confirmation email arrives the corresponding package is automatically removed from tracking.
 - Logs each added package: `📦 added package: 1Z999AA10123456784 (UPS) — Personal: …`
 
-View tracked packages: `openclaw tool call --plugin package-tracking --tool package_list`
-
 ## Systemd Service
 
 Install: `systemctl --user enable fastmail-sse && systemctl --user start fastmail-sse`
@@ -350,7 +347,5 @@ Logs: `journalctl --user -u fastmail-sse -f`
 
 ## 🔗 Related
 
-- [`mail_runtime_core`](../../libs/ts/mail_runtime_core/README.md) — Provider-agnostic rule engine and action registry
+- [Carapace Mail Runtime](https://github.com/JeffSteinbok/carapace-mail-runtime) — Provider-agnostic rule engine and action registry
 - [`mail_action_usps`](../../libs/ts/mail_action_usps/README.md) — USPS Informed Delivery action module
-- [`package_tracking_core`](../../libs/ts/package_tracking_core/README.md) — Carrier detection, URL extraction, package storage
-- [`package-tracking` plugin](../../plugins/package-tracking/README.md) — Operator-facing package tracking tools

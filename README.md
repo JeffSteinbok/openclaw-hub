@@ -2,7 +2,7 @@
 
 [![CI Tests](https://github.com/JeffSteinbok/openclaw-hub/actions/workflows/ci-tests.yml/badge.svg)](https://github.com/JeffSteinbok/openclaw-hub/actions/workflows/ci-tests.yml)
 
-Public plugins, services, and shared libraries for [OpenClaw](https://jeffsteinbok.github.io/octo-docs/). This repo contains the public pieces I use in my own assistant.
+Public plugins, CLIs, services, and shared libraries for [OpenClaw](https://jeffsteinbok.github.io/octo-docs/). This repo contains the public pieces I use in my own assistant.
 
 > **Building a new plugin?** Use [carapace-plugin-template](https://github.com/JeffSteinbok/carapace-plugin-template) to scaffold it as a standalone repo with the [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapace-plugin-sdk).
 
@@ -14,6 +14,7 @@ Public plugins, services, and shared libraries for [OpenClaw](https://jeffsteinb
 |---|--------|-------------|
 | ✉️ | [Fastmail](plugins/fastmail/) | Send/search/read mail, work with calendars |
 | 📊 | [Glances](plugins/glances/) | Live CPU, memory, disk metrics from a Glances server |
+| 📚 | [Goodreads](plugins/goodreads/) | Search books and read your shelves via a headless browser |
 | 🏠 | [Home Assistant](plugins/homeassistant/) | Control devices, query state, inspect activity |
 | 📄 | [HTML to PDF](plugins/html-to-pdf/) | Convert HTML files to PDF via Chromium headless |
 | 📅 | [ICS Calendar](plugins/ics-calendar/) | Read events from ICS feeds |
@@ -34,6 +35,16 @@ All plugins use the [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapa
 
 ---
 
+## CLIs
+
+Lightweight command-line tools the agent runs as subprocesses. See [`clis/`](clis/) for when to use a CLI vs. a plugin.
+
+| CLI | Description |
+|-----|-------------|
+| ⏳ [`waitlistme`](clis/waitlistme/) | Add yourself to a [Waitlist.me](https://www.waitlist.me) queue |
+
+---
+
 ## Services & Libraries
 
 | Component | Purpose |
@@ -43,6 +54,11 @@ All plugins use the [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapa
 
 ---
 
-## Development
+## Documentation
 
-See [`DEVELOPMENT.md`](DEVELOPMENT.md) for build instructions and project structure.
+| Doc | Contents |
+|-----|----------|
+| [`DEVELOPMENT.md`](DEVELOPMENT.md) | Build instructions and project structure |
+| [`TOOLS.md`](TOOLS.md) | Registry of tools the agent can call |
+| [`CHANGELOG.md`](CHANGELOG.md) | Notable changes over time |
+| [`SECURITY.md`](SECURITY.md) | Security policy and reporting |

@@ -138,5 +138,4 @@ For internals — module layout, agent boundaries, the two-phase rule system, vi
 | 📬 | [Carapace Mail Runtime](https://github.com/JeffSteinbok/carapace-mail-runtime) | Rule engine and action registry that dispatches to this action |
 | ⚡ | [FastMail SSE](../../../services/fastmail-sse/README.md) | Email source that feeds digests into the mail runtime |
 | 📧 | [`usps-mail` plugin](../../../plugins/usps-mail/README.md) | Interactive tool surface for manual USPS processing |
-| 📦 | [`package_tracking_core`](../package_tracking_core/README.md) | Carrier detection and package storage |
 | 📖 | [Custom rules guide](docs/custom-rules.md) | Full guide to writing USPS classification rules |
