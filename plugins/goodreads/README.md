@@ -1,6 +1,6 @@
 # Goodreads Plugin
 
-Headless Playwright-based Goodreads integration for OpenClaw.
+Headless Playwright-based Goodreads integration for OpenClaw. Supports both **reading** (list shelves, search) and **writing** (move books between shelves, remove books).
 
 ## Why this exists
 
@@ -36,6 +36,19 @@ Returns structured `BookRecord[]` with title, author, URL, ratings, and dates.
 Search for books by title, author, or ISBN. Parameters:
 - `query`: search string
 - `limit`: max results (default 10)
+
+### `goodreads_move_shelf`
+Move a book to a different shelf. Requires the book's Goodreads URL. Parameters:
+- `book_url`: Goodreads book URL (e.g. `https://www.goodreads.com/book/show/...`)
+- `shelf`: `"read"` | `"currently-reading"` | `"to-read"`
+
+Returns `{ success, error? }`. Auto-reauthenticates if the session has expired.
+
+### `goodreads_remove_shelf`
+Remove a book from all shelves (Did Not Finish / remove). Requires the book's Goodreads URL. Parameters:
+- `book_url`: Goodreads book URL
+
+Returns `{ success, error? }`. Auto-reauthenticates if the session has expired.
 
 ## Session management
 
