@@ -11,12 +11,12 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "typescript": "^6",
-    "@types/node": "^26",
-    "tsup": "^8.3.0",
-    "vitest": "^4.1.9",
     "@sinclair/typebox": "^0.34.0",
-    "carapace-plugin-sdk": "^1.0.3"
+    "@types/node": "^26.1.1",
+    "carapace-plugin-sdk": "^1.0.3",
+    "tsup": "^8.3.0",
+    "typescript": "^6",
+    "vitest": "^4.1.9"
   },
   "openclaw": {
     "extensions": [
