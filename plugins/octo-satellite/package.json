@@ -14,8 +14,8 @@
     "typescript": "^6",
     "@types/node": "^26",
     "tsup": "^8.3.0",
-    "vitest": "^4.1.9",
-    "@sinclair/typebox": "^0.34.0",
+    "vitest": "^4.1.10",
+    "@sinclair/typebox": "^0.34.52",
     "carapace-plugin-sdk": "^1.0.3"
   },
   "openclaw": {

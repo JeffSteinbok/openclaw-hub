@@ -13,13 +13,13 @@
   "dependencies": {
     "carapace-plugin-sdk": "^1.0.3",
     "@openclaw/mail-action-usps": "*",
-    "@sinclair/typebox": "^0.34.48"
+    "@sinclair/typebox": "^0.34.52"
   },
   "devDependencies": {
     "@types/node": "^26",
     "tsup": "^8.3.0",
     "typescript": "^6",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
     "openclaw": "^2026.4.23"
