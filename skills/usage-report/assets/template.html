@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{TITLE}}</title>
+<style>
+  /* ============================================================
+     RETIREMENT FINANCIAL PLAN — CSS TEMPLATE
+     Source of truth for all report renders.
+     Do not edit the rendered HTML files — edit this template.
+     ============================================================ */
+
+  * { box-sizing: border-box; }
+  @page { size: letter landscape; margin: 20px 30px; }
+  body { font-family: -apple-system, Arial, sans-serif; font-size: 12px; color: #1a1a1a; margin: 24px 36px; line-height: 1.45; }
+
+  /* --- Headings --- */
+  h1 { font-size: 20px; color: #1a1a1a; margin-bottom: 2px; display: flex; align-items: center; gap: 12px; }
+  h1::before { content: ''; display: inline-block; width: 56px; height: 56px; background: url('octo.png') no-repeat center/contain; flex-shrink: 0; }
+  .subtitle { color: #555; font-size: 11px; margin-bottom: 18px; }
+  h2 { font-size: 14px; color: #5c1f00; border-bottom: 1.5px solid #5c1f00; padding-bottom: 3px; margin-top: 28px; margin-bottom: 8px; }
+  h3 { font-size: 12px; color: #333; margin-top: 14px; margin-bottom: 4px; }
+
+  /* --- Tables --- */
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 14px 0; font-size: 11px; }
+  th { background: #5c1f00; color: #fff; text-align: left; padding: 4px 6px; }
+  td { padding: 3px 6px; border-bottom: 1px solid #e0e0e0; vertical-align: top; }
+  .total td { font-weight: bold; background: #fdf0e6 !important; border-top: 2px solid #5c1f00; }
+  .total-row td { font-weight: bold; background: #fdf0e6 !important; border-top: 2px solid #5c1f00; }
+  .phase-header td { background: #fdf0e6 !important; font-weight: bold; font-size: 10px; color: #5c1f00; }
+  .highlight-row td { background: #fffbe6 !important; font-weight: bold; }
+  .bucket-header td { background: #fdf0e6 !important; font-weight: bold; font-size: 10px; color: #5c1f00; padding: 2px 6px; }
+  .bucket-header-pretax td { background: #fff8f0 !important; font-weight: bold; font-size: 10px; color: #7a4a00; padding: 2px 6px; }
+  .bucket-header-roth td { background: #f0fff4 !important; font-weight: bold; font-size: 10px; color: #1a6b1a; padding: 2px 6px; }
+
+  /* --- Inline text styles --- */
+  .warn { color: #b85c00; font-weight: bold; }
+  .good { color: #1a6b1a; font-weight: bold; }
+  .roth { color: #1a6b1a; font-weight: bold; }
+  .pretax { color: #7a4a00; font-weight: bold; }
+  .taxable-tag { color: #5c2500; }
+
+  /* --- Tags / badges --- */
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: bold; white-space: nowrap; }
+  .tag-phase { background: #fdf0e6; color: #5c1f00; }
+  .tag-action { background: #fff3e0; color: #b85c00; }
+  .tag-needed { background: #fde8e8; color: #b00000; }
+  .tag-ok { background: #e8f8e8; color: #1a6b1a; }
+  .tag-done { background: #e8f8e8; color: #1a6b1a; }
+
+  /* --- KPI row --- */
+  .kpi-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .kpi { background: #fdf0e6; border: 1px solid #e8b070; border-radius: 7px; padding: 8px 14px; min-width: 120px; }
+  .kpi-label { font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+  .kpi-value { font-size: 17px; font-weight: bold; color: #5c1f00; }
+  .kpi-sub { font-size: 9px; color: #777; }
+
+  /* --- Callout boxes (always use <ul><li> inside, never prose) --- */
+  .callout { background: #fff8e6; border-left: 4px solid #e0a020; padding: 4px 10px; margin: 6px 0 12px 0; font-size: 10.5px; color: #5a3a00; }
+  .callout p { margin: 2px 0; }
+  .callout ul { margin: 2px 0 0 0; padding-left: 16px; }
+  .callout li { margin-bottom: 2px; }
+  .callout-good { background: #f0fff4; border-left: 4px solid #2a8a2a; padding: 4px 10px; margin: 6px 0 12px 0; font-size: 10.5px; color: #1a4a1a; }
+  .callout-good p { margin: 2px 0; }
+  .callout-good ul { margin: 2px 0 0 0; padding-left: 16px; }
+  .callout-good li { margin-bottom: 2px; }
+  .callout-blue { background: #fdf0e6; border-left: 4px solid #5c1f00; padding: 4px 10px; margin: 6px 0 12px 0; font-size: 10.5px; color: #5c2500; }
+  .callout-blue p { margin: 2px 0; }
+  .callout-blue ul { margin: 2px 0 0 0; padding-left: 16px; }
+  .callout-blue li { margin-bottom: 2px; }
+
+  /* --- Layout helpers --- */
+  .two-col { display: flex; gap: 24px; }
+  .two-col > div { flex: 1; }
+  .pb { page-break-before: always; padding-top: 12px; }
+  .note-sm { font-size: 9.5px; color: #555; margin-top: -8px; margin-bottom: 10px; }
+  .action-q { font-size: 10px; }
+
+  /* --- TOC --- */
+  .toc { background: #f7f9ff; border: 1px solid #e8b070; border-radius: 5px; padding: 10px 16px; margin-bottom: 20px; }
+  .toc h3 { margin: 0 0 6px 0; font-size: 12px; color: #5c1f00; }
+  .toc ol { margin: 0; padding-left: 18px; }
+  .toc li { margin-bottom: 2px; font-size: 11px; }
+  .toc a { color: #5c1f00; text-decoration: none; }
+  .toc-col { display: flex; gap: 28px; }
+  .toc-col > ol { flex: 1; }
+
+  /* --- Disclaimer --- */
+  .disclaimer { font-size: 9.5px; color: #888; margin-top: 28px; padding-top: 8px; border-top: 1px solid #ccc; }
+</style>
+</head>
+<body>
+
+<!-- RENDER INSTRUCTIONS (remove this comment block in output):
+  1. Replace {{TITLE}} in <title> with the report title.
+  2. Populate <h1> and .subtitle with title + "May 6, 2026 9:51 PM PT · vN.N".
+  3. Populate .kpi-row divs with live values.
+  4. Build all sections from the .md source.
+  5. Use the CSS classes above — do not add inline styles.
+  6. Never edit this template directly when rendering — copy it into the output HTML file.
+-->
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:4px;">
+  <img src="octo.png" style="height:64px; width:auto;" alt="Octo">
+  <div>
+    <h1 style="margin:0;">{{H1_TITLE}}</h1>
+    <div class="subtitle" style="margin-top:2px;">{{SUBTITLE_DATE_VERSION}}</div>
+  </div>
+</div>
+
+</body>
+</html>
