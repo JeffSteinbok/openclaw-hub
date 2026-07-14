@@ -35,6 +35,16 @@ All plugins use the [Carapace Plugin SDK](https://github.com/JeffSteinbok/carapa
 
 ---
 
+## Skills
+
+Reusable agent skills. Each skill has a `SKILL.md` the agent reads to know how to use it, plus supporting scripts and assets.
+
+| | Skill | Description |
+|---|-------|-------------|
+| 📊 | [usage-report](skills/usage-report/) | Generate a weekly LLM API usage and cost report, render to PDF, post to a channel, and commit |
+
+---
+
 ## CLIs
 
 Lightweight command-line tools the agent runs as subprocesses. See [`clis/`](clis/) for when to use a CLI vs. a plugin.
