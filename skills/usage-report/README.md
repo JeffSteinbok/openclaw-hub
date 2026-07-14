@@ -72,6 +72,26 @@ Add to your `openclaw.json` cron section:
 
 ---
 
+## Agent Visibility (Skill Scoping)
+
+OpenClaw injects skills into agents based on where the SKILL.md lives:
+
+- **Global skills** (installed via `openclaw install`) are visible to all agents.
+- **Agent-local skills** (`agents/<name>/skills/<skill>/SKILL.md`) are only visible to that specific agent.
+
+Since this skill involves billing data and private report delivery, you probably don't want it visible to all agents. The recommended pattern is:
+
+1. Keep the shared scripts + assets here in `openclaw-hub` (or wherever you cloned it)
+2. Create a thin agent-local wrapper in your private repo:
+   ```
+   agents/root/skills/usage-report/SKILL.md
+   ```
+3. That wrapper's SKILL.md references the shared script paths via env vars and documents your specific output dir, delivery channel, and cron names.
+
+This way the skill is only injected into the one agent that should run it, while the reusable implementation stays shareable.
+
+---
+
 ## Manual Run
 
 ```bash
