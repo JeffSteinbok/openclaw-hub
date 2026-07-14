@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-07-13
+
+### Added
+- **`agent-review` skill** — weekly self-improvement analysis that scans an OpenClaw instance's own session trajectories and daily memory notes for recurring tool failures, cron errors, and friction, then files deduplicated GitHub issues for high-confidence findings and hands a prioritized summary to the calling agent. Portable via `AGENT_REVIEW_OUT_DIR` / `AGENT_REVIEW_ISSUE_REPO` (or the equivalent CLI flags); fingerprint state lives under `~/.openclaw/state/agent-review/`.
+
 ## 2026-05-09
 
 ### Added
