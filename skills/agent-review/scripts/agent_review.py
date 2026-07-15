@@ -44,8 +44,9 @@ DEFAULT_REPORT_DIR = Path(
     os.environ.get("AGENT_REVIEW_OUT_DIR", str(OPENCLAW_DIR / "reports" / "agent-review"))
 )
 
-# Session key prefixes that indicate a cron/automated run
-CRON_SESSION_PREFIXES = ("cron:", "isolated:")
+# Substring that indicates a cron/automated run in the `source` field
+# source format: agent:<name>:cron:<job_id>:run:<session_id>
+CRON_SOURCE_MARKER = ":cron:"
 
 # Keywords in memory files that signal a correction, failure, or friction event
 CORRECTION_KEYWORDS = [
@@ -445,8 +446,8 @@ def parse_trajectories(since_ts: datetime) -> tuple[list[dict], dict, list[str]]
                     continue
 
                 event_type = d.get("type", "")
-                session_key = d.get("sessionKey", "")
-                is_cron = any(session_key.startswith(p) for p in CRON_SESSION_PREFIXES)
+                session_key = d.get("source", "")
+                is_cron = CRON_SOURCE_MARKER in session_key
 
                 # Tool error events
                 if event_type in ("tool.error", "tool.failed"):
@@ -500,6 +501,13 @@ def parse_trajectories(since_ts: datetime) -> tuple[list[dict], dict, list[str]]
                             "is_cron": is_cron,
                         }
                     )
+
+    if stats["files_seen"] > 0 and len(events) == 0:
+        add_issue(
+            issues,
+            f"WARNING: {stats['files_seen']} trajectory files were read but 0 events were extracted — "
+            "possible schema mismatch or all events outside the time window",
+        )
 
     return events, stats, issues
 
