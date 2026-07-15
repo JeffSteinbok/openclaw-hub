@@ -93,10 +93,10 @@ function formatEvent(e: Record<string, unknown>): Record<string, unknown> {
     my_status: ((e.responseStatus as Record<string, string>)?.response ?? "none"), show_as: String(e.showAs ?? "busy"),
   };
   if (attendees.length) result.attendees = attendees;
-  const body = e.body as Record<string, string> | undefined;
-  if (body?.content) {
-    result.body = body.content;
-    result.body_type = body.contentType ?? "text";
+  const bodyContent = (e.body as Record<string, string> | undefined)?.content;
+  if (bodyContent && bodyContent.trim()) {
+    const plainText = bodyContent.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (plainText.length > 0) result.body = plainText;
   }
   return result;
 }

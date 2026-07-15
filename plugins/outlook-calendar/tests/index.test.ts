@@ -37,6 +37,11 @@ const EVENTS_RESPONSE = JSON.stringify({ value: [
   { subject: "Team Standup", start: { dateTime: "2026-05-03T17:00:00Z", timeZone: "UTC" }, end: { dateTime: "2026-05-03T17:30:00Z", timeZone: "UTC" },
     location: { displayName: "Zoom" }, organizer: { emailAddress: { name: "Jeff", address: "jeff@test.com" } }, attendees: [], responseStatus: { response: "accepted" }, showAs: "busy" },
 ]});
+const EVENTS_WITH_BODY_RESPONSE = JSON.stringify({ value: [
+  { subject: "Team Standup", start: { dateTime: "2026-05-03T17:00:00Z", timeZone: "UTC" }, end: { dateTime: "2026-05-03T17:30:00Z", timeZone: "UTC" },
+    location: { displayName: "Zoom" }, organizer: { emailAddress: { name: "Jeff", address: "jeff@test.com" } }, attendees: [], responseStatus: { response: "accepted" }, showAs: "busy",
+    body: { contentType: "html", content: "<div>Agenda&nbsp;item 1<br>https://teams.example/join</div>" } },
+]});
 
 describe("plugin entry", () => {
   it("has correct id and name", async () => {
@@ -71,7 +76,20 @@ describe("outlook_calendar_fetch", () => {
     mockHttps(EVENTS_RESPONSE);
     const { api } = await loadPlugin();
     const data = resultText(await api.tools["outlook_calendar_fetch"].execute("id", { calendar: "personal", days: 7 })) as Record<string, unknown>;
-    // Should return a personal key with events array (even if empty due to mock ordering)
     expect(data).toHaveProperty("personal");
+  });
+
+  it("includes plain-text body content when an event description exists", async () => {
+    process.env.OUTLOOK_CLIENT_ID = "cid";
+    process.env.OUTLOOK_CLIENT_SECRET = "csec";
+    process.env.OUTLOOK_REFRESH_TOKEN = "rtoken";
+    mockHttps(TOKEN_RESPONSE);
+    mockHttps(CALENDARS_RESPONSE);
+    mockHttps(EVENTS_WITH_BODY_RESPONSE);
+    const { api } = await loadPlugin();
+    const data = resultText(await api.tools["outlook_calendar_fetch"].execute("id", { calendar: "personal", days: 7 })) as {
+      personal: { events: Array<Record<string, unknown>> };
+    };
+    expect(data.personal.events[0]?.body).toBe("Agenda item 1 https://teams.example/join");
   });
 });
