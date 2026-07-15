@@ -16,8 +16,13 @@
     "playwright": "^1.48.0"
   },
   "devDependencies": {
+<<<<<<< HEAD
+    "typescript": "^6",
+    "@types/node": "^26",
+=======
     "typescript": "^7",
     "@types/node": "^25",
+>>>>>>> origin/main
     "tsup": "^8.3.0"
   },
   "openclaw": {
