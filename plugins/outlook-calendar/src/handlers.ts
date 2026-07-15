@@ -93,6 +93,8 @@ function formatEvent(e: Record<string, unknown>): Record<string, unknown> {
     my_status: ((e.responseStatus as Record<string, string>)?.response ?? "none"), show_as: String(e.showAs ?? "busy"),
   };
   if (attendees.length) result.attendees = attendees;
+  const bodyContent = ((e.body as Record<string, string>)?.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  if (bodyContent) result.body = bodyContent;
   return result;
 }
 
@@ -127,7 +129,7 @@ export async function fetchCalendar(
     const searchNames = calendarSearchNames(config, key);
     const calId = searchNames.map(n => calMap[n]).find(Boolean);
     if (!calId) { results[key] = { label: key, error: `Calendar not found. Available: ${Object.keys(calMap).join(", ")}`, events: [] }; continue; }
-    const qp = new URLSearchParams({ "$select": "subject,start,end,location,organizer,attendees,responseStatus,showAs", "$orderby": "start/dateTime", "$top": "100", "startDateTime": `${start}T00:00:00`, "endDateTime": `${end}T00:00:00` }).toString();
+    const qp = new URLSearchParams({ "$select": "subject,start,end,location,organizer,attendees,responseStatus,showAs,body", "$orderby": "start/dateTime", "$top": "100", "startDateTime": `${start}T00:00:00`, "endDateTime": `${end}T00:00:00` }).toString();
     const evData = await graphGet(token, `/me/calendars/${calId}/calendarView?${qp}`) as { value: Array<Record<string, unknown>> };
     const events = (evData.value ?? []).map(formatEvent);
     results[key] = { label: key === "personal" ? "Personal" : "Family", count: events.length, start_date: start, end_date: end, events };
