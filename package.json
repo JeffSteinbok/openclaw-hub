@@ -6,6 +6,7 @@
   "workspaces": [
     "libs/ts/mail_action_usps",
     "services/fastmail-sse",
+    "services/config-watchdog",
     "plugins/fastmail",
     "plugins/glances",
     "plugins/goodreads",

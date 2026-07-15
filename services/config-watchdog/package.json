@@ -1,0 +1,23 @@
+{
+  "name": "@openclaw/config-watchdog",
+  "version": "1.0.0",
+  "description": "Watches the OpenClaw config file, rotates backups, and auto-recovers the gateway if a bad config is detected.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "node --watch dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^7"
+  }
+}

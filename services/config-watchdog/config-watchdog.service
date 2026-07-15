@@ -1,0 +1,20 @@
+[Unit]
+Description=OpenClaw Config Watchdog
+After=openclaw-gateway.service
+Wants=openclaw-gateway.service
+
+[Service]
+ExecStart=/usr/bin/node /home/openclaw/git/openclaw-hub/services/config-watchdog/dist/index.js
+Restart=always
+RestartSec=5
+EnvironmentFile=-/home/openclaw/.openclaw/gateway.systemd.env
+Environment=HOME=/home/openclaw
+Environment=TMPDIR=/tmp
+Environment=PATH=/usr/bin:/usr/local/bin:/bin:/home/openclaw/.local/bin:/home/openclaw/.npm-global/bin:/home/openclaw/bin
+Environment=OPENCLAW_SYSTEMD_UNIT=openclaw-gateway.service
+Environment=OPENCLAW_GATEWAY_PORT=18789
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
