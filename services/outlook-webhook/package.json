@@ -1,21 +1,13 @@
 {
-  "name": "@openclaw/mail-action-usps",
+  "name": "@openclaw/outlook-webhook",
   "version": "1.0.0",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "import": "./dist/index.js"
-    },
-    "./rules": {
-      "types": "./src/rules.ts",
-      "import": "./dist/rules.js"
-    },
-    "./memory": {
-      "types": "./src/memory.ts",
-      "import": "./dist/memory.js"
+      "import": "./src/index.ts"
     }
   },
   "scripts": {
@@ -26,13 +18,8 @@
     "carapace-mail-runtime": "github:JeffSteinbok/carapace-mail-runtime#175b1663fd7e2bac256a550b05e94b5532cf4765"
   },
   "devDependencies": {
-<<<<<<< HEAD
-    "@types/node": "^26.1.1",
+    "@types/node": "^25.9.1",
     "typescript": "^6",
-=======
-    "@types/node": "^26",
-    "typescript": "^7",
->>>>>>> origin/main
     "vitest": "^4.1.9"
   }
 }
