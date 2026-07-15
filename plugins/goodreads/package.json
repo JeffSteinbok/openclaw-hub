@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "carapace-plugin-sdk": "^1.0.3",
-    "@sinclair/typebox": "^0.34.49",
+    "@sinclair/typebox": "^0.34.52",
     "playwright": "^1.48.0"
   },
   "devDependencies": {

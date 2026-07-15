@@ -11,14 +11,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.49",
+    "@sinclair/typebox": "^0.34.52",
     "carapace-plugin-sdk": "^1.0.3"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
     "tsup": "^8.3.0",
     "typescript": "^7",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
     "openclaw": "^2026.4.23"
