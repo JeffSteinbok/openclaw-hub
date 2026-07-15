@@ -13,8 +13,13 @@
   "devDependencies": {
     "@types/node": "^26.1.0",
     "tsup": "^8.3.0",
+<<<<<<< HEAD
     "typescript": "^6",
     "vitest": "^4.1.10"
+=======
+    "typescript": "^7",
+    "vitest": "^4.1.9"
+>>>>>>> origin/main
   },
   "openclaw": {
     "extensions": [
