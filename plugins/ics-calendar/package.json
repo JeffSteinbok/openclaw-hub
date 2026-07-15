@@ -10,10 +10,15 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/node": "^26.1.1",
     "carapace-plugin-sdk": "^1.0.3",
+<<<<<<< HEAD
+=======
     "typescript": "^7",
     "@types/node": "^26",
+>>>>>>> origin/main
     "tsup": "^8.3.0",
+    "typescript": "^6",
     "vitest": "^4.1.9"
   },
   "openclaw": {
