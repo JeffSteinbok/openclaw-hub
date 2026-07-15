@@ -12,18 +12,13 @@
   },
   "dependencies": {
     "carapace-plugin-sdk": "^1.0.3",
-    "@sinclair/typebox": "^0.34.49",
+    "@sinclair/typebox": "^0.34.52",
     "playwright": "^1.48.0"
   },
   "devDependencies": {
-<<<<<<< HEAD
-    "typescript": "^6",
-    "@types/node": "^26",
-=======
-    "typescript": "^7",
-    "@types/node": "^25",
->>>>>>> origin/main
-    "tsup": "^8.3.0"
+    "@types/node": "^26.1.1",
+    "tsup": "^8.3.0",
+    "typescript": "^7"
   },
   "openclaw": {
     "extensions": [
