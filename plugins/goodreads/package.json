@@ -16,7 +16,7 @@
     "playwright": "^1.48.0"
   },
   "devDependencies": {
-    "typescript": "^6",
+    "typescript": "^7",
     "@types/node": "^25",
     "tsup": "^8.3.0"
   },
