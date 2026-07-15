@@ -94,6 +94,10 @@ export function buildNotificationPlan(
   options?: {
     config?: Record<string, unknown>;
     workspaceAgent?: string;
+    /** Fallback notification channel when routing config has no default. */
+    defaultChannel?: string;
+    /** Fallback notification target when routing config has no default. */
+    defaultTarget?: string;
   },
 ): NotificationEntry[] {
   const opts = options ?? {};
@@ -112,8 +116,8 @@ export function buildNotificationPlan(
   if (!routing || Object.keys(routing).length === 0) {
     routing = {
       default: {
-        channel: process.env.NOTIFY_CHANNEL ?? "discord",
-        target: process.env.NOTIFY_TARGET ?? "",
+        channel: opts.defaultChannel ?? defaultChannel,
+        target: opts.defaultTarget ?? "",
       },
     };
   }
@@ -187,7 +191,7 @@ export function buildNotificationPlan(
 export function routeAndNotify(
   dateStr: string,
   items: Array<Record<string, unknown>>,
-  options?: { dryRun?: boolean; workspaceAgent?: string },
+  options?: { dryRun?: boolean; workspaceAgent?: string; defaultChannel?: string; defaultTarget?: string },
 ): NotificationEntry[] {
   const opts = options ?? {};
   if (!opts.workspaceAgent) {
@@ -195,6 +199,8 @@ export function routeAndNotify(
   }
   const plan = buildNotificationPlan(dateStr, items, {
     workspaceAgent: opts.workspaceAgent,
+    defaultChannel: opts.defaultChannel,
+    defaultTarget: opts.defaultTarget,
   });
   const results: NotificationEntry[] = [];
   for (const entry of plan) {

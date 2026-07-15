@@ -90,6 +90,8 @@ export async function processUspsDigestAction(
     workspaceAgent: params.workspace_agent as string,
     memoryAgent: params.memory_agent as string,
     visionAgent: params.vision_agent as string,
+    defaultChannel: params.notify_channel as string | undefined,
+    defaultTarget: params.notify_target as string | undefined,
   });
 
   if (result.error) {

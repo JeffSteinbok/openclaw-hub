@@ -77,6 +77,10 @@ export interface ProcessDigestOptions {
   workspaceAgent?: string;
   memoryAgent?: string;
   visionAgent?: string;
+  /** Fallback notification channel when routing config has no default. */
+  defaultChannel?: string;
+  /** Fallback notification target when routing config has no default. */
+  defaultTarget?: string;
 }
 
 /**
@@ -99,6 +103,8 @@ export async function processDigest(
     workspaceAgent,
     memoryAgent,
     visionAgent,
+    defaultChannel,
+    defaultTarget,
   } = options;
 
   if (!workspaceAgent) {
@@ -194,13 +200,15 @@ export async function processDigest(
   const notificationPlan = buildNotificationPlan(
     dateStr,
     Object.values(items),
-    { workspaceAgent },
+    { workspaceAgent, defaultChannel, defaultTarget },
   );
   let notifications: unknown[] = [];
   if (sendNotifications) {
     notifications = routeAndNotify(dateStr, Object.values(items), {
       dryRun,
       workspaceAgent,
+      defaultChannel,
+      defaultTarget,
     });
   }
 
