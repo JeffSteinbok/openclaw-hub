@@ -147,10 +147,19 @@ function formatEvent(e: Record<string, unknown>): Record<string, unknown> {
     my_status: ((e.responseStatus as Record<string, string>)?.response ?? "none"), show_as: String(e.showAs ?? "busy"),
   };
   if (attendees.length) result.attendees = attendees;
-  const bodyContent = (e.body as Record<string, string> | undefined)?.content;
+  const bodyObj = e.body as Record<string, string> | undefined;
+  const bodyContent = bodyObj?.content;
+  const bodyType = bodyObj?.contentType ?? "html";
   if (bodyContent && bodyContent.trim()) {
-    const stripped = bodyContent.replace(/<[^>]+>/g, " ");
-    const plainText = stripped.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
+    let plainText: string;
+    if (bodyType === "text") {
+      plainText = bodyContent.replace(/\s+/g, " ").trim();
+    } else {
+      // HTML body: strip tags first, then collapse whitespace only.
+      // Entity sequences (&amp; &lt; etc.) are left as-is — they are HTML
+      // artefacts that don't need unescaping for plain-text display.
+      plainText = bodyContent.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    }
     if (plainText.length > 0) result.body = plainText;
   }
   return result;
