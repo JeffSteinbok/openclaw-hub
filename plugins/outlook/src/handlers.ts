@@ -160,6 +160,13 @@ function calendarSearchNames(config: OutlookCalendarConfig, key: string): string
   return [...extraNames, ...CALENDAR_DEFAULTS[key]];
 }
 
+
+// ---------------------------------------------------------------------------
+// Unified config (superset of mail + calendar configs)
+// ---------------------------------------------------------------------------
+
+export type OutlookConfig = OutlookCalendarConfig;
+export type OutlookMailConfig = OutlookConfig;
 /** Resolve ISO datetime + optional timezone into a Graph dateTimeTimeZone object. */
 function toGraphDateTime(isoStr: string, timezone: string): { dateTime: string; timeZone: string } {
   // Strip any trailing Z or offset — Graph wants wall-clock in the given tz
@@ -526,4 +533,235 @@ export async function queryEvents(
   }
 
   return { count: events.length, events };
+}
+export async function getInbox(
+  config: OutlookMailConfig,
+  params: { limit?: number; unread?: boolean; folder?: string },
+): Promise<unknown> {
+  const { clientId, clientSecret, refreshToken } = config;
+  if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
+  const token = await getToken(clientId, clientSecret, refreshToken);
+  const limit = params.limit ?? 10;
+  const folder = params.folder ?? "inbox";
+  let path = `/me/mailFolders/${encodeURIComponent(folder)}/messages?$top=${limit}&$select=subject,from,receivedDateTime,isRead,hasAttachments,bodyPreview&$orderby=receivedDateTime%20desc`;
+  if (params.unread) path += "&$filter=isRead%20eq%20false";
+  const data = await graphGet(token, path) as { value: Array<Record<string, unknown>> };
+  return { messages: (data.value ?? []).map(m => formatMessage(m, true)), count: data.value?.length ?? 0 };
+}
+
+export async function searchMail(
+  config: OutlookMailConfig,
+  params: { query?: string; from?: string; subject?: string; since?: string; before?: string; limit?: number },
+): Promise<unknown> {
+  const { clientId, clientSecret, refreshToken } = config;
+  if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
+  const token = await getToken(clientId, clientSecret, refreshToken);
+  const limit = params.limit ?? 10;
+  const filters: string[] = [];
+  if (params.from) filters.push(`from/emailAddress/address eq '${esc(String(params.from))}'`);
+  if (params.subject) filters.push(`contains(subject,'${esc(String(params.subject))}')`);
+  if (params.since) filters.push(`receivedDateTime ge ${params.since}T00:00:00Z`);
+  if (params.before) filters.push(`receivedDateTime le ${params.before}T00:00:00Z`);
+  const base = `/me/messages?$top=${limit}&$select=subject,from,receivedDateTime,isRead,bodyPreview&$orderby=receivedDateTime%20desc`;
+  const path = filters.length ? `${base}&$filter=${encodeURIComponent(filters.join(" and "))}` : base;
+  const data = await graphGet(token, path) as { value: Array<Record<string, unknown>> };
+  return { messages: (data.value ?? []).map(m => formatMessage(m, true)), count: data.value?.length ?? 0 };
+}
+
+export async function readMessage(
+  config: OutlookMailConfig,
+  params: { message_id: string },
+): Promise<unknown> {
+  const { clientId, clientSecret, refreshToken } = config;
+  if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
+  const token = await getToken(clientId, clientSecret, refreshToken);
+  const msgId = params.message_id?.trim();
+  if (!msgId) return { error: "message_id is required" };
+  const data = await graphGet(token, `/me/messages/${encodeURIComponent(msgId)}`) as Record<string, unknown>;
+  const body = (data.body as Record<string, string> | undefined);
+  return { ...formatMessage(data), body: body?.content ?? "", content_type: body?.contentType ?? "" };
+}
+
+export async function saveAttachments(
+  config: OutlookMailConfig,
+  params: { message_id: string; output_dir: string; content_types?: string[] },
+): Promise<unknown> {
+  const { default: fs } = await import("node:fs");
+  const { default: path } = await import("node:path");
+  const { clientId, clientSecret, refreshToken } = config;
+  if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
+  const token = await getToken(clientId, clientSecret, refreshToken);
+  const msgId = params.message_id?.trim();
+  const outputDir = params.output_dir?.trim();
+  if (!msgId) return { error: "message_id is required" };
+  if (!outputDir) return { error: "output_dir is required" };
+  const filters = params.content_types ?? ["image/*"];
+  fs.mkdirSync(outputDir, { recursive: true });
+  const attData = await graphGet(token, `/me/messages/${encodeURIComponent(msgId)}/attachments`) as { value: Array<Record<string, unknown>> };
+  const saved: string[] = [];
+  for (const att of attData.value ?? []) {
+    const ct = String(att.contentType ?? "");
+    const matches = filters.some(f => { if (f.endsWith("/*")) return ct.startsWith(f.slice(0, -1)); return ct === f; });
+    if (!matches) continue;
+    const name = String(att.name ?? "attachment");
+    const safe = path.basename(name).replace(/[/\\]/g, "_") || "attachment";
+    const dest = path.join(outputDir, safe);
+    const content = String(att.contentBytes ?? "");
+    fs.writeFileSync(dest, Buffer.from(content, "base64"));
+    saved.push(dest);
+  }
+  return { saved, count: saved.length };
+}
+
+// ---------------------------------------------------------------------------
+// Send / Reply / Forward / Move / Flag handlers
+// ---------------------------------------------------------------------------
+
+export async function sendMessage(
+  config: OutlookMailConfig,
+  params: {
+    to: string | string[];
+    cc?: string[];
+    subject: string;
+    body: string;
+    signature?: string;
+    attachment?: string[];
+    in_reply_to?: string;
+    references?: string;
+  },
+): Promise<unknown> {
+  const { clientId, clientSecret, refreshToken } = config;
+  if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
+  if (!params.subject?.trim()) return { error: "subject is required" };
+  if (!params.body?.trim()) return { error: "body is required" };
+
+  const token = await getToken(clientId, clientSecret, refreshToken);
+  const toList = Array.isArray(params.to) ? params.to : [params.to];
+  if (!toList.length) return { error: "to is required" };
+
+  const bodyText = params.signature ? `${params.body}\n\n${params.signature}` : params.body;
+  const message: Record<string, unknown> = {
+    subject: params.subject,
+    body: { contentType: "Text", content: bodyText },
+    toRecipients: toList.map(e => ({ emailAddress: { address: e.trim() } })),
+  };
+  if (params.cc?.length) {
+    message.ccRecipients = params.cc.map(e => ({ emailAddress: { address: e.trim() } }));
+  }
+  if (params.in_reply_to) {
+    message.internetMessageHeaders = [{ name: "In-Reply-To", value: params.in_reply_to }];
+  }
+
+  if (params.attachment?.length) {
+    const { readFile } = await import("node:fs/promises");
+    const { basename } = await import("node:path");
+    const attachments: Array<Record<string, unknown>> = [];
+    for (const filepath of params.attachment) {
+      const data = await readFile(filepath);
+      attachments.push({
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        name: basename(filepath),
+        contentBytes: data.toString("base64"),
+      });
+    }
+    message.attachments = attachments;
+  }
+
+  // Create draft message then send it
+  const createRes = await graphPost(token, "/me/messages", message) as Record<string, unknown>;
+  if (createRes.error) return { error: JSON.stringify(createRes.error) };
+  const msgId = String(createRes.id ?? "");
+  if (!msgId) return { error: "Failed to create draft message" };
+
+  await httpPostEmpty(`${GRAPH_BASE}/me/messages/${encodeURIComponent(msgId)}/send`, token);
+
+  const attNote = params.attachment?.length ? ` (${params.attachment.length} attachment(s))` : "";
+  return { ok: true, message: `✓ Sent to ${toList.join(", ")}: ${params.subject}${attNote}` };
+}
+
+export async function replyToMessage(
+  config: OutlookMailConfig,
+  params: {
+    message_id: string;
+    body: string;
+    reply_all?: boolean;
+    signature?: string;
+  },
+): Promise<unknown> {
+  const { clientId, clientSecret, refreshToken } = config;
+  if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
+  const msgId = params.message_id?.trim();
+  if (!msgId) return { error: "message_id is required" };
+  if (!params.body?.trim()) return { error: "body is required" };
+
+  const token = await getToken(clientId, clientSecret, refreshToken);
+  const bodyText = params.signature ? `${params.body}\n\n${params.signature}` : params.body;
+  const endpoint = params.reply_all
+    ? `/me/messages/${encodeURIComponent(msgId)}/replyAll`
+    : `/me/messages/${encodeURIComponent(msgId)}/reply`;
+
+  const payload = {
+    message: { body: { contentType: "Text", content: bodyText } },
+    comment: bodyText,
+  };
+  const res = await graphPost(token, endpoint, payload) as Record<string, unknown>;
+  if (res.error) return { error: JSON.stringify(res.error) };
+  return { ok: true, message: `✓ Reply sent${params.reply_all ? " (reply-all)" : ""}` };
+}
+
+export async function forwardMessage(
+  config: OutlookMailConfig,
+  params: {
+    message_id: string;
+    to: string | string[];
+    comment?: string;
+  },
+): Promise<unknown> {
+  const { clientId, clientSecret, refreshToken } = config;
+  if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
+  const msgId = params.message_id?.trim();
+  if (!msgId) return { error: "message_id is required" };
+  const toList = Array.isArray(params.to) ? params.to : [params.to];
+  if (!toList.length) return { error: "to is required" };
+
+  const token = await getToken(clientId, clientSecret, refreshToken);
+  const payload: Record<string, unknown> = {
+    toRecipients: toList.map(e => ({ emailAddress: { address: e.trim() } })),
+  };
+  if (params.comment) payload.comment = params.comment;
+
+  const res = await graphPost(token, `/me/messages/${encodeURIComponent(msgId)}/forward`, payload) as Record<string, unknown>;
+  if (res.error) return { error: JSON.stringify(res.error) };
+  return { ok: true, message: `✓ Forwarded to ${toList.join(", ")}` };
+}
+
+export async function moveMessage(
+  config: OutlookMailConfig,
+  params: { message_id: string; destination_folder: string },
+): Promise<unknown> {
+  const { clientId, clientSecret, refreshToken } = config;
+  if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
+  const msgId = params.message_id?.trim();
+  if (!msgId) return { error: "message_id is required" };
+  if (!params.destination_folder?.trim()) return { error: "destination_folder is required" };
+
+  const token = await getToken(clientId, clientSecret, refreshToken);
+  const res = await graphPost(token, `/me/messages/${encodeURIComponent(msgId)}/move`, { destinationId: params.destination_folder }) as Record<string, unknown>;
+  if (res.error) return { error: JSON.stringify(res.error) };
+  return { ok: true, new_id: res.id ?? null };
+}
+
+export async function flagMessage(
+  config: OutlookMailConfig,
+  params: { message_id: string; flag_status: "flagged" | "complete" | "notFlagged" },
+): Promise<unknown> {
+  const { clientId, clientSecret, refreshToken } = config;
+  if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
+  const msgId = params.message_id?.trim();
+  if (!msgId) return { error: "message_id is required" };
+
+  const token = await getToken(clientId, clientSecret, refreshToken);
+  const res = await graphPatch(token, `/me/messages/${encodeURIComponent(msgId)}`, { flag: { flagStatus: params.flag_status } }) as Record<string, unknown>;
+  if (res.error) return { error: JSON.stringify(res.error) };
+  return { ok: true, flag_status: params.flag_status };
 }
