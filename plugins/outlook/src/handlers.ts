@@ -107,7 +107,7 @@ async function getAccessToken(clientId: string, clientSecret: string, refreshTok
     client_secret: clientSecret,
     refresh_token: refreshToken,
     grant_type: "refresh_token",
-    scope: "Calendars.ReadWrite",
+    scope: "Calendars.ReadWrite Mail.ReadWrite Mail.Send offline_access",
   }).toString();
   const res = await httpPost(TOKEN_URL, body, { "Content-Type": "application/x-www-form-urlencoded" });
   const parsed = JSON.parse(res);
