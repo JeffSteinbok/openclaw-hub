@@ -204,5 +204,58 @@ export const createEntry = definePlugin({
         }
       },
     }),
+
+    tool({
+      name: "outlook_move",
+      label: "Outlook Move Message",
+      description: "Move an Outlook message to a different mail folder.",
+      parameters: Type.Object({
+        message_id: Type.String({ description: "The Microsoft Graph message ID to move." }),
+        destination_folder: Type.String({ description: "Target folder name or well-known folder name (inbox, archive, deleteditems, junkemail, sentitems, drafts)." }),
+      }),
+      async execute({ message_id, destination_folder }, config) {
+        try {
+          const resolvedConfig: OutlookMailConfig = {
+            clientId: String(config.clientId ?? process.env.OUTLOOK_CLIENT_ID ?? ""),
+            clientSecret: String(config.clientSecret ?? process.env.OUTLOOK_CLIENT_SECRET ?? ""),
+            refreshToken: String(config.refreshToken ?? process.env.OUTLOOK_REFRESH_TOKEN ?? ""),
+          };
+          return await moveMessage(resolvedConfig, {
+            message_id: String(message_id ?? ""),
+            destination_folder: String(destination_folder ?? ""),
+          });
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      },
+    }),
+
+    tool({
+      name: "outlook_flag",
+      label: "Outlook Flag Message",
+      description: "Flag, complete, or unflag an Outlook message.",
+      parameters: Type.Object({
+        message_id: Type.String({ description: "The Microsoft Graph message ID to flag." }),
+        flag_status: Type.Union(
+          [Type.Literal("flagged"), Type.Literal("complete"), Type.Literal("notFlagged")],
+          { description: "Flag status: 'flagged', 'complete', or 'notFlagged'." },
+        ),
+      }),
+      async execute({ message_id, flag_status }, config) {
+        try {
+          const resolvedConfig: OutlookMailConfig = {
+            clientId: String(config.clientId ?? process.env.OUTLOOK_CLIENT_ID ?? ""),
+            clientSecret: String(config.clientSecret ?? process.env.OUTLOOK_CLIENT_SECRET ?? ""),
+            refreshToken: String(config.refreshToken ?? process.env.OUTLOOK_REFRESH_TOKEN ?? ""),
+          };
+          return await flagMessage(resolvedConfig, {
+            message_id: String(message_id ?? ""),
+            flag_status: flag_status as "flagged" | "complete" | "notFlagged",
+          });
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      },
+    }),
   ],
 });
