@@ -1,10 +1,10 @@
 {
-  "name": "outlook-mail",
-  "version": "1.0.1",
+  "name": "outlook",
+  "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "outlook-mail": "./dist/bin/outlook-mail.js"
+    "outlook": "./dist/bin/outlook.js"
   },
   "scripts": {
     "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
