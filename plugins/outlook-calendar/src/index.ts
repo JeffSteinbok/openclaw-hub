@@ -9,6 +9,8 @@ import {
   createEvent,
   updateEvent,
   deleteEvent,
+  createMeeting,
+  queryEvents,
   type OutlookCalendarConfig,
 } from "./handlers.js";
 
@@ -115,6 +117,50 @@ export const createEntry = definePlugin({
         try {
           const pluginConfig = resolveConfig(config);
           return await deleteEvent(pluginConfig, params);
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      },
+    }),
+    tool({
+      name: "outlook_meeting",
+      label: "Outlook Create Meeting",
+      description: "Create a calendar meeting invite via Microsoft Graph and send invitations to attendees.",
+      parameters: Type.Object({
+        to: Type.Union([Type.String(), Type.Array(Type.String())], { description: "Attendee email address(es)." }),
+        cc: Type.Optional(Type.Array(Type.String(), { description: "Optional attendees (will be marked as optional)." })),
+        subject: Type.String({ description: "Meeting title." }),
+        start: Type.String({ description: "Start datetime in ISO format (e.g. 2026-03-15T14:00)." }),
+        duration: Type.Optional(Type.String({ description: "Duration: '1h', '30m', '1.5h' (default: 1h)." })),
+        end: Type.Optional(Type.String({ description: "End datetime in ISO format. Overrides duration." })),
+        timezone: Type.Optional(Type.String({ description: "IANA timezone (default: America/Los_Angeles)." })),
+        location: Type.Optional(Type.String({ description: "Meeting location." })),
+        description: Type.Optional(Type.String({ description: "Meeting description / agenda." })),
+        signature: Type.Optional(Type.String({ description: "Signature block for the invite email." })),
+      }),
+      async execute(params, config) {
+        try {
+          return await createMeeting(resolveConfig(config), params);
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      },
+    }),
+
+    tool({
+      name: "outlook_query_events",
+      label: "Outlook Query Events",
+      description: "Query calendar events by date range, text, attendee email, or iCalUId.",
+      parameters: Type.Object({
+        after: Type.Optional(Type.String({ description: "Only events starting at or after this date (ISO, e.g. 2026-03-01)." })),
+        before: Type.Optional(Type.String({ description: "Only events starting before this date (ISO, e.g. 2026-04-01)." })),
+        text: Type.Optional(Type.String({ description: "Filter by text match on title." })),
+        attendee: Type.Optional(Type.String({ description: "Filter to events including this attendee email." })),
+        uid: Type.Optional(Type.String({ description: "Return the single event with this exact iCalUId." })),
+      }),
+      async execute(params, config) {
+        try {
+          return await queryEvents(resolveConfig(config), params);
         } catch (e) {
           return { error: (e as Error).message };
         }

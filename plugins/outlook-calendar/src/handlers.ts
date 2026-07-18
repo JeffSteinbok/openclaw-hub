@@ -411,3 +411,119 @@ export async function deleteEvent(
   }
   return { success: true, event_id: params.event_id };
 }
+
+// ---------------------------------------------------------------------------
+// createMeeting — send invite to attendees
+// ---------------------------------------------------------------------------
+
+export interface CreateMeetingParams {
+  to: string | string[];
+  cc?: string[];
+  subject: string;
+  start: string;
+  duration?: string;
+  end?: string;
+  location?: string;
+  description?: string;
+  timezone?: string;
+  signature?: string;
+}
+
+export async function createMeeting(
+  config: OutlookCalendarConfig,
+  params: CreateMeetingParams,
+): Promise<unknown> {
+  const { clientId, clientSecret, refreshToken } = config;
+  if (!clientId || !clientSecret || !refreshToken) {
+    return { error: "OUTLOOK_CLIENT_ID, OUTLOOK_CLIENT_SECRET, OUTLOOK_REFRESH_TOKEN must be set" };
+  }
+  const token = await getAccessToken(clientId, clientSecret, refreshToken);
+  const tz = params.timezone ?? "America/Los_Angeles";
+  const start = toGraphDateTime(params.start, tz);
+  const endDt = params.end
+    ? toGraphDateTime(params.end, tz)
+    : { dateTime: addMinutes(params.start, parseDurationMinutes(params.duration ?? "1h")), timeZone: tz };
+
+  const toList = Array.isArray(params.to) ? params.to : [params.to];
+  const ccList = params.cc ?? [];
+  const attendees = [
+    ...toList.map(e => ({ emailAddress: { address: e }, type: "required" })),
+    ...ccList.map(e => ({ emailAddress: { address: e }, type: "optional" })),
+  ];
+
+  const body: Record<string, unknown> = {
+    subject: params.subject,
+    start,
+    end: endDt,
+    attendees,
+    ...(params.location ? { location: { displayName: params.location } } : {}),
+    ...(params.description ? { body: { contentType: "Text", content: params.description } } : {}),
+  };
+
+  const res = await httpPostJson(`${GRAPH_BASE}/me/events`, JSON.stringify(body), token);
+  const created = JSON.parse(res) as Record<string, unknown>;
+  if (created.error) return { error: JSON.stringify(created.error) };
+  return {
+    ok: true,
+    id: created.id,
+    iCalUId: created.iCalUId,
+    subject: created.subject,
+    start: (created.start as Record<string, string>)?.dateTime,
+    end: (created.end as Record<string, string>)?.dateTime,
+    webLink: created.webLink,
+    message: `✓ Meeting created: ${params.subject}`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// queryEvents — filter events by date range / text / attendee / UID
+// ---------------------------------------------------------------------------
+
+export interface QueryEventsParams {
+  after?: string;
+  before?: string;
+  text?: string;
+  attendee?: string;
+  uid?: string;
+}
+
+export async function queryEvents(
+  config: OutlookCalendarConfig,
+  params: QueryEventsParams,
+): Promise<unknown> {
+  const { clientId, clientSecret, refreshToken } = config;
+  if (!clientId || !clientSecret || !refreshToken) {
+    return { error: "OUTLOOK_CLIENT_ID, OUTLOOK_CLIENT_SECRET, OUTLOOK_REFRESH_TOKEN must be set" };
+  }
+  const token = await getAccessToken(clientId, clientSecret, refreshToken);
+
+  const esc = (s: string) => s.replace(/'/g, "''");
+
+  if (params.uid) {
+    const res = await graphGet(token, `/me/events?$filter=iCalUId eq '${esc(params.uid)}'`) as { value: Array<Record<string, unknown>> };
+    return { events: (res.value ?? []).map(formatEvent) };
+  }
+
+  const filters: string[] = [];
+  if (params.after) filters.push(`start/dateTime ge '${params.after}T00:00:00'`);
+  if (params.before) filters.push(`end/dateTime le '${params.before}T23:59:59'`);
+  if (params.text) filters.push(`contains(subject,'${esc(params.text)}')`);
+
+  const qs = filters.length
+    ? `?$filter=${encodeURIComponent(filters.join(" and "))}&$top=50&$orderby=start/dateTime`
+    : `?$top=20&$orderby=start/dateTime`;
+
+  const res = await graphGet(token, `/me/events${qs}`) as { value: Array<Record<string, unknown>> };
+  let events = (res.value ?? []).map(formatEvent);
+
+  if (params.attendee) {
+    const att = params.attendee.toLowerCase();
+    events = events.filter(e =>
+      (e.attendees as Array<Record<string, string>>)?.some(
+        (a: Record<string, string>) => a.email?.toLowerCase() === att,
+      ),
+    );
+  }
+
+  return { count: events.length, events };
+}
