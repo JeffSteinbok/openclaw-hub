@@ -38,9 +38,9 @@ beforeEach(() => {
 
 describe("plugin entry", () => {
   it("has correct id and name", async () => { const { entry } = await loadPlugin(); expect(entry.id).toBe("outlook-mail"); });
-  it("registers all 4 tools", async () => {
+  it("registers all 8 tools", async () => {
     const { api } = await loadPlugin();
-    expect(Object.keys(api.tools).sort()).toEqual(["outlook_inbox","outlook_read","outlook_save_attachments","outlook_search"]);
+    expect(Object.keys(api.tools).sort()).toEqual(["outlook_inbox","outlook_meeting","outlook_query_events","outlook_read","outlook_save_attachments","outlook_search","outlook_send","outlook_update_event"]);
   });
 });
 
