@@ -257,6 +257,38 @@ describe("outlook_create_event", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Calendar: outlook_meeting
+// ---------------------------------------------------------------------------
+
+describe("outlook_meeting", () => {
+  it("returns error when subject missing", async () => {
+    const { api } = await loadPlugin();
+    const data = resultText(await api.tools["outlook_meeting"].execute("id", { to: "a@b.com", start: "2026-08-01T10:00" }));
+    expect(data).toHaveProperty("error");
+  });
+
+  it("creates a meeting and returns ok", async () => {
+    const CREATED = JSON.stringify({
+      id: "mtg-1", iCalUId: "uid-1", subject: "Team Sync",
+      start: { dateTime: "2026-08-01T17:00:00.0000000", timeZone: "UTC" },
+      end: { dateTime: "2026-08-01T17:30:00.0000000", timeZone: "UTC" },
+      webLink: "https://outlook.live.com/owa/?itemid=mtg-1",
+    });
+    mockHttpsSeq([TOKEN, 200], [CREATED, 201]);
+    const { api } = await loadPlugin();
+    const data = resultText(await api.tools["outlook_meeting"].execute("id", {
+      to: "jeff@steinbok.net",
+      subject: "Team Sync",
+      start: "2026-08-01T10:00",
+      duration: "30m",
+    })) as Record<string, unknown>;
+    expect(data.ok).toBe(true);
+    expect(data.subject).toBe("Team Sync");
+    expect(data.id).toBe("mtg-1");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Calendar: outlook_query_events
 // ---------------------------------------------------------------------------
 
