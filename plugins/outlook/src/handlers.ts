@@ -541,8 +541,12 @@ export async function createMeeting(
     ...(params.description ? { body: { contentType: "Text", content: params.description } } : {}),
   };
 
-  const res = await httpPostJson(`${GRAPH_BASE}/me/events`, JSON.stringify(body), token);
-  const created = JSON.parse(res) as Record<string, unknown>;
+  const res = await httpPostJson(`${GRAPH_BASE}/me/events`, token, JSON.stringify(body));
+  if (res.status < 200 || res.status >= 300) {
+    const err = JSON.parse(res.data ?? "{}");
+    return { error: `Graph API error ${res.status}: ${err?.error?.message ?? res.data}` };
+  }
+  const created = JSON.parse(res.data) as Record<string, unknown>;
   if (created.error) return { error: JSON.stringify(created.error) };
   return {
     ok: true,
