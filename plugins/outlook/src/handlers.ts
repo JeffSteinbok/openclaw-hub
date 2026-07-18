@@ -115,9 +115,55 @@ async function getAccessToken(clientId: string, clientSecret: string, refreshTok
   return parsed.access_token;
 }
 
+function httpPatch(url: string, body: string, token: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const headers: Record<string, string | number> = {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "Content-Length": Buffer.byteLength(body),
+    };
+    const req = https.request(url, { method: "PATCH", headers: headers as Record<string, string>, timeout: 30_000 }, res => {
+      let data = ""; res.on("data", (c: Buffer) => data += c); res.on("end", () => resolve(data));
+    });
+    req.on("error", reject); req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
+    req.write(body); req.end();
+  });
+}
+
 async function graphGet(token: string, path: string): Promise<unknown> {
   const res = await httpGet(`${GRAPH_BASE}${path}`, token);
   return JSON.parse(res);
+}
+
+async function graphPost(token: string, path: string, body: unknown): Promise<unknown> {
+  const bodyStr = JSON.stringify(body);
+  const res = await httpPostJson(`${GRAPH_BASE}${path}`, bodyStr, token);
+  if (!res || res.trim() === "") return { success: true };
+  return JSON.parse(res);
+}
+
+async function graphPatch(token: string, path: string, body: unknown): Promise<unknown> {
+  const bodyStr = JSON.stringify(body);
+  const res = await httpPatch(`${GRAPH_BASE}${path}`, bodyStr, token);
+  if (!res || res.trim() === "") return { success: true };
+  return JSON.parse(res);
+}
+
+function esc(s: string): string { return s.replace(/'/g, "''"); }
+
+function formatMessage(m: Record<string, unknown>, includeBody = false): Record<string, unknown> {
+  const from = (m.from as Record<string, Record<string, string>>)?.emailAddress ?? {};
+  const result: Record<string, unknown> = {
+    id: m.id,
+    subject: m.subject ?? "(no subject)",
+    from: `${from.name ?? ""}${from.address ? ` <${from.address}>` : ""}`.trim(),
+    received: String(m.receivedDateTime ?? "").slice(0, 10),
+    is_read: m.isRead,
+    has_attachments: m.hasAttachments,
+  };
+  if (includeBody) result.body_preview = (m.bodyPreview as string ?? "").slice(0, 500);
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -550,7 +596,7 @@ export async function getInbox(
 ): Promise<unknown> {
   const { clientId, clientSecret, refreshToken } = config;
   if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
-  const token = await getToken(clientId, clientSecret, refreshToken);
+  const token = await getAccessToken(clientId, clientSecret, refreshToken);
   const limit = params.limit ?? 10;
   const folder = params.folder ?? "inbox";
   let path = `/me/mailFolders/${encodeURIComponent(folder)}/messages?$top=${limit}&$select=subject,from,receivedDateTime,isRead,hasAttachments,bodyPreview&$orderby=receivedDateTime%20desc`;
@@ -565,7 +611,7 @@ export async function searchMail(
 ): Promise<unknown> {
   const { clientId, clientSecret, refreshToken } = config;
   if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
-  const token = await getToken(clientId, clientSecret, refreshToken);
+  const token = await getAccessToken(clientId, clientSecret, refreshToken);
   const limit = params.limit ?? 10;
   const filters: string[] = [];
   if (params.from) filters.push(`from/emailAddress/address eq '${esc(String(params.from))}'`);
@@ -584,7 +630,7 @@ export async function readMessage(
 ): Promise<unknown> {
   const { clientId, clientSecret, refreshToken } = config;
   if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
-  const token = await getToken(clientId, clientSecret, refreshToken);
+  const token = await getAccessToken(clientId, clientSecret, refreshToken);
   const msgId = params.message_id?.trim();
   if (!msgId) return { error: "message_id is required" };
   const data = await graphGet(token, `/me/messages/${encodeURIComponent(msgId)}`) as Record<string, unknown>;
@@ -600,7 +646,7 @@ export async function saveAttachments(
   const { default: path } = await import("node:path");
   const { clientId, clientSecret, refreshToken } = config;
   if (!clientId) return { error: "OUTLOOK_CLIENT_ID not set" };
-  const token = await getToken(clientId, clientSecret, refreshToken);
+  const token = await getAccessToken(clientId, clientSecret, refreshToken);
   const msgId = params.message_id?.trim();
   const outputDir = params.output_dir?.trim();
   if (!msgId) return { error: "message_id is required" };
@@ -645,7 +691,7 @@ export async function sendMessage(
   if (!params.subject?.trim()) return { error: "subject is required" };
   if (!params.body?.trim()) return { error: "body is required" };
 
-  const token = await getToken(clientId, clientSecret, refreshToken);
+  const token = await getAccessToken(clientId, clientSecret, refreshToken);
   const toList = Array.isArray(params.to) ? params.to : [params.to];
   if (!toList.length) return { error: "to is required" };
 
@@ -704,7 +750,7 @@ export async function replyToMessage(
   if (!msgId) return { error: "message_id is required" };
   if (!params.body?.trim()) return { error: "body is required" };
 
-  const token = await getToken(clientId, clientSecret, refreshToken);
+  const token = await getAccessToken(clientId, clientSecret, refreshToken);
   const bodyText = params.signature ? `${params.body}\n\n${params.signature}` : params.body;
   const endpoint = params.reply_all
     ? `/me/messages/${encodeURIComponent(msgId)}/replyAll`
@@ -734,7 +780,7 @@ export async function forwardMessage(
   const toList = Array.isArray(params.to) ? params.to : [params.to];
   if (!toList.length) return { error: "to is required" };
 
-  const token = await getToken(clientId, clientSecret, refreshToken);
+  const token = await getAccessToken(clientId, clientSecret, refreshToken);
   const payload: Record<string, unknown> = {
     toRecipients: toList.map(e => ({ emailAddress: { address: e.trim() } })),
   };
@@ -755,7 +801,7 @@ export async function moveMessage(
   if (!msgId) return { error: "message_id is required" };
   if (!params.destination_folder?.trim()) return { error: "destination_folder is required" };
 
-  const token = await getToken(clientId, clientSecret, refreshToken);
+  const token = await getAccessToken(clientId, clientSecret, refreshToken);
   const res = await graphPost(token, `/me/messages/${encodeURIComponent(msgId)}/move`, { destinationId: params.destination_folder }) as Record<string, unknown>;
   if (res.error) return { error: JSON.stringify(res.error) };
   return { ok: true, new_id: res.id ?? null };
@@ -770,7 +816,7 @@ export async function flagMessage(
   const msgId = params.message_id?.trim();
   if (!msgId) return { error: "message_id is required" };
 
-  const token = await getToken(clientId, clientSecret, refreshToken);
+  const token = await getAccessToken(clientId, clientSecret, refreshToken);
   const res = await graphPatch(token, `/me/messages/${encodeURIComponent(msgId)}`, { flag: { flagStatus: params.flag_status } }) as Record<string, unknown>;
   if (res.error) return { error: JSON.stringify(res.error) };
   return { ok: true, flag_status: params.flag_status };
