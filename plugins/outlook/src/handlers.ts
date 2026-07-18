@@ -149,7 +149,8 @@ function formatEvent(e: Record<string, unknown>): Record<string, unknown> {
   if (attendees.length) result.attendees = attendees;
   const bodyContent = (e.body as Record<string, string> | undefined)?.content;
   if (bodyContent && bodyContent.trim()) {
-    const plainText = bodyContent.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
+    const stripped = bodyContent.replace(/<[^>]+>/g, " ");
+    const plainText = stripped.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
     if (plainText.length > 0) result.body = plainText;
   }
   return result;
