@@ -6,12 +6,12 @@
 
 import { definePlugin } from "carapace-plugin-sdk";
 import { Type } from "@sinclair/typebox";
-import { getInbox, searchMail, readMessage, saveAttachments, sendMessage, createMeeting, updateEvent, queryEvents, type OutlookMailConfig } from "./handlers.js";
+import { getInbox, searchMail, readMessage, saveAttachments, sendMessage, replyToMessage, forwardMessage, moveMessage, flagMessage, createMeeting, updateEvent, queryEvents, type OutlookMailConfig } from "./handlers.js";
 
 export const createEntry = definePlugin({
   id: "outlook-mail",
   name: "Outlook Mail",
-  description: "Search, read, send messages and manage calendar events in Outlook",
+  description: "Search, read, send, reply to, and forward messages in Outlook",
 
   configSchema: Type.Object({
     clientId: Type.Optional(Type.String({ description: "Microsoft OAuth client ID" })),
@@ -141,8 +141,8 @@ export const createEntry = definePlugin({
         body: Type.String({ description: "Plain-text email body." }),
         signature: Type.Optional(Type.String({ description: "Signature block appended after body." })),
         attachment: Type.Optional(Type.Array(Type.String(), { description: "File path(s) to attach." })),
-        in_reply_to: Type.Optional(Type.String({ description: "Message-ID of the email being replied to (enables threading)." })),
-        references: Type.Optional(Type.String({ description: "Space-separated list of Message-IDs for the References header." })),
+        in_reply_to: Type.Optional(Type.String({ description: "Message-ID of the email being replied to (enables threading). Include angle brackets, e.g. <abc@mail.example.com>." })),
+        references: Type.Optional(Type.String({ description: "Space-separated list of Message-IDs for the full thread References header." })),
       }),
       async execute({ to, cc, subject, body, signature, attachment, in_reply_to, references }, config) {
         try {
@@ -158,6 +158,105 @@ export const createEntry = definePlugin({
       },
     }),
 
+    tool({
+      name: "outlook_reply",
+      label: "Outlook Reply to Message",
+      description: "Reply to an existing Outlook message with proper threading. Handles In-Reply-To and References headers automatically via Microsoft Graph.",
+      parameters: Type.Object({
+        message_id: Type.String({ description: "The Microsoft Graph message ID to reply to." }),
+        body: Type.String({ description: "Reply body text." }),
+        reply_all: Type.Optional(Type.Boolean({ description: "Reply to all recipients (default: false)." })),
+        signature: Type.Optional(Type.String({ description: "Signature block appended after body." })),
+      }),
+      async execute({ message_id, body, reply_all, signature }, config) {
+        try {
+          const resolvedConfig: OutlookMailConfig = {
+            clientId: String(config.clientId ?? process.env.OUTLOOK_CLIENT_ID ?? ""),
+            clientSecret: String(config.clientSecret ?? process.env.OUTLOOK_CLIENT_SECRET ?? ""),
+            refreshToken: String(config.refreshToken ?? process.env.OUTLOOK_REFRESH_TOKEN ?? ""),
+          };
+          return await replyToMessage(resolvedConfig, { message_id: String(message_id ?? ""), body: String(body ?? ""), reply_all, signature });
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      },
+    }),
+
+    tool({
+      name: "outlook_forward",
+      label: "Outlook Forward Message",
+      description: "Forward an existing Outlook message to new recipients.",
+      parameters: Type.Object({
+        message_id: Type.String({ description: "The Microsoft Graph message ID to forward." }),
+        to: Type.Union([Type.String(), Type.Array(Type.String())], { description: "Recipient email address(es) to forward to." }),
+        comment: Type.Optional(Type.String({ description: "Optional note to prepend to the forwarded message." })),
+      }),
+      async execute({ message_id, to, comment }, config) {
+        try {
+          const resolvedConfig: OutlookMailConfig = {
+            clientId: String(config.clientId ?? process.env.OUTLOOK_CLIENT_ID ?? ""),
+            clientSecret: String(config.clientSecret ?? process.env.OUTLOOK_CLIENT_SECRET ?? ""),
+            refreshToken: String(config.refreshToken ?? process.env.OUTLOOK_REFRESH_TOKEN ?? ""),
+          };
+          return await forwardMessage(resolvedConfig, { message_id: String(message_id ?? ""), to, comment });
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      },
+    }),
+
+    tool({
+      name: "outlook_move",
+      label: "Outlook Move Message",
+      description: "Move an Outlook message to a different mail folder.",
+      parameters: Type.Object({
+        message_id: Type.String({ description: "The Microsoft Graph message ID to move." }),
+        destination_folder: Type.String({ description: "Target folder name or well-known folder name (inbox, archive, deleteditems, junkemail, sentitems, drafts)." }),
+      }),
+      async execute({ message_id, destination_folder }, config) {
+        try {
+          const resolvedConfig: OutlookMailConfig = {
+            clientId: String(config.clientId ?? process.env.OUTLOOK_CLIENT_ID ?? ""),
+            clientSecret: String(config.clientSecret ?? process.env.OUTLOOK_CLIENT_SECRET ?? ""),
+            refreshToken: String(config.refreshToken ?? process.env.OUTLOOK_REFRESH_TOKEN ?? ""),
+          };
+          return await moveMessage(resolvedConfig, {
+            message_id: String(message_id ?? ""),
+            destination_folder: String(destination_folder ?? ""),
+          });
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      },
+    }),
+
+    tool({
+      name: "outlook_flag",
+      label: "Outlook Flag Message",
+      description: "Flag, complete, or unflag an Outlook message.",
+      parameters: Type.Object({
+        message_id: Type.String({ description: "The Microsoft Graph message ID to flag." }),
+        flag_status: Type.Union(
+          [Type.Literal("flagged"), Type.Literal("complete"), Type.Literal("notFlagged")],
+          { description: "Flag status: 'flagged', 'complete', or 'notFlagged'." },
+        ),
+      }),
+      async execute({ message_id, flag_status }, config) {
+        try {
+          const resolvedConfig: OutlookMailConfig = {
+            clientId: String(config.clientId ?? process.env.OUTLOOK_CLIENT_ID ?? ""),
+            clientSecret: String(config.clientSecret ?? process.env.OUTLOOK_CLIENT_SECRET ?? ""),
+            refreshToken: String(config.refreshToken ?? process.env.OUTLOOK_REFRESH_TOKEN ?? ""),
+          };
+          return await flagMessage(resolvedConfig, {
+            message_id: String(message_id ?? ""),
+            flag_status: flag_status as "flagged" | "complete" | "notFlagged",
+          });
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      },
+    }),
     tool({
       name: "outlook_meeting",
       label: "Outlook Create Meeting",
