@@ -115,6 +115,23 @@ async function getAccessToken(clientId: string, clientSecret: string, refreshTok
   return parsed.access_token;
 }
 
+function httpPostEmpty(url: string, token: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Length": "0" },
+      timeout: 30_000,
+    }, res => {
+      res.resume();
+      res.on("end", () => {
+        if ((res.statusCode ?? 0) >= 400) reject(new Error(`HTTP ${res.statusCode}`));
+        else resolve();
+      });
+    });
+    req.on("error", reject); req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); }); req.end();
+  });
+}
+
 function httpPatch(url: string, body: string, token: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const headers: Record<string, string | number> = {
@@ -138,9 +155,10 @@ async function graphGet(token: string, path: string): Promise<unknown> {
 
 async function graphPost(token: string, path: string, body: unknown): Promise<unknown> {
   const bodyStr = JSON.stringify(body);
-  const res = await httpPostJson(`${GRAPH_BASE}${path}`, bodyStr, token);
-  if (!res || res.trim() === "") return { success: true };
-  return JSON.parse(res);
+  const res = await httpPostJson(`${GRAPH_BASE}${path}`, token, bodyStr);
+  if (!res.data || res.data.trim() === "") return { success: true };
+  if (res.status >= 400) return { error: res.data };
+  return JSON.parse(res.data);
 }
 
 async function graphPatch(token: string, path: string, body: unknown): Promise<unknown> {
