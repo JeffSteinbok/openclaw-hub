@@ -45,7 +45,10 @@ echo "[usage_report] generating report for $TODAY..."
 # 1. Rebuild usage CSV with latest data
 OPENCLAW_LOGS_DIR="$LOGS_DIR" python3 "$SCRIPT_DIR/usage_summary.py" --all > /dev/null 2>&1 || true
 
-# 2. Generate the MD report via standalone script (avoids heredoc \n bug)
+# 2. Build/update weekly aggregated CSV
+OPENCLAW_LOGS_DIR="$LOGS_DIR" python3 "$SCRIPT_DIR/build_weekly_csv.py" > /dev/null 2>&1 || true
+
+# 3. Generate the MD report via standalone script (avoids heredoc \n bug)
 OPENCLAW_LOGS_DIR="$LOGS_DIR" python3 "$SCRIPT_DIR/generate_report.py" "$TODAY" "$REPORT_DIR"
 
 MD="$REPORT_DIR/$TODAY.md"

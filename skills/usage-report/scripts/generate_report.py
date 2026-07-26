@@ -28,6 +28,10 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 
 TODAY = sys.argv[1]
 REPORT_DIR = sys.argv[2]
+# Optional: --end-date YYYY-MM-DD to report on the 7 days ending on that date
+_end_date = None
+if "--end-date" in sys.argv:
+    _end_date = sys.argv[sys.argv.index("--end-date") + 1]
 
 _logs = os.environ.get("OPENCLAW_LOGS_DIR", os.path.expanduser("~/.openclaw/logs"))
 _openclaw_dir = Path(_logs).parent
@@ -78,7 +82,11 @@ def _session_first_ts(session_id: str, agent: str) -> str:
 _ts_cache: dict = {}
 
 dates = sorted(set(r["date"] for r in data))
-last7 = dates[-7:]
+if _end_date and _end_date in dates:
+    end_idx = dates.index(_end_date) + 1
+    last7 = dates[max(0, end_idx - 7):end_idx]
+else:
+    last7 = dates[-7:]
 date_range = f"{last7[0]} to {last7[-1]}"
 
 # ── Aggregate ────────────────────────────────────────────────────────────────
@@ -282,7 +290,109 @@ with open(OUT, "w") as f:
         f.write(f"| {ts_col} | `{s['agent']}` | {cat_col} | {label} | ${cost:.3f} |\n")
     f.write("\n---\n\n")
 
-    # Section 7: Recommendations
+    # Section 7: Week-over-Week Chart
+    weekly_csv_path = os.path.join(_logs, "usage-weekly.csv")
+    weekly_rows = []
+    if os.path.exists(weekly_csv_path):
+        with open(weekly_csv_path) as wf:
+            weekly_rows = list(csv.DictReader(wf))
+
+    if weekly_rows:
+        f.write("## 7. Week-over-Week Cost by Agent\n\n")
+        # Build chart data — last 12 weeks
+        all_weeks = sorted(set(r["week_ending"] for r in weekly_rows))
+        chart_weeks = all_weeks[-12:]
+        CHART_AGENTS = ["coding", "main", "root", "finance", "hass-hooks", "mail", "family", "other"]
+        AGENT_COLORS = {
+            "coding":     "#c0392b",
+            "main":       "#2980b9",
+            "root":       "#8e44ad",
+            "finance":    "#27ae60",
+            "hass-hooks": "#e67e22",
+            "mail":       "#16a085",
+            "family":     "#f39c12",
+            "other":      "#95a5a6",
+        }
+        by_wa = defaultdict(float)
+        for r in weekly_rows:
+            if r["week_ending"] in chart_weeks:
+                by_wa[(r["week_ending"], r["agent"])] += float(r["est_cost_usd"])
+
+        # Stack bars
+        W, H = 700, 260
+        PAD_L, PAD_R, PAD_T, PAD_B = 54, 20, 20, 54
+        chart_w = W - PAD_L - PAD_R
+        chart_h = H - PAD_T - PAD_B
+        n = len(chart_weeks)
+        bar_w = chart_w / n * 0.72
+        bar_gap = chart_w / n
+
+        max_total = max(
+            sum(by_wa.get((w, a), 0) for a in CHART_AGENTS)
+            for w in chart_weeks
+        ) if chart_weeks else 1
+        y_max = max(max_total * 1.12, 1)
+
+        def ys(val):
+            return PAD_T + chart_h - (val / y_max * chart_h)
+
+        svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" style="font-family:Arial,sans-serif;font-size:10px">']
+        # Background
+        svg.append(f'<rect x="{PAD_L}" y="{PAD_T}" width="{chart_w}" height="{chart_h}" fill="#fafafa" stroke="#ddd"/>')
+        # Y gridlines + labels
+        y_ticks = 5
+        for i in range(y_ticks + 1):
+            val = y_max * i / y_ticks
+            y = ys(val)
+            svg.append(f'<line x1="{PAD_L}" y1="{y:.1f}" x2="{PAD_L+chart_w}" y2="{y:.1f}" stroke="#e0e0e0" stroke-dasharray="3,3"/>')
+            svg.append(f'<text x="{PAD_L-4}" y="{y+3:.1f}" text-anchor="end" fill="#666">${val:.0f}</text>')
+        # Stacked bars
+        for i, w in enumerate(chart_weeks):
+            x = PAD_L + i * bar_gap + (bar_gap - bar_w) / 2
+            base = 0.0
+            for ag in CHART_AGENTS:
+                val = by_wa.get((w, ag), 0)
+                if val < 0.005:
+                    continue
+                bh = val / y_max * chart_h
+                by_ = ys(base + val)
+                svg.append(f'<rect x="{x:.1f}" y="{by_:.1f}" width="{bar_w:.1f}" height="{bh:.1f}" fill="{AGENT_COLORS[ag]}" opacity="0.85"/>')
+                base += val
+            # X label — short date
+            lbl = w[5:]  # MM-DD
+            svg.append(f'<text x="{x + bar_w/2:.1f}" y="{PAD_T+chart_h+13}" text-anchor="middle" fill="#444">{lbl}</text>')
+            total = sum(by_wa.get((w, ag), 0) for ag in CHART_AGENTS)
+            svg.append(f'<text x="{x + bar_w/2:.1f}" y="{ys(total)-3:.1f}" text-anchor="middle" fill="#222" font-size="8">${total:.0f}</text>')
+        # Legend
+        lx = PAD_L
+        for ag in CHART_AGENTS:
+            has_data = any(by_wa.get((w, ag), 0) > 0.01 for w in chart_weeks)
+            if not has_data:
+                continue
+            svg.append(f'<rect x="{lx}" y="{PAD_T+chart_h+26}" width="10" height="10" fill="{AGENT_COLORS[ag]}"/>')
+            svg.append(f'<text x="{lx+13}" y="{PAD_T+chart_h+35}" fill="#333">{ag}</text>')
+            lx += len(ag) * 6.5 + 22
+        # Axes
+        svg.append(f'<line x1="{PAD_L}" y1="{PAD_T}" x2="{PAD_L}" y2="{PAD_T+chart_h}" stroke="#999"/>')
+        svg.append(f'<line x1="{PAD_L}" y1="{PAD_T+chart_h}" x2="{PAD_L+chart_w}" y2="{PAD_T+chart_h}" stroke="#999"/>')
+        svg.append('</svg>')
+
+        f.write('\n```svg\n')
+        f.write('\n'.join(svg))
+        f.write('\n```\n\n')
+
+        # Also write a summary table
+        f.write("| Week ending | " + " | ".join(CHART_AGENTS) + " | **Total** |\n")
+        f.write("|---" * (len(CHART_AGENTS) + 2) + "|\n")
+        for w in chart_weeks:
+            vals = [by_wa.get((w, ag), 0) for ag in CHART_AGENTS]
+            total = sum(vals)
+            cells = " | ".join(f"${v:.2f}" if v >= 0.01 else "—" for v in vals)
+            f.write(f"| {w} | {cells} | **${total:.2f}** |\n")
+        f.write("\n---\n\n")
+
+    # Section 8: Recommendations
+
     prev7 = dates[-14:-7] if len(dates) >= 14 else []
     prev_total = sum(float(r["est_cost_usd"]) for r in data if r["date"] in prev7)
     wow_pct = ((total_7d - prev_total) / prev_total * 100) if prev_total else None
@@ -317,7 +427,7 @@ with open(OUT, "w") as f:
         threshold = 0
         p75 = 0
 
-    f.write("## 7. Recommendations\n\n")
+    f.write("## 8. Recommendations\n\n")
 
     f.write("### 7.1 Top 3 Cost Drivers\n\n")
     f.write("| Rank | Agent | Category | Job/Task | Sessions | Cost | Share |\n")
@@ -366,7 +476,7 @@ with open(OUT, "w") as f:
     f.write("\n---\n\n")
 
     # Section 8: Pricing Reference
-    f.write("## 8. Pricing Reference\n\n")
+    f.write("## 9. Pricing Reference\n\n")
     f.write("Rates are per 1M tokens via GitHub Copilot usage-based billing (1 AI Credit = $0.01 USD).\n\n")
     f.write("| Model | Input | Cached input | Cache write | Output |\n")
     f.write("|---|---|---|---|---|\n")
