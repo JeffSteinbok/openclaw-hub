@@ -17,8 +17,11 @@ Prints the output path on success.
 
 import sys
 import csv
+import json
 import os
 from collections import defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -27,6 +30,7 @@ TODAY = sys.argv[1]
 REPORT_DIR = sys.argv[2]
 
 _logs = os.environ.get("OPENCLAW_LOGS_DIR", os.path.expanduser("~/.openclaw/logs"))
+_openclaw_dir = Path(_logs).parent
 CSV_PATH = os.path.join(_logs, "usage-trends.csv")
 SESSION_CSV_PATH = os.path.join(_logs, "usage-sessions.csv")
 
@@ -42,6 +46,36 @@ if os.path.exists(SESSION_CSV_PATH):
     with open(SESSION_CSV_PATH) as sf:
         for row in csv.DictReader(sf):
             session_data.append(row)
+
+
+def _session_first_ts(session_id: str, agent: str) -> str:
+    """Return the first model.completed timestamp for a session as 'YYYY-MM-DD HH:MM PT'."""
+    traj = _openclaw_dir / "agents" / agent / "sessions" / f"{session_id}.trajectory.jsonl"
+    if not traj.exists():
+        return ""
+    try:
+        with open(traj) as f:
+            for line in f:
+                try:
+                    d = json.loads(line)
+                except Exception:
+                    continue
+                if d.get("type") != "model.completed":
+                    continue
+                ts_str = d.get("ts", "")
+                if not ts_str:
+                    continue
+                try:
+                    ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                    return ts.astimezone(PACIFIC).strftime("%Y-%m-%d %H:%M")
+                except Exception:
+                    return ""
+    except Exception:
+        pass
+    return ""
+
+
+_ts_cache: dict = {}
 
 dates = sorted(set(r["date"] for r in data))
 last7 = dates[-7:]
@@ -222,22 +256,30 @@ with open(OUT, "w") as f:
         f.write(f"| `{short}` | ${d['cost']:.2f} | {d['calls']} | {pct:.1f}% |\n")
     f.write("\n---\n\n")
 
-    # Section 6: Itemized Session Log (phone-bill style, sorted by date)
+    # Section 6: Itemized Session Log (phone-bill style, sorted by date+time)
     f.write("## 6. Itemized Session Log\n\n")
-    f.write("| Date | Agent | Category | Label / Description | Cost |\n")
+    f.write("| Date/Time (PT) | Agent | Category | Label / Description | Cost |\n")
     f.write("|---|---|---|---|---|\n")
     week_sessions = [s for s in session_data if s["date"] in last7]
-    week_sessions.sort(key=lambda s: (s["date"], s["agent"]))
+    # Augment with first timestamp so we can sort and display chronologically
+    for s in week_sessions:
+        sid = s["session_id"]
+        if sid not in _ts_cache:
+            _ts_cache[sid] = _session_first_ts(sid, s["agent"])
+        s["_first_ts"] = _ts_cache[sid] or s["date"]
+    week_sessions.sort(key=lambda s: (s["_first_ts"], s["agent"]))
     for s in week_sessions:
         cost = float(s["est_cost_usd"])
         if cost < 0.01:
             continue
         label = (s.get("label") or s.get("subcategory") or s.get("category") or "").strip()
-        label = label[:80].replace("|", "\\|")
+        # Strip embedded pipes and newlines to avoid breaking table columns
+        label = label.replace("|", "/").replace("\n", " ").replace("\r", "")[:80]
         sub = s.get("subcategory", "")
         cat = s["category"]
         cat_col = f"{cat}/{sub}" if sub and sub not in ("unknown", "") and sub != cat else cat
-        f.write(f"| {s['date']} | `{s['agent']}` | {cat_col} | {label} | ${cost:.3f} |\n")
+        ts_col = s["_first_ts"]
+        f.write(f"| {ts_col} | `{s['agent']}` | {cat_col} | {label} | ${cost:.3f} |\n")
     f.write("\n---\n\n")
 
     # Section 7: Recommendations
