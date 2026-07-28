@@ -15,8 +15,6 @@
     "plugins/ics-calendar",
     "plugins/llmvision",
     "plugins/md-to-html",
-    "plugins/outlook-calendar",
-    "plugins/outlook-mail",
     "plugins/outlook-work-calendar",
     "plugins/screenshot-capture",
     "plugins/spotify",
@@ -27,7 +25,7 @@
   ],
   "scripts": {
     "build:libs": "npm run build --workspace libs/ts/mail_action_usps && npm run build --workspace services/fastmail-sse",
-    "build:plugins": "npm run build --workspace plugins/fastmail --workspace plugins/glances --workspace plugins/goodreads --workspace plugins/homeassistant --workspace plugins/html-to-pdf --workspace plugins/ics-calendar --workspace plugins/llmvision --workspace plugins/md-to-html --workspace plugins/outlook-calendar --workspace plugins/outlook-mail --workspace plugins/outlook-work-calendar --workspace plugins/spotify --workspace plugins/withings --workspace plugins/usps-mail --workspace plugins/octo-satellite --workspace plugins/weightwatchers",
+    "build:plugins": "npm run build --workspace plugins/fastmail --workspace plugins/glances --workspace plugins/goodreads --workspace plugins/homeassistant --workspace plugins/html-to-pdf --workspace plugins/ics-calendar --workspace plugins/llmvision --workspace plugins/md-to-html --workspace plugins/outlook-work-calendar --workspace plugins/spotify --workspace plugins/withings --workspace plugins/usps-mail --workspace plugins/octo-satellite --workspace plugins/weightwatchers",
     "build": "npm run build:libs && npm run build:plugins",
     "test:scripts": "python3 -m unittest scripts.tests.test_export_artifacts",
     "export:artifacts": "python3 scripts/export_artifacts.py",
