@@ -22,8 +22,6 @@ Public plugins, CLIs, services, and shared libraries for [OpenClaw](https://jeff
 | 📝 | [Markdown to HTML](plugins/md-to-html/) | Convert extended Markdown to styled HTML |
 | 🗂️ | [Obsidian Vault](https://github.com/JeffSteinbok/carapace-obsidian) | Read-only access to an Obsidian vault — search, read, and explore notes *(standalone repo)* |
 | 🛰️ | [Octo Satellite](plugins/octo-satellite/) | Remote agent for running plugins on secondary machines |
-| 📆 | [Outlook Calendar](plugins/outlook-calendar/) | Query Outlook calendar data |
-| 📬 | [Outlook Mail](plugins/outlook-mail/) | Search and read Outlook mail |
 | 🗓️ | [Outlook Work Calendar](plugins/outlook-work-calendar/) | Work-focused Outlook calendar |
 | 📸 | [Screenshot Capture](plugins/screenshot-capture/) | Capture screenshots from paired nodes, write to media store |
 | 🎵 | [Spotify](plugins/spotify/) | Playback control and search |
