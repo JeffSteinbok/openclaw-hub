@@ -52,6 +52,27 @@ fall back to safe defaults when the env vars are unset.
 
 ---
 
+## Synthesis Grounding Rules
+
+The synthesis step (where the agent interprets the JSON and composes a delivery
+message) **must** follow these rules:
+
+- Every suggestion must be **directly traceable to a field** in the JSON output
+  (`tool_errors`, `cron_errors`, `memory_flags`, or `source_health.issues`).
+- If all of those are empty/minimal, output a **short "clean week" note** — do
+  not invent suggestions.
+- **Schedule and cost suggestions are prohibited** unless the JSON contains an
+  explicit `cron_job_schedules` block with real schedule expressions. The script
+  does not emit per-job run frequencies or dollar costs.
+- `cron_stats.total_cron_sessions` is a session-level error counter — do **not**
+  use it to infer per-job run counts or extrapolate savings figures.
+- `source_health` is scan diagnostics, not operational metrics — it does not
+  license schedule or cost recommendations.
+
+See the SKILL.md **Grounding rules** section for the full details.
+
+---
+
 ## Wiring Up the Cron Job
 
 Add to your `openclaw.json` cron section (the agent parses the JSON, then

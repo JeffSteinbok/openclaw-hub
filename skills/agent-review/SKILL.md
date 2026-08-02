@@ -108,6 +108,87 @@ The calling cron agent should:
 
 ---
 
+## Grounding rules (MUST follow)
+
+These rules prevent the synthesis step from fabricating authoritative-sounding
+recommendations that have no basis in the script's actual output.
+
+### Only surface findings traceable to the JSON
+
+Every suggestion or recommendation in the synthesis output **must be directly
+traceable to a field in the JSON output** — specifically `tool_errors`,
+`cron_errors`, `memory_flags`, or `source_health.issues`. Do **not** invent,
+extrapolate, or speculate beyond what those fields contain.
+
+### Clean-week rule
+
+If `tool_errors`, `cron_errors`, and `memory_flags` are all empty or contain
+only trivial/low-count entries, the synthesis output **must** be a short
+"clean week" note. Do not fill the absence of findings with invented
+suggestions.
+
+### Schedule and cost suggestions are prohibited
+
+The script does **not** emit per-job run frequencies, schedule expressions, or
+cost data. Therefore:
+
+- **Never recommend changing a cron job schedule** unless the JSON output
+  contains an explicit `cron_job_schedules` block with the job's actual
+  schedule expression.
+- **Never state or estimate run counts or dollar costs** (e.g. "ran 73x/week",
+  "costs $0.87/week") — the script has no such data.
+- `cron_stats.total_cron_sessions` counts session-level errors, not per-job
+  run frequencies. Do **not** use it to infer how often a named job runs.
+- `source_health` is diagnostics about the scan itself (e.g. trajectory
+  extraction quality). It is **not** a source of operational metrics and does
+  not license schedule or cost recommendations.
+
+### Memory notes do not override grounding
+
+Memory files may provide helpful context for interpreting findings that **are**
+grounded in the JSON. They do not grant permission to surface suggestions that
+are absent from the JSON output — for example, memory notes mentioning a job
+name do not justify inventing run-count or savings numbers for that job.
+
+---
+
+## ⚠️ Synthesis grounding rules (required)
+
+These rules are non-negotiable. Violating them produces hallucinated reports.
+
+### Every suggestion must cite a real finding
+
+Only surface a suggestion if it is **directly traceable to a field in the JSON output** — specifically:
+- `tool_errors` — a named tool with `count > 0`
+- `cron_errors` — a named job/session with `count > 0`
+- `memory_flags` — a line from the memory scan
+- `source_health.issues` — a diagnostic warning from the scan itself
+
+If `tool_errors`, `cron_errors`, and `memory_flags` are all empty or minimal, the output **must** be a short "clean week" note. Do not invent suggestions to fill space.
+
+### Schedule and cost suggestions are prohibited unless data exists
+
+The script **does not emit per-job run frequencies or cost data.** The `cron_stats` block only contains session-level counts (`total_cron_sessions`, `errored_sessions`, `ok_sessions`) — it does not contain per-job schedule expressions, run counts, or dollar costs.
+
+Therefore:
+- **Never suggest** changing a cron job's schedule without first reading that job's actual schedule expression (e.g. via `cron get <job>`).
+- **Never infer** run frequency from `cron_stats.total_cron_sessions` — that field counts all cron sessions, not runs of a specific job.
+- **Never fabricate** dollar-cost savings or weekly run counts. If no cost data is in the JSON, no cost estimate may appear in the output.
+
+If schedule or cost analysis is wanted in the future, it must be added to `agent_review.py` explicitly (e.g. a `cron_schedule_stats` block with real data from `cron list`). Until then, those suggestions are **forbidden**.
+
+### What the script does and does not emit
+
+| Field | What it contains | What it does NOT contain |
+|---|---|---|
+| `tool_errors` | Per-tool failure counts + sample errors | Schedule data, cost data |
+| `cron_errors` | Per-session cron failures | Per-job run frequencies |
+| `cron_stats` | Total/errored/ok session counts | Per-job breakdown, costs |
+| `memory_flags` | Memory lines matching correction/friction keywords | Structured data |
+| `source_health` | Scan diagnostics (files read, warnings) | Operational recommendations |
+
+---
+
 ## Requirements
 
 - Python 3.9+ (stdlib only)
