@@ -35,15 +35,16 @@ export const createEntry = definePlugin({
         limit: Type.Optional(Type.Integer({ description: "Maximum number of events to return (default: 50, max: 200)." })),
         start_time: Type.Optional(Type.String({ description: "Start of query window as ISO 8601." })),
         end_time: Type.Optional(Type.String({ description: "End of query window as ISO 8601. Defaults to now." })),
+        include_false_positives: Type.Optional(Type.Boolean({ description: "Include false positive / no-activity events in results (default: false)." })),
       }),
-      async execute({ days, limit, start_time, end_time }, config) {
+      async execute({ days, limit, start_time, end_time, include_false_positives }, config) {
         try {
           const pluginConfig: LlmVisionConfig = {
             server: stripTrailingSlashes(config.server?.trim() || "") || "http://192.168.1.76:8123",
             token: config.token ?? "",
             keyframeDir: config.keyframeDir?.trim() || "/tmp/openclaw/llmvision_keyframes",
           };
-          return await timelineGet(pluginConfig, { days, limit, start_time, end_time });
+          return await timelineGet(pluginConfig, { days, limit, start_time, end_time, include_false_positives });
         } catch (e) {
           return { error: (e as Error).message };
         }
