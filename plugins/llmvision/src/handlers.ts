@@ -74,11 +74,13 @@ export async function haPost(server: string, token: string, apiPath: string, bod
 // Handler functions
 // ---------------------------------------------------------------------------
 
-export async function timelineGet(config: LlmVisionConfig, params: { days?: number; limit?: number; start_time?: string; end_time?: string }): Promise<unknown> {
+export async function timelineGet(config: LlmVisionConfig, params: { days?: number; limit?: number; start_time?: string; end_time?: string; include_false_positives?: boolean }): Promise<unknown> {
   const { server, token } = config;
   const days = params.days ?? 7;
   const limit = Math.min(params.limit ?? 50, 200);
-  const res = await haGet(server, token, "/api/llmvision/timeline/events", { limit });
+  const apiParams: Record<string, string | number> = { limit };
+  if (params.include_false_positives) apiParams.include_no_activity = 1;
+  const res = await haGet(server, token, "/api/llmvision/timeline/events", apiParams);
   if ("error" in res) return res;
   const raw = ((res.output as Record<string, unknown>).events as Array<Record<string, unknown>>) ?? [];
   const now = Date.now();
