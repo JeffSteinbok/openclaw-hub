@@ -14,8 +14,10 @@ OpenClaw plugin providing structured access to the [Octo Satellite](https://gith
 | [`amazon_add_to_cart`](#tool-amazon_add_to_cart) | Add item to Amazon cart by ASIN |
 | [`amazon_remove_from_cart`](#tool-amazon_remove_from_cart) | Remove item from Amazon cart |
 | [`monarch_get_accounts`](#tool-monarch_get_accounts) | List financial accounts grouped by type with balances |
-| [`monarch_get_net_worth`](#tool-monarch_get_net_worth) | Get current net worth summary |
-| [`monarch_get_spending`](#tool-monarch_get_spending) | Get spending trends broken down by month |
+| [`monarch_get_net_worth`](#tool-monarch_get_net_worth) | Get current net worth summary or daily history |
+| [`monarch_get_spending`](#tool-monarch_get_spending) | Get spending trends by month or date range |
+| [`monarch_get_merchants`](#tool-monarch_get_merchants) | Get aggregate spending totals by merchant |
+| [`monarch_login`](#tool-monarch_login) | Start interactive Monarch login on the satellite |
 | [`monarch_get_health`](#tool-monarch_get_health) | Verify Monarch session is authenticated |
 | [`monarch_get_sync_status`](#tool-monarch_get_sync_status) | Get sync status for all linked accounts |
 | [`monarch_get_investments`](#tool-monarch_get_investments) | Get investment account positions (holdings) |
@@ -110,13 +112,38 @@ No parameters. Returns accounts grouped by type (Investments, Cash, Credit Cards
 
 ### `monarch_get_net_worth`
 
-No parameters. Returns total assets, total liabilities, and net worth.
+- `start_date` — optional range start date (`YYYY-MM-DD`)
+- `end_date` — optional range end date (`YYYY-MM-DD`, defaults to today)
+
+Without dates, returns the current total assets, total liabilities, and net worth. With a start date, returns daily snapshot history.
 
 <a id="tool-monarch_get_spending"></a>
 
 ### `monarch_get_spending`
 
 - `months` — optional number of months to look back (default: 3)
+- `start_date` — optional range start date (`YYYY-MM-DD`); takes precedence over `months`
+- `end_date` — optional range end date (`YYYY-MM-DD`, defaults to today)
+
+Use either `months` or an explicit date range.
+
+<a id="tool-monarch_get_merchants"></a>
+
+### `monarch_get_merchants`
+
+- `months` — optional number of months to look back (default: 3)
+- `start_date` — optional range start date (`YYYY-MM-DD`); takes precedence over `months`
+- `end_date` — optional range end date (`YYYY-MM-DD`, defaults to today)
+- `category` — optional category or category-group filter
+- `limit` — optional maximum number of merchants to return
+
+Returns aggregate spending totals by merchant, without transaction details.
+
+<a id="tool-monarch_login"></a>
+
+### `monarch_login`
+
+No parameters. Starts an interactive login on the satellite server; the server terminal prompts for email, password, and MFA.
 
 <a id="tool-monarch_get_health"></a>
 

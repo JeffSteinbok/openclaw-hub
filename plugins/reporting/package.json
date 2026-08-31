@@ -1,0 +1,39 @@
+{
+  "name": "reporting",
+  "version": "1.0.0",
+  "description": "Markdown to HTML to PDF report pipeline — single-file and multi-section assembly",
+  "author": "OpenClaw",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "reporting": "./dist/bin/reporting.js"
+  },
+  "scripts": {
+    "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.52"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "carapace-plugin-sdk": "^1.0.3",
+    "tsup": "^8.3.0",
+    "typescript": "^7",
+    "vitest": "^4.1.10"
+  },
+  "peerDependencies": {
+    "openclaw": "^2026.4.23"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/adapter.js"
+    ]
+  }
+}

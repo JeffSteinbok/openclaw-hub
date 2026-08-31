@@ -6,22 +6,24 @@ import { definePlugin } from "carapace-plugin-sdk";
 import { Type } from "@sinclair/typebox";
 import {
   mdToHtml,
+  reportRender,
   parseBlocks,
   extractStyles,
   SYNTAX_REFERENCE,
   type MdToHtmlResult,
+  type ReportRenderResult,
   type Block,
 } from "./handlers.js";
 
 // Re-export for consumers and tests
-export { mdToHtml, parseBlocks, extractStyles, SYNTAX_REFERENCE };
-export { type MdToHtmlResult, type Block };
+export { mdToHtml, reportRender, parseBlocks, extractStyles, SYNTAX_REFERENCE };
+export { type MdToHtmlResult, type ReportRenderResult, type Block };
 
 export const createEntry = definePlugin({
   id: "md-to-html",
   name: "Markdown to HTML",
   description: "Convert styled Markdown reports to HTML using a CSS template",
-  contracts: { tools: ["md_to_html", "md_to_html_syntax"] },
+  contracts: { tools: ["md_to_html", "md_to_html_syntax", "report_render"] },
 
   tools: (tool) => [
     tool({
@@ -68,6 +70,36 @@ export const createEntry = definePlugin({
       parameters: Type.Object({}),
       async execute() {
         return SYNTAX_REFERENCE;
+      },
+    }),
+
+    tool({
+      name: "report_render",
+      label: "Report Render (multi-section)",
+      description:
+        "Render a multi-section report to HTML from a folder containing an INDEX.json with assembly_order. " +
+        "Reads section .md files in order, concatenates them, renders HTML using the provided CSS template. " +
+        "Use this instead of md_to_html when the report is split into per-section files.",
+      parameters: Type.Object({
+        folder_path: Type.String({
+          description: "Absolute path to the folder containing INDEX.json and section .md files",
+        }),
+        output_html_path: Type.String({
+          description: "Absolute path where the rendered HTML should be saved (must end in .html)",
+        }),
+        template_path: Type.String({
+          description: "Absolute path to an HTML template containing CSS <style> blocks",
+        }),
+      }),
+      async execute({ folder_path, output_html_path, template_path }) {
+        if (!folder_path?.trim()) return { success: false, error: "folder_path is required" };
+        if (!output_html_path?.trim()) return { success: false, error: "output_html_path is required" };
+        if (!template_path?.trim()) return { success: false, error: "template_path is required" };
+        try {
+          return await reportRender(folder_path.trim(), output_html_path.trim(), template_path.trim());
+        } catch (e) {
+          return { success: false, error: `report_render crashed: ${e instanceof Error ? e.message : String(e)}` };
+        }
       },
     }),
   ],

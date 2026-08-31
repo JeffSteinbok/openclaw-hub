@@ -1,0 +1,35 @@
+{
+  "name": "fs-utils",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "plugin:build": "npm run build && openclaw plugins build --entry ./dist/index.js",
+    "plugin:validate": "npm run build && openclaw plugins validate --entry ./dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsup": "^8.3.0",
+    "typescript": "^7",
+    "vitest": "^4.1.10"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/adapter.js"
+    ]
+  },
+  "peerDependencies": {
+    "openclaw": "^2026.4.23"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.52",
+    "carapace-plugin-sdk": "^1.0.3"
+  }
+}

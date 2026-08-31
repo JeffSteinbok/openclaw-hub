@@ -83,8 +83,11 @@ export async function fetchWorkCalendar(
   if (!calendarUrl) return { error: "OUTLOOK_WORK_CALENDAR_URL is not set" };
   if (!folderId) return { error: "OUTLOOK_WORK_FOLDER_ID is not set" };
   const days = params.days ?? 7;
-  const startDate = new Date().toISOString().slice(0, 10);
-  const endDate = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+  // Use local date (America/Los_Angeles) — toISOString() would give UTC and shift the
+  // window forward by ~7h in the evening, dropping same-day events.
+  const toLocalDate = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  const startDate = toLocalDate(new Date());
+  const endDate = toLocalDate(new Date(Date.now() + days * 86_400_000));
   const url = `${calendarUrl}/service.svc?action=FindItem&app=PublishedCalendar&n=18`;
   const body = JSON.stringify(buildRequestBody(folderId, startDate, endDate));
   const res = await httpPost(url, body, { "Content-Type": "application/json; charset=utf-8", "Action": "FindItem", "User-Agent": "Mozilla/5.0" });

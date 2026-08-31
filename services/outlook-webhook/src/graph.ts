@@ -9,7 +9,7 @@ import { log, GRAPH_BASE, TOKEN_URL } from "./config.js";
 
 export interface GraphConfig {
   clientId: string;
-  clientSecret: string;
+  clientSecret?: string;
   refreshToken: string;
 }
 
@@ -78,13 +78,15 @@ export async function getAccessToken(config: GraphConfig): Promise<string> {
     return tokenCache.accessToken;
   }
 
-  const body = new URLSearchParams({
+  const params: Record<string, string> = {
     client_id: config.clientId,
-    client_secret: config.clientSecret,
     refresh_token: config.refreshToken,
     grant_type: "refresh_token",
     scope: "Mail.Read offline_access",
-  }).toString();
+  };
+  // Public-client (PKCE) registrations have no secret; only send it when present
+  if (config.clientSecret) params.client_secret = config.clientSecret;
+  const body = new URLSearchParams(params).toString();
 
   const resp = await httpRequest(
     "POST",

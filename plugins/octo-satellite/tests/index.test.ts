@@ -204,6 +204,21 @@ describe("satellite plugin", () => {
       expect(parsed.net_worth).toBe(400000);
       expect(parsed.assets).toBe(500000);
     });
+
+    it("passes an explicit date range", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ provider: "monarch", snapshots: [] }),
+      });
+
+      await api.tools.monarch_get_net_worth.execute("call6b", {
+        start_date: "2026-01-01",
+        end_date: "2026-01-31",
+      });
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain("/monarch/net-worth?start_date=2026-01-01&end_date=2026-01-31");
+    });
   });
 
   describe("monarch_get_spending", () => {
@@ -238,6 +253,73 @@ describe("satellite plugin", () => {
 
       await api.tools.monarch_get_spending.execute("call8", { months: 6 });
       expect(mockFetch.mock.calls[0][0]).toContain("/monarch/spending?months=6");
+    });
+
+    it("passes an explicit date range instead of months", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ provider: "monarch", months: [] }),
+      });
+
+      await api.tools.monarch_get_spending.execute("call8b", {
+        months: 6,
+        start_date: "2026-01-01",
+        end_date: "2026-01-31",
+      });
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain("/monarch/spending?start_date=2026-01-01&end_date=2026-01-31");
+      expect(url).not.toContain("months=");
+    });
+  });
+
+  describe("monarch_login", () => {
+    it("starts interactive login on the satellite", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ provider: "monarch", status: "login_started" }),
+      });
+
+      const result = await api.tools.monarch_login.execute("call-login", {});
+      const parsed = JSON.parse((result as { content: [{ text: string }] }).content[0].text);
+      expect(parsed.status).toBe("login_started");
+      expect(mockFetch.mock.calls[0][0]).toContain("/monarch/login");
+      expect(mockFetch.mock.calls[0][1].method).toBe("POST");
+    });
+  });
+
+  describe("monarch_get_merchants", () => {
+    it("passes date, category, and limit filters", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ provider: "monarch", merchants: [] }),
+      });
+
+      await api.tools.monarch_get_merchants.execute("call-merchants", {
+        months: 6,
+        start_date: "2026-01-01",
+        end_date: "2026-01-31",
+        category: "Travel & Lifestyle",
+        limit: 10,
+      });
+      const url = mockFetch.mock.calls[0][0] as string;
+      expect(url).toContain(
+        "/monarch/merchants?start_date=2026-01-01&end_date=2026-01-31&category=Travel+%26+Lifestyle&limit=10",
+      );
+      expect(url).not.toContain("months=");
+    });
+
+    it("uses the default lookback when no date range is provided", async () => {
+      const { api } = await loadPlugin({ token: "test-token", baseUrl: "http://localhost:9000" });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ provider: "monarch", merchants: [] }),
+      });
+
+      await api.tools.monarch_get_merchants.execute("call-merchants-default", {});
+      expect(mockFetch.mock.calls[0][0]).toContain("/monarch/merchants?months=3");
     });
   });
 

@@ -5,7 +5,7 @@
  */
 
 import { readFile, writeFile, access, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -573,6 +573,88 @@ ${bodyHtml}
   }
 
   return { success: true, output_path: outputPath };
+}
+
+// ---------------------------------------------------------------------------
+// Report render (multi-section assembly)
+// ---------------------------------------------------------------------------
+
+export interface ReportIndex {
+  assembly_order: string[];
+  [key: string]: unknown;
+}
+
+export interface ReportRenderResult {
+  success: boolean;
+  html_path?: string;
+  pdf_path?: string;
+  sections_assembled?: number;
+  error?: string;
+}
+
+export async function reportRender(
+  folderPath: string,
+  outputHtmlPath: string,
+  templatePath: string,
+): Promise<ReportRenderResult> {
+  if (!outputHtmlPath.endsWith(".html")) {
+    return { success: false, error: "output_html_path must end with .html" };
+  }
+
+  const absFolder = resolve(folderPath);
+  const indexPath = join(absFolder, "INDEX.json");
+
+  try {
+    await access(indexPath);
+  } catch {
+    return { success: false, error: `INDEX.json not found in folder: ${absFolder}` };
+  }
+
+  let index: ReportIndex;
+  try {
+    const raw = await readFile(indexPath, "utf-8");
+    index = JSON.parse(raw) as ReportIndex;
+  } catch (e) {
+    return { success: false, error: `Failed to parse INDEX.json: ${e instanceof Error ? e.message : String(e)}` };
+  }
+
+  if (!Array.isArray(index.assembly_order) || index.assembly_order.length === 0) {
+    return { success: false, error: "INDEX.json must have a non-empty assembly_order array" };
+  }
+
+  // Read and concatenate sections in order
+  const parts: string[] = [];
+  for (const filename of index.assembly_order) {
+    const sectionPath = join(absFolder, filename);
+    try {
+      const content = await readFile(sectionPath, "utf-8");
+      parts.push(content);
+    } catch {
+      return { success: false, error: `Section file not found: ${filename}` };
+    }
+  }
+
+  // Write assembled MD to a temp file alongside the output
+  const assembledPath = outputHtmlPath.replace(/\.html$/, ".assembled.md");
+  const assembled = parts.join("\n");
+  try {
+    await mkdir(dirname(outputHtmlPath), { recursive: true });
+    await writeFile(assembledPath, assembled, "utf-8");
+  } catch (e) {
+    return { success: false, error: `Failed to write assembled MD: ${e instanceof Error ? e.message : String(e)}` };
+  }
+
+  // Render HTML
+  const htmlResult = await mdToHtml(assembledPath, outputHtmlPath, templatePath);
+  if (!htmlResult.success) {
+    return { success: false, error: htmlResult.error };
+  }
+
+  return {
+    success: true,
+    html_path: outputHtmlPath,
+    sections_assembled: index.assembly_order.length,
+  };
 }
 
 // ---------------------------------------------------------------------------

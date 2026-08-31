@@ -17,6 +17,8 @@ import {
   monarchGetAccounts,
   monarchGetNetWorth,
   monarchGetSpending,
+  monarchGetMerchants,
+  monarchLogin,
   monarchGetHealth,
   monarchGetSyncStatus,
   monarchGetInvestments,
@@ -224,14 +226,25 @@ export const createEntry = definePlugin({
       label: "Get Net Worth",
       description:
         "Get net worth summary from Monarch Money. " +
-        "Returns total assets, total liabilities, and net worth.",
-      parameters: Type.Object({}),
-      async execute(_params, config) {
+        "Returns total assets, total liabilities, and net worth. " +
+        "Optionally returns daily snapshot history for a date range.",
+      parameters: Type.Object({
+        start_date: Type.Optional(
+          Type.String({ description: "Optional range start date (YYYY-MM-DD)" }),
+        ),
+        end_date: Type.Optional(
+          Type.String({ description: "Optional range end date (YYYY-MM-DD; defaults to today)" }),
+        ),
+      }),
+      async execute({ start_date, end_date }, config) {
         const satelliteConfig: SatelliteConfig = {
           token: config.token?.trim() || process.env.OCTO_SATELLITE_TOKEN?.trim() || undefined,
           baseUrl: config.baseUrl?.trim() || "http://localhost:9000",
         };
-        return await monarchGetNetWorth(satelliteConfig);
+        return await monarchGetNetWorth({
+          start_date: start_date?.trim() || undefined,
+          end_date: end_date?.trim() || undefined,
+        }, satelliteConfig);
       },
     }),
 
@@ -240,19 +253,82 @@ export const createEntry = definePlugin({
       label: "Get Spending Trends",
       description:
         "Get spending trends from Monarch Money — income, expenses, and savings " +
-        "broken down by month. Defaults to the last 3 months.",
+        "broken down by month. Defaults to the last 3 months. " +
+        "Optionally query an explicit date range.",
       parameters: Type.Object({
         months: Type.Optional(
           Type.Integer({ description: "Number of months to look back (default: 3)" }),
         ),
+        start_date: Type.Optional(
+          Type.String({ description: "Optional range start date (YYYY-MM-DD)" }),
+        ),
+        end_date: Type.Optional(
+          Type.String({ description: "Optional range end date (YYYY-MM-DD; defaults to today)" }),
+        ),
       }),
-      async execute({ months }, config) {
+      async execute({ months, start_date, end_date }, config) {
         const satelliteConfig: SatelliteConfig = {
           token: config.token?.trim() || process.env.OCTO_SATELLITE_TOKEN?.trim() || undefined,
           baseUrl: config.baseUrl?.trim() || "http://localhost:9000",
         };
         return await monarchGetSpending({
           months: months != null ? Number(months) : undefined,
+          start_date: start_date?.trim() || undefined,
+          end_date: end_date?.trim() || undefined,
+        }, satelliteConfig);
+      },
+    }),
+
+    tool({
+      name: "monarch_login",
+      label: "Log In to Monarch",
+      description:
+        "Start an interactive Monarch Money login on the satellite server. " +
+        "The satellite terminal prompts for email, password, and MFA.",
+      parameters: Type.Object({}),
+      async execute(_params, config) {
+        const satelliteConfig: SatelliteConfig = {
+          token: config.token?.trim() || process.env.OCTO_SATELLITE_TOKEN?.trim() || undefined,
+          baseUrl: config.baseUrl?.trim() || "http://localhost:9000",
+        };
+        return await monarchLogin(satelliteConfig);
+      },
+    }),
+
+    tool({
+      name: "monarch_get_merchants",
+      label: "Get Merchant Spending",
+      description:
+        "Break Monarch Money spending down by merchant, returning aggregate totals " +
+        "with no transactions. Defaults to the last 3 months and sorts by top spend.",
+      parameters: Type.Object({
+        months: Type.Optional(
+          Type.Integer({ description: "Number of months to look back (default: 3)" }),
+        ),
+        start_date: Type.Optional(
+          Type.String({ description: "Optional range start date (YYYY-MM-DD)" }),
+        ),
+        end_date: Type.Optional(
+          Type.String({ description: "Optional range end date (YYYY-MM-DD; defaults to today)" }),
+        ),
+        category: Type.Optional(
+          Type.String({ description: "Optional category or category-group filter" }),
+        ),
+        limit: Type.Optional(
+          Type.Integer({ description: "Optional maximum number of merchants to return" }),
+        ),
+      }),
+      async execute({ months, start_date, end_date, category, limit }, config) {
+        const satelliteConfig: SatelliteConfig = {
+          token: config.token?.trim() || process.env.OCTO_SATELLITE_TOKEN?.trim() || undefined,
+          baseUrl: config.baseUrl?.trim() || "http://localhost:9000",
+        };
+        return await monarchGetMerchants({
+          months: months != null ? Number(months) : undefined,
+          start_date: start_date?.trim() || undefined,
+          end_date: end_date?.trim() || undefined,
+          category: category?.trim() || undefined,
+          limit: limit != null ? Number(limit) : undefined,
         }, satelliteConfig);
       },
     }),
