@@ -1,0 +1,23 @@
+{
+  "name": "@openclaw/webhook-proxy",
+  "version": "1.0.0",
+  "description": "Auth-validating webhook proxy for OpenClaw. Validates inbound webhooks (HMAC or bearer) and forwards to OpenClaw hooks with the correct bearer token.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "node --watch dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6"
+  }
+}

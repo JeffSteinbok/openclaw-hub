@@ -144,20 +144,63 @@ export async function monarchGetAccounts(
 }
 
 export async function monarchGetNetWorth(
+  params: { start_date?: string; end_date?: string },
   config: SatelliteConfig,
 ): Promise<unknown> {
   return withErrorCatch(async () => {
-    return await satelliteFetch(config, "/monarch/net-worth");
+    const query = new URLSearchParams();
+    if (params.start_date) query.set("start_date", params.start_date);
+    if (params.end_date) query.set("end_date", params.end_date);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return await satelliteFetch(config, `/monarch/net-worth${suffix}`);
   });
 }
 
 export async function monarchGetSpending(
-  params: { months?: number },
+  params: { months?: number; start_date?: string; end_date?: string },
   config: SatelliteConfig,
 ): Promise<unknown> {
   return withErrorCatch(async () => {
-    const months = params.months ?? 3;
-    return await satelliteFetch(config, `/monarch/spending?months=${months}`);
+    const query = new URLSearchParams();
+    if (params.start_date) {
+      query.set("start_date", params.start_date);
+    } else {
+      query.set("months", String(params.months ?? 3));
+    }
+    if (params.end_date) query.set("end_date", params.end_date);
+    return await satelliteFetch(config, `/monarch/spending?${query.toString()}`);
+  });
+}
+
+export async function monarchGetMerchants(
+  params: {
+    months?: number;
+    start_date?: string;
+    end_date?: string;
+    category?: string;
+    limit?: number;
+  },
+  config: SatelliteConfig,
+): Promise<unknown> {
+  return withErrorCatch(async () => {
+    const query = new URLSearchParams();
+    if (params.start_date) {
+      query.set("start_date", params.start_date);
+    } else {
+      query.set("months", String(params.months ?? 3));
+    }
+    if (params.end_date) query.set("end_date", params.end_date);
+    if (params.category) query.set("category", params.category);
+    if (params.limit != null) query.set("limit", String(params.limit));
+    return await satelliteFetch(config, `/monarch/merchants?${query.toString()}`);
+  });
+}
+
+export async function monarchLogin(
+  config: SatelliteConfig,
+): Promise<unknown> {
+  return withErrorCatch(async () => {
+    return await satelliteFetch(config, "/monarch/login", "POST");
   });
 }
 

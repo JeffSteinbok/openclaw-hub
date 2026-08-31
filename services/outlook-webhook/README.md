@@ -28,7 +28,7 @@ Add to `.env`:
 | Variable | Description |
 |---|---|
 | `OUTLOOK_CLIENT_ID` | Azure app client ID |
-| `OUTLOOK_CLIENT_SECRET` | Azure app client secret |
+| `OUTLOOK_CLIENT_SECRET` | *(optional)* Azure app client secret (for confidential client flow; omit for public-client PKCE) |
 | `OUTLOOK_REFRESH_TOKEN` | OAuth2 refresh token (requires `Mail.Read` scope) |
 | `OUTLOOK_WEBHOOK_URL` | Public HTTPS URL Graph will POST to (e.g. `https://jeff-x1yogag3.tail498490.ts.net/outlook/webhook`) |
 | `OUTLOOK_WEBHOOK_PORT` | Local port to listen on (default: `18790`) |

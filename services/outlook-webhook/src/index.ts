@@ -157,7 +157,7 @@ function createWebhookServer(opts: {
 export async function main(): Promise<void> {
   // Required env
   const clientId = requireEnv("OUTLOOK_CLIENT_ID");
-  const clientSecret = requireEnv("OUTLOOK_CLIENT_SECRET");
+  const clientSecret = process.env["OUTLOOK_CLIENT_SECRET"];
   const refreshToken = requireEnv("OUTLOOK_REFRESH_TOKEN");
   const clientState = requireEnv("OUTLOOK_WEBHOOK_CLIENT_STATE");
   const notifyTarget = requireEnv("NOTIFY_TARGET");
