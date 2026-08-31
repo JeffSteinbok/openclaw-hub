@@ -15,10 +15,10 @@
     "carapace-plugin-sdk": "^1.0.3"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.2.0",
     "tsup": "^8.3.0",
     "typescript": "^7",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
     "openclaw": "^2026.4.23"
