@@ -133,6 +133,7 @@ function makeEndpoints(tld: string) {
     tracked_foods: `${base}/api/v4/cmx/members/~/trackedFoods/{date}`,
     tracked_foods_v3: `${base}/api/v3/cmx/members/~/trackedFoods/{date}`,
     tracked_food_item: `${base}/api/v3/cmx/members/~/trackedFoods/{date}/{tracking_id}`,
+    tracked_food_item_v4: `${base}/api/v4/cmx/members/~/trackedFoods/{date}/{tracking_id}`,
     custom_meals: `${base}/api/v3/cmx/members/~/custom-foods/meals`,
     custom_recipes: `${base}/api/v3/cmx/members/~/custom-foods/recipes`,
     custom_foods_list: `${base}/api/v3/cmx/members/~/custom-foods/foods`,
@@ -293,8 +294,36 @@ async function apiDelete(
     const newJwt = await reauth(cfg, endpoints);
     if (newJwt) return apiDelete(url, newJwt, cfg, endpoints, body, true);
   }
-  if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status} from ${url}`);
+  if (res.status < 200 || res.status >= 300) {
+    const err = new Error(`HTTP ${res.status} from ${url}`) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
   try { return res.body.trim() ? JSON.parse(res.body) : {}; } catch { return {}; }
+}
+
+/**
+ * Deletes a single tracked food item.
+ *
+ * Quick-add entries are logged through the v4 API and 404 when deleted via v3,
+ * so try v4 first and fall back to v3, which covers regular entries.
+ */
+async function deleteTrackedItem(
+  targetDate: string,
+  itemId: string,
+  jwt: string,
+  cfg: WWConfig,
+  endpoints: ReturnType<typeof makeEndpoints>,
+): Promise<void> {
+  const v4Url = endpoints.tracked_food_item_v4.replace("{date}", targetDate).replace("{tracking_id}", itemId);
+  try {
+    await apiDelete(v4Url, jwt, cfg, endpoints, undefined);
+    return;
+  } catch (e) {
+    if ((e as Error & { status?: number }).status !== 404) throw e;
+  }
+  const v3Url = endpoints.tracked_food_item.replace("{date}", targetDate).replace("{tracking_id}", itemId);
+  await apiDelete(v3Url, jwt, cfg, endpoints, undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -459,16 +488,14 @@ export async function wwDelete(params: DeleteParams, cfg: WWConfig): Promise<unk
     if (mealComponents.length > 0) {
       // Delete each meal component individually via item endpoint
       for (const e of mealComponents) {
-        const itemUrl = ep.tracked_food_item.replace("{date}", targetDate).replace("{tracking_id}", String(e.entryId ?? e._id ?? ""));
-        await apiDelete(itemUrl, jwt, cfg, ep, undefined);
+        await deleteTrackedItem(targetDate, String(e.entryId ?? e._id ?? ""), jwt, cfg, ep);
       }
     } else {
       const entry = entries.find(e => String(e._id ?? "") === trackingId || String(e.entryId ?? "") === trackingId);
       if (!entry) return { error: `Entry ${trackingId} not found on ${targetDate}` };
       const itemId = String(entry.entryId ?? entry._id ?? "");
       if (!itemId) return { error: "Entry has no id — cannot delete" };
-      const itemUrl = ep.tracked_food_item.replace("{date}", targetDate).replace("{tracking_id}", itemId);
-      await apiDelete(itemUrl, jwt, cfg, ep, undefined);
+      await deleteTrackedItem(targetDate, itemId, jwt, cfg, ep);
     }
     return { status: "ok", message: `Deleted tracked item ${trackingId} from ${targetDate}`, date: targetDate, tracking_id: trackingId };
   } catch (e) { return { error: (e as Error).message }; }
