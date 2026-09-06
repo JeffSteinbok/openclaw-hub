@@ -26,7 +26,7 @@
     "carapace-mail-runtime": "github:JeffSteinbok/carapace-mail-runtime#175b1663fd7e2bac256a550b05e94b5532cf4765"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.1",
     "typescript": "^7",
     "vitest": "^4.1.11"
   }
