@@ -75,23 +75,44 @@ function formatEvent(e: Record<string, unknown>): Record<string, unknown> {
 // Handler
 // ---------------------------------------------------------------------------
 
+/** Shift a YYYY-MM-DD date string by N days without timezone drift. */
+function addDays(date: string, days: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
 export async function fetchWorkCalendar(
   config: OutlookWorkCalendarConfig,
-  params: { days?: number },
+  params: { days?: number; after?: string; before?: string },
 ): Promise<unknown> {
   const { calendarUrl, folderId } = config;
   if (!calendarUrl) return { error: "OUTLOOK_WORK_CALENDAR_URL is not set" };
   if (!folderId) return { error: "OUTLOOK_WORK_FOLDER_ID is not set" };
-  const days = params.days ?? 7;
   // Use local date (America/Los_Angeles) — toISOString() would give UTC and shift the
   // window forward by ~7h in the evening, dropping same-day events.
   const toLocalDate = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-  const startDate = toLocalDate(new Date());
-  const endDate = toLocalDate(new Date(Date.now() + days * 86_400_000));
+
+  // An explicit date range wins over the rolling `days` window, so past dates
+  // and arbitrary future ranges are reachable — `days` alone can only look
+  // forward from today.
+  let startDate: string;
+  let endDate: string;
+  if (params.after || params.before) {
+    startDate = params.after ?? toLocalDate(new Date());
+    // `before` names a day the caller wants included; the EWS page view end is
+    // exclusive, so run to the following midnight.
+    endDate = addDays(params.before ?? addDays(startDate, params.days ?? 7), 1);
+  } else {
+    const days = params.days ?? 7;
+    startDate = toLocalDate(new Date());
+    endDate = toLocalDate(new Date(Date.now() + days * 86_400_000));
+  }
   const url = `${calendarUrl}/service.svc?action=FindItem&app=PublishedCalendar&n=18`;
   const body = JSON.stringify(buildRequestBody(folderId, startDate, endDate));
   const res = await httpPost(url, body, { "Content-Type": "application/json; charset=utf-8", "Action": "FindItem", "User-Agent": "Mozilla/5.0" });
   const data = JSON.parse(res);
   const events = extractEvents(data).map(e => formatEvent(e as Record<string, unknown>));
-  return { start_date: startDate, end_date: endDate, count: events.length, events };
+  return { start_date: startDate, end_date: addDays(endDate, -1), count: events.length, events };
 }
