@@ -447,137 +447,158 @@ def _parse_legacy_session_file(
     # Derive session_id from the file stem before the first dot
     session_id = path.name.split(".")[0]
 
-    try:
-        handle = path.open(encoding="utf-8", errors="replace")
-    except OSError as exc:
-        stats["files_unreadable"] += 1
-        add_issue(issues, f"unreadable trajectory file {path}: {exc}")
-        return events
+    # Option B: detect and decompress .zst files; plain open() on a zstd binary
+    # produces garbled text that can parse as non-dict JSON and cause crashes.
+    if path.name.endswith(".zst"):
+        try:
+            result = subprocess.run(
+                ["zstd", "-d", "-c", str(path)],
+                capture_output=True,
+                check=True,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+            stats["files_unreadable"] += 1
+            add_issue(issues, f"unreadable trajectory file {path}: {exc}")
+            return events
+        raw_lines: list[str] = result.stdout.decode("utf-8", errors="replace").splitlines()
+    else:
+        try:
+            handle = path.open(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            stats["files_unreadable"] += 1
+            add_issue(issues, f"unreadable trajectory file {path}: {exc}")
+            return events
+        with handle:
+            raw_lines = handle.readlines()
 
     stats["files_read"] += 1
-    with handle:
-        for line_no, raw_line in enumerate(handle, start=1):
-            try:
-                d = json.loads(raw_line)
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                stats["malformed_json_lines"] += 1
-                continue
+    for line_no, raw_line in enumerate(raw_lines, start=1):
+        try:
+            d = json.loads(raw_line)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            stats["malformed_json_lines"] += 1
+            continue
 
-            # Timestamp: top-level ISO string field (NOT "ts")
-            ts_str = d.get("timestamp", "")
-            if not ts_str:
-                # Some older lines use numeric epoch ms — skip gracefully
-                continue
-            try:
-                ts = datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
-                if ts.tzinfo is None:
-                    ts = ts.replace(tzinfo=timezone.utc)
-            except (TypeError, ValueError):
-                stats["invalid_timestamps"] += 1
-                if stats["invalid_timestamps"] <= MAX_DIAGNOSTIC_ISSUES:
-                    add_issue(issues, f"invalid timestamp in {path}:{line_no}: {ts_str!r}")
-                continue
+        # Option A: guard against non-dict JSON values (e.g. integers parsed
+        # from garbled binary content — belt-and-suspenders with Option B)
+        if not isinstance(d, dict):
+            continue
 
-            record_type = d.get("type", "")
+        # Timestamp: top-level ISO string field (NOT "ts")
+        ts_str = d.get("timestamp", "")
+        if not ts_str:
+            # Some older lines use numeric epoch ms — skip gracefully
+            continue
+        try:
+            ts = datetime.fromisoformat(str(ts_str).replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            stats["invalid_timestamps"] += 1
+            if stats["invalid_timestamps"] <= MAX_DIAGNOSTIC_ISSUES:
+                add_issue(issues, f"invalid timestamp in {path}:{line_no}: {ts_str!r}")
+            continue
 
-            # ── Detect cron session from first user message ──────────────────
-            if not cron_resolved and record_type == "message":
-                msg = d.get("message") or {}
-                if msg.get("role") == "user":
-                    content = msg.get("content", "")
-                    cron_text = ""
-                    if isinstance(content, str):
-                        cron_text = content
-                    elif isinstance(content, list) and content:
-                        first_block = content[0]
-                        if isinstance(first_block, dict):
-                            cron_text = first_block.get("text", "")
-                        elif isinstance(first_block, str):
-                            cron_text = first_block
+        record_type = d.get("type", "")
 
-                    if cron_text.startswith("[cron:"):
-                        is_cron = True
-                        # Extract job name: "[cron:<uuid> <job-name>] ..."
-                        inner = cron_text[len("[cron:"):]
-                        # Strip uuid prefix and grab the job name
-                        parts = inner.split(" ", 1)
-                        job_part = parts[1] if len(parts) > 1 else ""
-                        job_name = job_part.split("]")[0].strip()
-                        session_key = f"agent:{agent}:cron:{job_name}:{session_id}"
-                    else:
-                        session_key = f"agent:{agent}:{session_id}"
-                    cron_resolved = True
+        # ── Detect cron session from first user message ──────────────────
+        if not cron_resolved and record_type == "message":
+            msg = d.get("message") or {}
+            if msg.get("role") == "user":
+                content = msg.get("content", "")
+                cron_text = ""
+                if isinstance(content, str):
+                    cron_text = content
+                elif isinstance(content, list) and content:
+                    first_block = content[0]
+                    if isinstance(first_block, dict):
+                        cron_text = first_block.get("text", "")
+                    elif isinstance(first_block, str):
+                        cron_text = first_block
 
-            # ── Extract tool errors ──────────────────────────────────────────
-            if record_type == "message":
-                msg = d.get("message") or {}
-                role = msg.get("role", "")
+                if cron_text.startswith("[cron:"):
+                    is_cron = True
+                    # Extract job name: "[cron:<uuid> <job-name>] ..."
+                    inner = cron_text[len("[cron:"):]
+                    # Strip uuid prefix and grab the job name
+                    parts = inner.split(" ", 1)
+                    job_part = parts[1] if len(parts) > 1 else ""
+                    job_name = job_part.split("]")[0].strip()
+                    session_key = f"agent:{agent}:cron:{job_name}:{session_id}"
+                else:
+                    session_key = f"agent:{agent}:{session_id}"
+                cron_resolved = True
 
-                if role == "toolResult" and _is_tool_error(msg):
-                    if ts < since_ts:
-                        continue  # outside the window — skip
-                    tool_name = msg.get("toolName") or "unknown"
-                    error_msg = _extract_error_from_message(msg)
-                    # Synthesise session_key from what we know so far
-                    sk = session_key if cron_resolved else f"agent:{agent}:{session_id}"
-                    events.append(
-                        {
-                            "ts": ts,
-                            "agent": agent,
-                            "session_key": sk,
-                            "event_type": "tool.error",
-                            "tool_name": tool_name,
-                            "error_msg": error_msg[:MAX_ERROR_LEN],
-                            "is_cron": is_cron,
-                        }
-                    )
+        # ── Extract tool errors ──────────────────────────────────────────
+        if record_type == "message":
+            msg = d.get("message") or {}
+            role = msg.get("role", "")
 
-            # ── New trace-schema: legacy "tool.error" / session error events ─
-            # (keep support for any future schema that emits explicit events)
-            elif record_type in ("tool.error", "tool.failed"):
+            if role == "toolResult" and _is_tool_error(msg):
                 if ts < since_ts:
-                    continue
-                data = d.get("data") or {}
-                tool_name = (
-                    data.get("tool")
-                    or d.get("toolName")
-                    or d.get("tool")
-                    or "unknown"
-                )
-                error_msg = data.get("error") or d.get("error") or ""
-                source = d.get("source") or ""
-                sk = session_key if cron_resolved else source or f"agent:{agent}:{session_id}"
-                _is_cron = is_cron or (CRON_SOURCE_MARKER in source)
+                    continue  # outside the window — skip
+                tool_name = msg.get("toolName") or "unknown"
+                error_msg = _extract_error_from_message(msg)
+                # Synthesise session_key from what we know so far
+                sk = session_key if cron_resolved else f"agent:{agent}:{session_id}"
                 events.append(
                     {
                         "ts": ts,
                         "agent": agent,
                         "session_key": sk,
-                        "event_type": record_type,
+                        "event_type": "tool.error",
                         "tool_name": tool_name,
-                        "error_msg": str(error_msg)[:MAX_ERROR_LEN],
-                        "is_cron": _is_cron,
+                        "error_msg": error_msg[:MAX_ERROR_LEN],
+                        "is_cron": is_cron,
                     }
                 )
 
-            elif record_type in ("session.error", "session.timeout", "run.error", "run.timeout"):
-                if ts < since_ts:
-                    continue
-                data = d.get("data") or {}
-                source = d.get("source") or ""
-                sk = session_key if cron_resolved else source or f"agent:{agent}:{session_id}"
-                _is_cron = is_cron or (CRON_SOURCE_MARKER in source)
-                events.append(
-                    {
-                        "ts": ts,
-                        "agent": agent,
-                        "session_key": sk,
-                        "event_type": record_type,
-                        "tool_name": "",
-                        "error_msg": str(data.get("error") or record_type)[:MAX_ERROR_LEN],
-                        "is_cron": _is_cron,
-                    }
-                )
+        # ── New trace-schema: legacy "tool.error" / session error events ─
+        # (keep support for any future schema that emits explicit events)
+        elif record_type in ("tool.error", "tool.failed"):
+            if ts < since_ts:
+                continue
+            data = d.get("data") or {}
+            tool_name = (
+                data.get("tool")
+                or d.get("toolName")
+                or d.get("tool")
+                or "unknown"
+            )
+            error_msg = data.get("error") or d.get("error") or ""
+            source = d.get("source") or ""
+            sk = session_key if cron_resolved else source or f"agent:{agent}:{session_id}"
+            _is_cron = is_cron or (CRON_SOURCE_MARKER in source)
+            events.append(
+                {
+                    "ts": ts,
+                    "agent": agent,
+                    "session_key": sk,
+                    "event_type": record_type,
+                    "tool_name": tool_name,
+                    "error_msg": str(error_msg)[:MAX_ERROR_LEN],
+                    "is_cron": _is_cron,
+                }
+            )
+
+        elif record_type in ("session.error", "session.timeout", "run.error", "run.timeout"):
+            if ts < since_ts:
+                continue
+            data = d.get("data") or {}
+            source = d.get("source") or ""
+            sk = session_key if cron_resolved else source or f"agent:{agent}:{session_id}"
+            _is_cron = is_cron or (CRON_SOURCE_MARKER in source)
+            events.append(
+                {
+                    "ts": ts,
+                    "agent": agent,
+                    "session_key": sk,
+                    "event_type": record_type,
+                    "tool_name": "",
+                    "error_msg": str(data.get("error") or record_type)[:MAX_ERROR_LEN],
+                    "is_cron": _is_cron,
+                }
+            )
 
     return events
 
