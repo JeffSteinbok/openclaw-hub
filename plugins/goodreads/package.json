@@ -13,10 +13,10 @@
   "dependencies": {
     "carapace-plugin-sdk": "^1.0.3",
     "@sinclair/typebox": "^0.34.52",
-    "playwright": "^1.62.1"
+    "playwright": "^1.63.0"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.6.1",
     "tsup": "^8.3.0",
     "typescript": "^7"
   },
