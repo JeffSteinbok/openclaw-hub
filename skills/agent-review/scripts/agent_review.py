@@ -8,7 +8,9 @@ Purpose:
   that the agent-review cron skill uses to generate weekly improvement suggestions.
 
 Data sources:
-  ~/.openclaw/agents/*/sessions/*.trajectory.jsonl  — per-session event logs
+  ~/.openclaw/agents/*/agent/openclaw-agent.sqlite  — live session transcripts
+                                                     (transcript_events, OpenClaw 2026.9.x+)
+  ~/.openclaw/agents/*/sessions/*.jsonl.{deleted,reset}.*  — legacy JSONL archives
   ~/.openclaw/agents/*/memory/YYYY-MM-DD.md         — daily memory notes
 
 Output:
@@ -31,6 +33,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -394,7 +397,9 @@ def maybe_file_issues(
 
 def _extract_error_from_message(msg: dict) -> str:
     """Extract the best error string from a toolResult message dict."""
-    details = msg.get("details") or {}
+    details = msg.get("details")
+    if not isinstance(details, dict):
+        details = {}
     # Prefer the explicit error field, then aggregated output, then content text
     error_msg = details.get("error") or ""
     if not error_msg:
@@ -412,8 +417,8 @@ def _is_tool_error(msg: dict) -> bool:
     """Return True if this toolResult message represents an error/failure."""
     if msg.get("isError"):
         return True
-    details = msg.get("details") or {}
-    return details.get("status") in ("error", "failed")
+    details = msg.get("details")
+    return isinstance(details, dict) and details.get("status") in ("error", "failed")
 
 
 def _parse_legacy_session_file(
@@ -440,9 +445,6 @@ def _parse_legacy_session_file(
     starts with ``[cron:``.
     """
     events: list[dict] = []
-    session_key: str = ""  # synthesised from session id + cron job name
-    is_cron: bool = False
-    cron_resolved: bool = False  # stop scanning for cron marker once found
 
     # Derive session_id from the file stem before the first dot
     session_id = path.name.split(".")[0]
@@ -472,6 +474,7 @@ def _parse_legacy_session_file(
             raw_lines = handle.readlines()
 
     stats["files_read"] += 1
+    records: list[tuple[str, dict]] = []
     for line_no, raw_line in enumerate(raw_lines, start=1):
         try:
             d = json.loads(raw_line)
@@ -481,9 +484,45 @@ def _parse_legacy_session_file(
 
         # Option A: guard against non-dict JSON values (e.g. integers parsed
         # from garbled binary content — belt-and-suspenders with Option B)
-        if not isinstance(d, dict):
-            continue
+        if isinstance(d, dict):
+            records.append((f"{path}:{line_no}", d))
 
+    return _parse_session_records(
+        records=records,
+        agent=agent,
+        session_id=session_id,
+        since_ts=since_ts,
+        stats=stats,
+        issues=issues,
+    )
+
+
+def _parse_session_records(
+    records: list[tuple[str, dict]],
+    agent: str,
+    session_id: str,
+    since_ts: datetime,
+    stats: dict,
+    issues: list[str],
+    session_key_hint: str = "",
+) -> list[dict]:
+    """
+    Extract error events from one session's transcript records, in order.
+
+    ``records`` are ``(location, record)`` pairs in the transcript event schema
+    shared by legacy JSONL files and the SQLite ``transcript_events`` table.
+    ``session_key_hint`` is the stored session key when known (SQLite); cron
+    runs are then recognised from it even if the ``[cron:`` user message has
+    been archived out of the window.
+    """
+    events: list[dict] = []
+    default_key = session_key_hint or f"agent:{agent}:{session_id}"
+    session_key: str = session_key_hint  # synthesised from session id + cron job name
+    is_cron: bool = CRON_SOURCE_MARKER in session_key_hint
+    cron_resolved: bool = False  # stop scanning for cron marker once found
+    last_in_window: datetime | None = None
+
+    for location, d in records:
         # Timestamp: top-level ISO string field (NOT "ts")
         ts_str = d.get("timestamp", "")
         if not ts_str:
@@ -496,10 +535,12 @@ def _parse_legacy_session_file(
         except (TypeError, ValueError):
             stats["invalid_timestamps"] += 1
             if stats["invalid_timestamps"] <= MAX_DIAGNOSTIC_ISSUES:
-                add_issue(issues, f"invalid timestamp in {path}:{line_no}: {ts_str!r}")
+                add_issue(issues, f"invalid timestamp in {location}: {ts_str!r}")
             continue
 
         record_type = d.get("type", "")
+        if ts >= since_ts:
+            last_in_window = ts
 
         # ── Detect cron session from first user message ──────────────────
         if not cron_resolved and record_type == "message":
@@ -526,7 +567,7 @@ def _parse_legacy_session_file(
                     job_name = job_part.split("]")[0].strip()
                     session_key = f"agent:{agent}:cron:{job_name}:{session_id}"
                 else:
-                    session_key = f"agent:{agent}:{session_id}"
+                    session_key = default_key
                 cron_resolved = True
 
         # ── Extract tool errors ──────────────────────────────────────────
@@ -540,7 +581,7 @@ def _parse_legacy_session_file(
                 tool_name = msg.get("toolName") or "unknown"
                 error_msg = _extract_error_from_message(msg)
                 # Synthesise session_key from what we know so far
-                sk = session_key if cron_resolved else f"agent:{agent}:{session_id}"
+                sk = session_key if cron_resolved else default_key
                 events.append(
                     {
                         "ts": ts,
@@ -567,7 +608,7 @@ def _parse_legacy_session_file(
             )
             error_msg = data.get("error") or d.get("error") or ""
             source = d.get("source") or ""
-            sk = session_key if cron_resolved else source or f"agent:{agent}:{session_id}"
+            sk = session_key if cron_resolved else source or default_key
             _is_cron = is_cron or (CRON_SOURCE_MARKER in source)
             events.append(
                 {
@@ -586,7 +627,7 @@ def _parse_legacy_session_file(
                 continue
             data = d.get("data") or {}
             source = d.get("source") or ""
-            sk = session_key if cron_resolved else source or f"agent:{agent}:{session_id}"
+            sk = session_key if cron_resolved else source or default_key
             _is_cron = is_cron or (CRON_SOURCE_MARKER in source)
             events.append(
                 {
@@ -599,6 +640,21 @@ def _parse_legacy_session_file(
                     "is_cron": _is_cron,
                 }
             )
+
+    # Record every cron session active in the window (not just errored ones)
+    # so cron_stats can report ok vs errored runs.
+    if is_cron and last_in_window is not None:
+        events.append(
+            {
+                "ts": last_in_window,
+                "agent": agent,
+                "session_key": session_key if cron_resolved else default_key,
+                "event_type": "session.seen",
+                "tool_name": "",
+                "error_msg": "",
+                "is_cron": True,
+            }
+        )
 
     return events
 
@@ -668,6 +724,107 @@ def parse_trajectories(since_ts: datetime) -> tuple[list[dict], dict, list[str]]
             f"WARNING: {stats['files_seen']} trajectory files were read but 0 events were extracted — "
             "possible schema mismatch or all events outside the time window",
         )
+
+    return events, stats, issues
+
+
+def _decode_transcript_row(event_json: str | None, event_zstd: bytes | None) -> dict | None:
+    """Decode one ``transcript_events`` row (plain JSON or a zstd frame)."""
+    raw: str | None = event_json
+    if raw is None and event_zstd is not None:
+        result = subprocess.run(["zstd", "-d", "-c"], input=event_zstd, capture_output=True)
+        if result.returncode != 0:
+            return None
+        raw = result.stdout.decode("utf-8", errors="replace")
+    if raw is None:
+        return None
+    try:
+        record = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return record if isinstance(record, dict) else None
+
+
+def parse_sqlite_sessions(since_ts: datetime) -> tuple[list[dict], dict, list[str]]:
+    """
+    Scan the per-agent SQLite session stores used since OpenClaw 2026.9.x.
+
+    Live transcripts are written to ``agents/*/agent/openclaw-agent.sqlite``
+    (table ``transcript_events``); JSONL files under ``sessions/`` are only
+    pre-migration archives, so scanning them alone finds no recent events.
+    Databases are opened read-only.
+    """
+    events: list[dict] = []
+    stats = {
+        "databases_seen": 0,
+        "databases_read": 0,
+        "databases_unreadable": 0,
+        "sessions_in_window": 0,
+        "events_read": 0,
+        "compressed_events": 0,
+        "undecodable_events": 0,
+        "invalid_timestamps": 0,
+    }
+    issues: list[str] = []
+    since_ms = int(since_ts.timestamp() * 1000)
+    have_zstd = shutil.which("zstd") is not None
+
+    for db_path in sorted(AGENTS_DIR.glob("*/agent/openclaw-agent.sqlite")):
+        stats["databases_seen"] += 1
+        agent = db_path.relative_to(AGENTS_DIR).parts[0]
+        try:
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=10)
+        except sqlite3.Error as exc:
+            stats["databases_unreadable"] += 1
+            add_issue(issues, f"unreadable session database {db_path}: {exc}")
+            continue
+        try:
+            session_rows = conn.execute(
+                "SELECT DISTINCT e.session_id, w.session_key"
+                " FROM transcript_events e LEFT JOIN session_windows w USING (session_id)"
+                " WHERE e.created_at >= ?",
+                (since_ms,),
+            ).fetchall()
+            for session_id, session_key in session_rows:
+                stats["sessions_in_window"] += 1
+                records: list[tuple[str, dict]] = []
+                rows = conn.execute(
+                    "SELECT seq, event_json, event_zstd FROM transcript_events"
+                    " WHERE session_id = ? ORDER BY seq",
+                    (session_id,),
+                )
+                for seq, event_json, event_zstd in rows:
+                    stats["events_read"] += 1
+                    if event_json is None and event_zstd is not None:
+                        stats["compressed_events"] += 1
+                        if not have_zstd:
+                            stats["undecodable_events"] += 1
+                            continue
+                    record = _decode_transcript_row(event_json, event_zstd)
+                    if record is None:
+                        stats["undecodable_events"] += 1
+                        continue
+                    records.append((f"{db_path}:{session_id}#{seq}", record))
+                events.extend(
+                    _parse_session_records(
+                        records=records,
+                        agent=agent,
+                        session_id=session_id,
+                        since_ts=since_ts,
+                        stats=stats,
+                        issues=issues,
+                        session_key_hint=session_key or "",
+                    )
+                )
+            stats["databases_read"] += 1
+        except sqlite3.Error as exc:
+            stats["databases_unreadable"] += 1
+            add_issue(issues, f"failed reading session database {db_path}: {exc}")
+        finally:
+            conn.close()
+
+    if stats["compressed_events"] and not have_zstd:
+        add_issue(issues, f"zstd not installed — skipped {stats['compressed_events']} compressed transcript events")
 
     return events, stats, issues
 
@@ -745,8 +902,16 @@ def main() -> None:
     cron_sessions_errored = set()
 
     events, trajectory_stats, trajectory_issues = parse_trajectories(since)
-    if trajectory_stats["files_seen"] == 0:
-        raise RuntimeError(f"No trajectory files found under {AGENTS_DIR}/<agent>/sessions/")
+    sqlite_events, sqlite_stats, sqlite_issues = parse_sqlite_sessions(since)
+    events.extend(sqlite_events)
+    if sqlite_stats["events_read"]:
+        # Legacy JSONL files are pre-migration archives; finding nothing recent
+        # in them is expected once the SQLite store is being read.
+        trajectory_issues = [i for i in trajectory_issues if "0 events were extracted" not in i]
+    if trajectory_stats["files_seen"] == 0 and sqlite_stats["databases_seen"] == 0:
+        raise RuntimeError(
+            f"No session data found under {AGENTS_DIR}/<agent>/sessions/ or {AGENTS_DIR}/<agent>/agent/"
+        )
 
     for event in events:
         session_key = event["session_key"]
@@ -827,8 +992,9 @@ def main() -> None:
         "memory_flags": memory_flags,
         "source_health": {
             "trajectory_scan": trajectory_stats,
+            "sqlite_session_scan": sqlite_stats,
             "memory_scan": memory_stats,
-            "issues": trajectory_issues + memory_issues,
+            "issues": trajectory_issues + sqlite_issues + memory_issues,
         },
         "issue_candidates": issue_candidates,
         "issue_filing": issue_filing,
