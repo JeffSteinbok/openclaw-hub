@@ -23,7 +23,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "carapace-mail-runtime": "github:JeffSteinbok/carapace-mail-runtime#175b1663fd7e2bac256a550b05e94b5532cf4765"
+    "carapace-mail-runtime": "github:JeffSteinbok/carapace-mail-runtime#dbec615af2718adf06e5e06754e50466cfedcc92"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
