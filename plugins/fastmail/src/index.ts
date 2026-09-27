@@ -37,15 +37,18 @@ export const createEntry = definePlugin({
       name: "fastmail_send",
       label: "Send Email",
       description:
-        "Send a plain-text email via Fastmail JMAP, with optional file attachments.",
+        "Send a plain-text or HTML email via Fastmail JMAP, with optional file attachments.",
       parameters: Type.Object({
         to: Type.Union([Type.String(), Type.Array(Type.String())], {
-          description: "Recipient email address(es)",
+          description: "Recipient email address(es). Pass a single string or an array of strings.",
         }),
         subject: Type.String({ description: "Email subject line" }),
         body: Type.String({ description: "Plain-text email body" }),
+        html_body: Type.Optional(
+          Type.String({ description: "HTML email body. When provided, sends a multipart/alternative message with both plain-text and HTML parts." }),
+        ),
         cc: Type.Optional(
-          Type.Array(Type.String(), { description: "CC recipient email address(es)" }),
+          Type.Array(Type.String(), { description: "CC recipient email address(es). Must be an array of strings, e.g. [\"user@example.com\"]" }),
         ),
         signature: Type.Optional(
           Type.String({ description: "Signature block appended after body" }),
@@ -60,7 +63,7 @@ export const createEntry = definePlugin({
           Type.String({ description: "Space-separated list of Message-IDs for the full thread References header. Typically: prior References + In-Reply-To." }),
         ),
       }),
-      async execute({ to, subject, body, cc, signature, attachment, in_reply_to, references }, config) {
+      async execute({ to, subject, body, html_body, cc, signature, attachment, in_reply_to, references }, config) {
         try {
           const resolvedConfig = resolveConfig({
             ...config,
@@ -71,6 +74,7 @@ export const createEntry = definePlugin({
             cc,
             subject,
             body,
+            html_body,
             signature,
             attachment,
             in_reply_to,

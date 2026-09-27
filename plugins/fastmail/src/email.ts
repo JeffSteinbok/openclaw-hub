@@ -150,13 +150,28 @@ function buildMimeMessage(opts: {
   cc?: string[];
   subject: string;
   body: string;
+  htmlBody?: string;
   inReplyTo?: string;
   references?: string;
   attachments?: Array<{ filename: string; contentType: string; data: Uint8Array }>;
 }): string {
-  const boundary = `----=_Part_${randomUUID().replace(/-/g, "")}`;
+  const outerBoundary = `----=_Part_${randomUUID().replace(/-/g, "")}`;
+  const altBoundary = `----=_Alt_${randomUUID().replace(/-/g, "")}`;
   const msgId = `<${randomUUID()}@${opts.from.includes("@") ? opts.from.split("@")[1] : "localhost"}>`;
   const date = new Date().toUTCString();
+  const hasAttachments = (opts.attachments ?? []).length > 0;
+  const hasHtml = !!opts.htmlBody;
+
+  // Determine top-level content type
+  // - attachments present: multipart/mixed (body part may itself be multipart/alternative)
+  // - html only: multipart/alternative
+  // - plain only: text/plain
+  const topBoundary = hasAttachments ? outerBoundary : altBoundary;
+  const topContentType = hasAttachments
+    ? `multipart/mixed; boundary="${topBoundary}"`
+    : hasHtml
+      ? `multipart/alternative; boundary="${topBoundary}"`
+      : `text/plain; charset=utf-8`;
 
   const headers = [
     `From: ${opts.from}`,
@@ -168,35 +183,78 @@ function buildMimeMessage(opts: {
     ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
     ...(opts.references ? [`References: ${opts.references}`] : []),
     `MIME-Version: 1.0`,
-    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    `Content-Type: ${topContentType}`,
   ];
 
   const parts: string[] = [];
-  // Text body part
-  parts.push(
-    `--${boundary}\r\n` +
-    `Content-Type: text/plain; charset=utf-8\r\n` +
-    `Content-Transfer-Encoding: 8bit\r\n` +
-    `\r\n` +
-    opts.body,
-  );
 
-  // Attachment parts
-  for (const att of opts.attachments ?? []) {
-    const b64 = Buffer.from(att.data).toString("base64");
-    // Fold base64 at 76 chars
-    const folded = b64.match(/.{1,76}/g)?.join("\r\n") ?? b64;
-    parts.push(
-      `--${boundary}\r\n` +
-      `Content-Type: ${att.contentType}\r\n` +
-      `Content-Transfer-Encoding: base64\r\n` +
-      `Content-Disposition: attachment; filename="${att.filename}"\r\n` +
-      `\r\n` +
-      folded,
-    );
+  if (!hasAttachments && !hasHtml) {
+    // Simple plain-text — no MIME parts, just body after headers
+    return headers.join("\r\n") + "\r\n\r\n" + opts.body;
   }
 
-  parts.push(`--${boundary}--`);
+  if (hasAttachments) {
+    // Body section inside multipart/mixed
+    if (hasHtml) {
+      // Nest text+html as multipart/alternative inside the mixed part
+      const bodySection =
+        `--${outerBoundary}\r\n` +
+        `Content-Type: multipart/alternative; boundary="${altBoundary}"\r\n` +
+        `\r\n` +
+        `--${altBoundary}\r\n` +
+        `Content-Type: text/plain; charset=utf-8\r\n` +
+        `Content-Transfer-Encoding: 8bit\r\n` +
+        `\r\n` +
+        opts.body + `\r\n` +
+        `--${altBoundary}\r\n` +
+        `Content-Type: text/html; charset=utf-8\r\n` +
+        `Content-Transfer-Encoding: 8bit\r\n` +
+        `\r\n` +
+        opts.htmlBody + `\r\n` +
+        `--${altBoundary}--`;
+      parts.push(bodySection);
+    } else {
+      parts.push(
+        `--${outerBoundary}\r\n` +
+        `Content-Type: text/plain; charset=utf-8\r\n` +
+        `Content-Transfer-Encoding: 8bit\r\n` +
+        `\r\n` +
+        opts.body,
+      );
+    }
+
+    // Attachment parts
+    for (const att of opts.attachments ?? []) {
+      const b64 = Buffer.from(att.data).toString("base64");
+      const folded = b64.match(/.{1,76}/g)?.join("\r\n") ?? b64;
+      parts.push(
+        `--${outerBoundary}\r\n` +
+        `Content-Type: ${att.contentType}\r\n` +
+        `Content-Transfer-Encoding: base64\r\n` +
+        `Content-Disposition: attachment; filename="${att.filename}"\r\n` +
+        `\r\n` +
+        folded,
+      );
+    }
+    parts.push(`--${outerBoundary}--`);
+  } else {
+    // multipart/alternative (no attachments, has HTML)
+    parts.push(
+      `--${altBoundary}\r\n` +
+      `Content-Type: text/plain; charset=utf-8\r\n` +
+      `Content-Transfer-Encoding: 8bit\r\n` +
+      `\r\n` +
+      opts.body,
+    );
+    parts.push(
+      `--${altBoundary}\r\n` +
+      `Content-Type: text/html; charset=utf-8\r\n` +
+      `Content-Transfer-Encoding: 8bit\r\n` +
+      `\r\n` +
+      opts.htmlBody,
+    );
+    parts.push(`--${altBoundary}--`);
+  }
 
   return headers.join("\r\n") + "\r\n\r\n" + parts.join("\r\n");
 }
@@ -299,6 +357,7 @@ export interface SendArgs {
   cc?: string[];
   subject: string;
   body: string;
+  html_body?: string;
   signature?: string;
   attachment?: string[];
   in_reply_to?: string;
@@ -312,14 +371,32 @@ export async function cmdSend(cfg: FastmailConfig, args: SendArgs): Promise<stri
 
   if (!args.attachment || args.attachment.length === 0) {
     // Fast path: native JMAP Email/set
+    const textBody = bodyWithSig(args.body, args.signature);
     const emailObj: Record<string, unknown> = {
       mailboxIds: { [cfg.draftsId]: true },
       from: [{ name: cfg.fromName, email: cfg.fromEmail }],
       to: toList.map((e) => ({ email: e })),
       subject: args.subject,
-      bodyStructure: { type: "text/plain", partId: "1" },
-      bodyValues: { "1": { value: bodyWithSig(args.body, args.signature) } },
     };
+
+    if (args.html_body) {
+      // multipart/alternative: text + HTML
+      emailObj.bodyStructure = {
+        type: "multipart/alternative",
+        subParts: [
+          { type: "text/plain", partId: "1" },
+          { type: "text/html", partId: "2" },
+        ],
+      };
+      emailObj.bodyValues = {
+        "1": { value: textBody },
+        "2": { value: args.html_body },
+      };
+    } else {
+      emailObj.bodyStructure = { type: "text/plain", partId: "1" };
+      emailObj.bodyValues = { "1": { value: textBody } };
+    }
+
     if (ccList.length > 0) {
       emailObj.cc = ccList.map((e) => ({ email: e }));
     }
@@ -367,6 +444,7 @@ export async function cmdSend(cfg: FastmailConfig, args: SendArgs): Promise<stri
       cc: ccList.length > 0 ? ccList : undefined,
       subject: args.subject,
       body: bodyWithSig(args.body, args.signature),
+      htmlBody: args.html_body,
       inReplyTo: args.in_reply_to,
       references: args.references,
       attachments,
