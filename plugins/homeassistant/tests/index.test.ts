@@ -170,6 +170,9 @@ describe("plugin entry", () => {
     const { api } = await loadPlugin();
     const names = Object.keys(api.tools).sort();
     expect(names).toEqual([
+      "hass_automation_get",
+      "hass_automation_list",
+      "hass_automation_set",
       "hass_camera_collage",
       "hass_camera_list",
       "hass_camera_snapshot",
@@ -178,6 +181,9 @@ describe("plugin entry", () => {
       "hass_lovelace_get",
       "hass_lovelace_set",
       "hass_person_find",
+      "hass_script_get",
+      "hass_script_list",
+      "hass_script_set",
       "hass_service_call",
       "hass_speaker_volume_get",
       "hass_speaker_volume_set",
@@ -390,6 +396,150 @@ describe("hass_lovelace_set", () => {
     expect(seen[0].method).toBe("PUT");
     expect(JSON.parse(seen[0].body)).toEqual(payload);
     expect(data.output.status).toBe("ok");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hass_automation_* / hass_script_*
+// ---------------------------------------------------------------------------
+
+const ENTITY_AUTOMATION = {
+  entity_id: "automation.patio_lights",
+  state: "on",
+  attributes: { id: "1719755681387", friendly_name: "Patio Lights", last_triggered: "2026-10-01T00:00:00Z" },
+  context: { id: "ctx-5" },
+};
+
+const ENTITY_SCRIPT = {
+  entity_id: "script.bedtime",
+  state: "off",
+  attributes: { friendly_name: "Bedtime", last_triggered: null },
+  context: { id: "ctx-6" },
+};
+
+describe("hass_automation_list / hass_script_list", () => {
+  it("lists automations keyed by their config id", async () => {
+    const { api } = await loadPlugin();
+    mockHttp(JSON.stringify([ENTITY_AUTOMATION, ENTITY_SCRIPT, ENTITY_LIGHT]));
+    const data = resultText(await api.tools["hass_automation_list"].execute("id", {})) as {
+      output: Array<Record<string, unknown>>; count: number;
+    };
+    expect(data.count).toBe(1);
+    expect(data.output[0]).toEqual({
+      id: "1719755681387",
+      entity_id: "automation.patio_lights",
+      alias: "Patio Lights",
+      state: "on",
+      last_triggered: "2026-10-01T00:00:00Z",
+    });
+  });
+
+  it("lists scripts keyed by their object id", async () => {
+    const { api } = await loadPlugin();
+    mockHttp(JSON.stringify([ENTITY_AUTOMATION, ENTITY_SCRIPT]));
+    const data = resultText(await api.tools["hass_script_list"].execute("id", {})) as {
+      output: Array<Record<string, unknown>>;
+    };
+    expect(data.output).toHaveLength(1);
+    expect(data.output[0]).toMatchObject({ id: "bedtime", entity_id: "script.bedtime" });
+  });
+});
+
+describe("hass_automation_get / hass_script_get", () => {
+  it("returns error when id is missing", async () => {
+    const { api } = await loadPlugin();
+    const data = resultText(await api.tools["hass_automation_get"].execute("id", {}));
+    expect(data).toMatchObject({ error: expect.stringContaining("id") });
+  });
+
+  it("reads an automation by config id", async () => {
+    const { api } = await loadPlugin();
+    const seen: string[] = [];
+    mockHttpSequence([
+      { body: JSON.stringify({ id: "123", alias: "A" }), inspect: (r) => { seen.push(r.url); } },
+    ]);
+    const data = resultText(await api.tools["hass_automation_get"].execute("id", { id: "123" })) as {
+      output: Record<string, unknown>; id: string;
+    };
+    expect(seen[0]).toContain("/api/config/automation/config/123");
+    expect(data).toEqual({ output: { id: "123", alias: "A" }, id: "123" });
+  });
+
+  it("resolves an automation entity ID to its config id", async () => {
+    const { api } = await loadPlugin();
+    const seen: string[] = [];
+    mockHttpSequence([
+      { body: JSON.stringify(ENTITY_AUTOMATION), inspect: (r) => { seen.push(r.url); } },
+      { body: JSON.stringify({ alias: "Patio Lights" }), inspect: (r) => { seen.push(r.url); } },
+    ]);
+    const data = resultText(await api.tools["hass_automation_get"].execute("id", {
+      id: "automation.patio_lights",
+    })) as { id: string };
+    expect(seen[0]).toContain("/api/states/automation.patio_lights");
+    expect(seen[1]).toContain("/api/config/automation/config/1719755681387");
+    expect(data.id).toBe("1719755681387");
+  });
+
+  it("strips the script. prefix without a lookup", async () => {
+    const { api } = await loadPlugin();
+    const seen: string[] = [];
+    mockHttpSequence([
+      { body: JSON.stringify({ alias: "Bedtime", sequence: [] }), inspect: (r) => { seen.push(r.url); } },
+    ]);
+    await api.tools["hass_script_get"].execute("id", { id: "script.bedtime" });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain("/api/config/script/config/bedtime");
+  });
+
+  it("surfaces HTTP errors such as a non-admin token", async () => {
+    const { api } = await loadPlugin();
+    mockHttp("401: Unauthorized", 401);
+    const data = resultText(await api.tools["hass_script_get"].execute("id", { id: "bedtime" }));
+    expect(data).toMatchObject({ error: expect.stringContaining("401") });
+  });
+});
+
+describe("hass_automation_set / hass_script_set", () => {
+  it("returns error when config is missing", async () => {
+    const { api } = await loadPlugin();
+    const data = resultText(await api.tools["hass_automation_set"].execute("id", { id: "123" }));
+    expect(data).toMatchObject({ error: expect.stringContaining("config") });
+  });
+
+  it("writes an automation config with POST", async () => {
+    const { api } = await loadPlugin();
+    const seen: Array<{ url: string; method: string; body: string }> = [];
+    mockHttpSequence([
+      { body: JSON.stringify({ result: "ok" }), inspect: (r) => { seen.push(r); } },
+    ]);
+    const payload = { alias: "A", triggers: [], actions: [] };
+    const data = resultText(await api.tools["hass_automation_set"].execute("id", {
+      id: "123",
+      config: payload,
+    })) as { output: Record<string, unknown>; id: string };
+    expect(seen[0].url).toContain("/api/config/automation/config/123");
+    expect(seen[0].method).toBe("POST");
+    expect(JSON.parse(seen[0].body)).toEqual(payload);
+    expect(data).toEqual({ output: { result: "ok" }, id: "123" });
+  });
+
+  it("generates an id for a new automation", async () => {
+    const { api } = await loadPlugin();
+    const seen: string[] = [];
+    mockHttpSequence([
+      { body: JSON.stringify({ result: "ok" }), inspect: (r) => { seen.push(r.url); } },
+    ]);
+    const data = resultText(await api.tools["hass_automation_set"].execute("id", {
+      config: { alias: "New" },
+    })) as { id: string };
+    expect(data.id).toMatch(/^\d+$/);
+    expect(seen[0]).toContain(`/api/config/automation/config/${data.id}`);
+  });
+
+  it("requires an id for scripts", async () => {
+    const { api } = await loadPlugin();
+    const data = resultText(await api.tools["hass_script_set"].execute("id", { config: { alias: "X" } }));
+    expect(data).toMatchObject({ error: expect.stringContaining("id is required") });
   });
 });
 

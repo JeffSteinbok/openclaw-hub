@@ -8,6 +8,7 @@ import {
   type HomeAssistantConfig,
   CAMERAS, DEFAULT_COLLAGE_CAMERAS,
   stateGet, stateList, serviceCall, lovelaceGet, lovelaceSet, eventList, personFind,
+  configList, configGet, configSet,
   speakerVolumeGet, speakerVolumeSet, logbook, cameraList,
   cameraSnapshotHandler, cameraCollageHandler,
 } from "./handlers.js";
@@ -163,6 +164,79 @@ export const createEntry = definePlugin({
           return { error: (e as Error).message };
         }
       },
+    }),
+
+    ...(["automation", "script"] as const).flatMap((kind) => {
+      const label = kind === "automation" ? "Automation" : "Script";
+      const idDescription = kind === "automation"
+        ? "Automation config id (the `id` attribute, as returned by hass_automation_list) or its entity ID (e.g. automation.porch_lights)."
+        : "Script id (e.g. bedtime) or its entity ID (e.g. script.bedtime).";
+      const resolve = (config: { server?: string; token?: string }): HomeAssistantConfig => ({
+        server: stripTrailingSlashes(config.server?.trim() || "http://<home-assistant-host>:8123"),
+        token: config.token ?? "",
+        captureDir: CAPTURE_DIR,
+      });
+
+      return [
+        tool({
+          name: `hass_${kind}_list`,
+          label: `HA ${label} List`,
+          description: `List Home Assistant ${kind}s with their config id, alias, state, and last triggered time.`,
+          parameters: Type.Object({}),
+          async execute(_params, config) {
+            try {
+              return await configList(resolve(config), { kind });
+            } catch (e) {
+              return { error: (e as Error).message };
+            }
+          },
+        }),
+
+        tool({
+          name: `hass_${kind}_get`,
+          label: `HA ${label} Get`,
+          description: `Read the full config of a Home Assistant ${kind}. Requires an admin token.`,
+          parameters: Type.Object({
+            id: Type.String({ description: idDescription }),
+          }),
+          async execute({ id }, config) {
+            try {
+              return await configGet(resolve(config), { kind, id: String(id ?? "") });
+            } catch (e) {
+              return { error: (e as Error).message };
+            }
+          },
+        }),
+
+        tool({
+          name: `hass_${kind}_set`,
+          label: `HA ${label} Set`,
+          description: kind === "automation"
+            ? "Create or replace a Home Assistant automation config. HA validates and reloads it. Omit id to create a new automation. Read the existing config with hass_automation_get first and send the full object. Requires an admin token."
+            : "Create or replace a Home Assistant script config. HA validates and reloads it. Read the existing config with hass_script_get first and send the full object. Requires an admin token.",
+          parameters: Type.Object({
+            id: kind === "automation"
+              ? Type.Optional(Type.String({ description: `${idDescription} Omit to create a new automation.` }))
+              : Type.String({ description: `${idDescription} A new id creates a new script.` }),
+            config: Type.Record(Type.String(), Type.Unknown(), {
+              description: kind === "automation"
+                ? "Full automation config object (alias, description, triggers, conditions, actions, mode)."
+                : "Full script config object (alias, description, sequence, mode, fields).",
+            }),
+          }),
+          async execute({ id, config: itemConfig }, config) {
+            try {
+              return await configSet(resolve(config), {
+                kind,
+                id: id as string | undefined,
+                config: itemConfig as Record<string, unknown>,
+              });
+            } catch (e) {
+              return { error: (e as Error).message };
+            }
+          },
+        }),
+      ];
     }),
 
     tool({
