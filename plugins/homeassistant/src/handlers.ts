@@ -345,6 +345,93 @@ export async function lovelaceSet(
   };
 }
 
+// Automation and script configs live behind /api/config/<kind>/config/<id>,
+// which requires an admin token. Automations are keyed by their `id` attribute
+// (not the entity object id); scripts are keyed by their entity object id.
+export type ConfigKind = "automation" | "script";
+
+async function resolveConfigId(
+  config: HomeAssistantConfig,
+  kind: ConfigKind,
+  ref: string,
+): Promise<{ id: string } | { error: string }> {
+  const value = ref.trim();
+  if (!value) return { error: "id is required" };
+  if (!value.startsWith(`${kind}.`)) return { id: value };
+  if (kind === "script") return { id: value.slice("script.".length) };
+
+  const res = await apiGet(config.server, config.token, `/api/states/${encodeURIComponent(value)}`);
+  if ("error" in res) return res;
+  const id = (res.output as HassEntity).attributes?.id;
+  if (typeof id !== "string" || !id) {
+    return { error: `${value} has no config id (it may be defined in YAML outside automations.yaml)` };
+  }
+  return { id };
+}
+
+export async function configList(config: HomeAssistantConfig, params: { kind: ConfigKind }): Promise<unknown> {
+  const { kind } = params;
+  const res = await apiGet(config.server, config.token, "/api/states", 60_000);
+  if ("error" in res) return res;
+  const data = res.output as HassEntity[];
+  if (!Array.isArray(data)) return res;
+  const items = data
+    .filter((e) => e.entity_id?.startsWith(`${kind}.`))
+    .map((e) => {
+      const attrs = (e.attributes ?? {}) as Record<string, unknown>;
+      return {
+        id: kind === "script" ? e.entity_id!.slice("script.".length) : attrs.id,
+        entity_id: e.entity_id,
+        alias: attrs.friendly_name,
+        state: e.state,
+        last_triggered: attrs.last_triggered,
+      };
+    });
+  return { output: items, count: items.length };
+}
+
+export async function configGet(config: HomeAssistantConfig, params: { kind: ConfigKind; id: string }): Promise<unknown> {
+  const resolved = await resolveConfigId(config, params.kind, params.id ?? "");
+  if ("error" in resolved) return resolved;
+  const res = await apiGet(
+    config.server,
+    config.token,
+    `/api/config/${params.kind}/config/${encodeURIComponent(resolved.id)}`,
+  );
+  if ("error" in res) return res;
+  return { output: res.output, id: resolved.id };
+}
+
+export async function configSet(
+  config: HomeAssistantConfig,
+  params: { kind: ConfigKind; id?: string; config: Record<string, unknown> },
+): Promise<unknown> {
+  if (!params.config || typeof params.config !== "object" || Array.isArray(params.config)) {
+    return { error: "config must be a non-null object" };
+  }
+
+  let id: string;
+  if (params.id?.trim()) {
+    const resolved = await resolveConfigId(config, params.kind, params.id);
+    if ("error" in resolved) return resolved;
+    id = resolved.id;
+  } else if (params.kind === "automation") {
+    // Same scheme the HA UI uses for new automations.
+    id = String(Date.now());
+  } else {
+    return { error: "id is required for scripts (it becomes the script.<id> entity)" };
+  }
+
+  const res = await apiPost(
+    config.server,
+    config.token,
+    `/api/config/${params.kind}/config/${encodeURIComponent(id)}`,
+    params.config,
+  );
+  if ("error" in res) return res;
+  return { output: res.output, id };
+}
+
 export async function eventList(config: HomeAssistantConfig, params: { entity_id?: string }): Promise<unknown> {
   const { server, token } = config;
   const res = await apiGet(server, token, "/api/events");
