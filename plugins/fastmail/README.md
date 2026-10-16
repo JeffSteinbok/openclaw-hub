@@ -14,6 +14,7 @@ Send email and manage calendar events in Fastmail via JMAP and CalDAV.
 | [`fastmail_inbox`](#tool-fastmail_inbox) | Show recent inbox emails, optionally filtered to unread |
 | [`fastmail_meeting`](#tool-fastmail_meeting) | Create a calendar meeting invite via CalDAV with iMIP invitations |
 | [`fastmail_update_event`](#tool-fastmail_update_event) | Update a calendar event's title, time, location, attendees, or status |
+| [`fastmail_delete_event`](#tool-fastmail_delete_event) | Delete a calendar event; Fastmail emails cancellations to attendees |
 | [`fastmail_query_events`](#tool-fastmail_query_events) | Query calendar events by date range, text, attendee, or UID |
 
 ## Configuration Schema
@@ -142,6 +143,16 @@ Send email and manage calendar events in Fastmail via JMAP and CalDAV.
 | `add_attendee` | array | No | Attendees to add |
 | `remove_attendee` | array | No | Attendees to remove |
 | `force` | boolean | No | Force update without confirmation |
+
+<a id="tool-fastmail_delete_event"></a>
+
+### `fastmail_delete_event`
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `uid` | string | No | Event UID to delete |
+| `find` | string | No | Text search to find the event |
+| `force` | boolean | No | Delete all matching events when multiple found |
 
 <a id="tool-fastmail_query_events"></a>
 

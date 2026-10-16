@@ -539,6 +539,57 @@ export async function cmdMeeting(cfg: FastmailConfig, args: MeetingArgs): Promis
   return lines.join("\n");
 }
 
+async function findEvents(
+  cfg: FastmailConfig,
+  caldav: CalDAVClient,
+  args: { uid?: string; find?: string; force?: boolean },
+  verb: string,
+): Promise<IcalEvent[]> {
+  if (!args.uid && !args.find) {
+    throw new Error("Provide uid or find to identify the event.");
+  }
+  const calPath = await getCaldavCalendarPath(cfg, caldav);
+
+  if (args.uid) {
+    const ev = await caldav.getEventByUid(calPath, args.uid);
+    if (!ev) throw new Error(`No event found with UID: ${args.uid}`);
+    return [ev];
+  }
+
+  const allEvents = await caldav.getCalendarEvents(calPath);
+  const needle = args.find!.toLowerCase();
+  const events = allEvents.filter(
+    (e) =>
+      e.summary.toLowerCase().includes(needle) ||
+      e.description.toLowerCase().includes(needle),
+  );
+  if (events.length === 0) throw new Error(`No event found matching: '${args.find}'`);
+  if (events.length > 1 && !args.force) {
+    const summaries = events
+      .map((e) => `  uid=${e.uid}  title='${e.summary}'  start=${e.dtstart}`)
+      .join("\n");
+    throw new Error(
+      `Found ${events.length} matching events:\n${summaries}\nRe-run with uid to target a specific one, or pass force=true to ${verb} all.`,
+    );
+  }
+  return events;
+}
+
+/** Parse an iCalendar DATE-TIME value (e.g. 20261020T083000 or ...Z). */
+function parseIcalDt(v: string): { date: Date; utc: boolean } | null {
+  const m = v.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/);
+  if (!m) return null;
+  const [, y, mo, d, h = "0", mi = "0", sec = "0", z] = m;
+  const parts = [+y, +mo - 1, +d, +h, +mi, +sec] as const;
+  return z
+    ? { date: new Date(Date.UTC(...parts)), utc: true }
+    : { date: new Date(...parts), utc: false };
+}
+
+function formatIcalUtc(d: Date): string {
+  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
 export interface UpdateEventArgs {
   uid?: string;
   find?: string;
@@ -562,35 +613,7 @@ export async function cmdUpdateEvent(
   if (!caldav) {
     throw new Error("CalDAV not configured. Set caldavUrl, caldavUsername, and caldavPassword.");
   }
-  if (!args.uid && !args.find) {
-    throw new Error("Provide uid or find to identify the event.");
-  }
-
-  const calPath = await getCaldavCalendarPath(cfg, caldav);
-  let events: IcalEvent[];
-
-  if (args.uid) {
-    const ev = await caldav.getEventByUid(calPath, args.uid);
-    if (!ev) throw new Error(`No event found with UID: ${args.uid}`);
-    events = [ev];
-  } else {
-    const allEvents = await caldav.getCalendarEvents(calPath);
-    const needle = args.find!.toLowerCase();
-    events = allEvents.filter(
-      (e) =>
-        e.summary.toLowerCase().includes(needle) ||
-        e.description.toLowerCase().includes(needle),
-    );
-    if (events.length === 0) throw new Error(`No event found matching: '${args.find}'`);
-    if (events.length > 1 && !args.force) {
-      const summaries = events
-        .map((e) => `  uid=${e.uid}  title='${e.summary}'  start=${e.dtstart}`)
-        .join("\n");
-      throw new Error(
-        `Found ${events.length} matching events:\n${summaries}\nRe-run with uid to target a specific one, or pass force=true to update all.`,
-      );
-    }
-  }
+  const events = await findEvents(cfg, caldav, args, "update");
 
   // Build patches
   const tz = args.timezone ?? "America/Los_Angeles";
@@ -611,24 +634,22 @@ export async function cmdUpdateEvent(
 
   if (args.new_duration) {
     const mins = durationToMinutes(args.new_duration);
-    let baseStart: Date;
     if (args.new_start) {
-      baseStart = new Date(args.new_start);
-    } else if (events.length > 0 && events[0].dtstart) {
-      baseStart = new Date(events[0].dtstart);
-      if (isNaN(baseStart.getTime())) baseStart = new Date();
-    } else {
-      baseStart = new Date();
-    }
-    const newEnd = new Date(baseStart.getTime() + mins * 60_000);
-    if (args.new_start) {
+      const newEnd = new Date(new Date(args.new_start).getTime() + mins * 60_000);
       icalPatches.DTEND = {
         params: `;TZID=${tz}`,
         value: formatIcalDt(newEnd),
       };
     } else {
-      icalPatches.DTEND = formatIcalDt(newEnd);
+      // Keep the existing DTSTART (and its TZID params, preserved by updateIcalVevent)
+      const parsed = parseIcalDt(events[0].dtstart);
+      if (!parsed) {
+        throw new Error(`Cannot parse existing DTSTART '${events[0].dtstart}'; pass new_start too.`);
+      }
+      const newEnd = new Date(parsed.date.getTime() + mins * 60_000);
+      icalPatches.DTEND = parsed.utc ? formatIcalUtc(newEnd) : formatIcalDt(newEnd);
     }
+    icalPatches.DURATION = null;
   }
 
   if (args.status) {
@@ -695,6 +716,32 @@ export async function cmdUpdateEvent(
     lines.push(`  Removed attendees: ${args.remove_attendee.join(", ")}`);
   }
   return lines.join("\n");
+}
+
+export interface DeleteEventArgs {
+  uid?: string;
+  find?: string;
+  force?: boolean;
+}
+
+export async function cmdDeleteEvent(
+  cfg: FastmailConfig,
+  args: DeleteEventArgs,
+): Promise<string> {
+  const caldav = getCaldavClient(cfg);
+  if (!caldav) {
+    throw new Error("CalDAV not configured. Set caldavUrl, caldavUsername, and caldavPassword.");
+  }
+  const events = await findEvents(cfg, caldav, args, "delete");
+
+  const lines: string[] = [];
+  for (const ev of events) {
+    if (!ev.href) continue;
+    // Fastmail's server-side scheduling emails CANCEL notices to attendees on delete.
+    await caldav.deleteEvent(ev.href, ev.etag);
+    lines.push(`  uid=${ev.uid}  title='${ev.summary}'  start=${ev.dtstart}`);
+  }
+  return [`✓ Deleted ${lines.length} event(s).`, ...lines].join("\n");
 }
 
 export interface QueryEventsArgs {

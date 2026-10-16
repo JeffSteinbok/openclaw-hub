@@ -273,10 +273,33 @@ function extractXmlValues(xml: string, localName: string): string[] {
   for (const pattern of patterns) {
     let match;
     while ((match = pattern.exec(xml)) !== null) {
-      results.push(match[1].trim());
+      results.push(decodeXmlText(match[1].trim()));
     }
   }
   return results;
+}
+
+/**
+ * Decode XML element text: unwrap CDATA sections (Fastmail wraps calendar-data
+ * in them) and decode entities everywhere else.
+ */
+function decodeXmlText(s: string): string {
+  return s
+    .split(/(<!\[CDATA\[[\s\S]*?\]\]>)/)
+    .map((part) =>
+      part.startsWith("<![CDATA[")
+        ? part.slice(9, -3)
+        : part
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'")
+            .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n, 10)))
+            .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+            .replace(/&amp;/g, "&"),
+    )
+    .join("")
+    .trim();
 }
 
 interface MultstatusResponse {
@@ -289,7 +312,7 @@ interface MultstatusResponse {
   color: string;
 }
 
-function parseMultistatus(xml: string): MultstatusResponse[] {
+export function parseMultistatus(xml: string): MultstatusResponse[] {
   const results: MultstatusResponse[] = [];
   // Split on <d:response> or <D:response> or <response xmlns="DAV:">
   const responseRegex = /<(?:[a-zA-Z0-9]+:)?response[\s>][\s\S]*?<\/(?:[a-zA-Z0-9]+:)?response>/gi;
@@ -426,7 +449,7 @@ export class CalDAVClient {
   async delete(path: string, etag?: string): Promise<void> {
     const headers: Record<string, string> = {};
     if (etag) {
-      headers["If-Match"] = etag;
+      headers["If-Match"] = etag.startsWith('"') ? etag : `"${etag}"`;
     }
     await this._request("DELETE", path, Object.keys(headers).length > 0 ? headers : undefined);
   }

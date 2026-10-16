@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { parseIcalEvent, updateIcalVevent } from "../src/caldav-client.js";
+import { parseIcalEvent, updateIcalVevent, parseMultistatus } from "../src/caldav-client.js";
 
 describe("parseIcalEvent()", () => {
   const sampleIcal = [
@@ -154,5 +154,35 @@ describe("updateIcalVevent()", () => {
     // Should not have bare \n (except within \r\n)
     const withoutCRLF = updated.replace(/\r\n/g, "");
     expect(withoutCRLF).not.toContain("\n");
+  });
+});
+
+describe("parseMultistatus()", () => {
+  it("unwraps CDATA calendar-data (Fastmail's response format)", () => {
+    const xml = `<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:response>
+    <d:href>/dav/calendars/user/a/b/x.ics</d:href>
+    <d:propstat><d:prop>
+      <d:getetag>"abc"</d:getetag>
+      <c:calendar-data><![CDATA[BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:x@y
+SUMMARY:A & B
+END:VEVENT
+END:VCALENDAR
+]]></c:calendar-data>
+    </d:prop></d:propstat></d:response></d:multistatus>`;
+    const [r] = parseMultistatus(xml);
+    expect(r.calendarData.startsWith("BEGIN:VCALENDAR")).toBe(true);
+    expect(r.calendarData.endsWith("END:VCALENDAR")).toBe(true);
+    expect(r.calendarData).toContain("SUMMARY:A & B");
+    expect(r.etag).toBe("abc");
+  });
+
+  it("decodes entity-escaped calendar-data", () => {
+    const xml = `<d:response><d:href>/x.ics</d:href><c:calendar-data>BEGIN:VCALENDAR
+SUMMARY:A &amp; B &lt;C&gt;
+END:VCALENDAR</c:calendar-data></d:response>`;
+    const [r] = parseMultistatus(xml);
+    expect(r.calendarData).toContain("SUMMARY:A & B <C>");
   });
 });

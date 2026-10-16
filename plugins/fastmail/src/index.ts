@@ -1,12 +1,12 @@
 /**
  * FastMail plugin — pure TS-native implementation.
  *
- * Provides 7 tools for email operations (JMAP) and calendar management (CalDAV).
+ * Provides 8 tools for email operations (JMAP) and calendar management (CalDAV).
  */
 
 import { definePlugin } from "carapace-plugin-sdk";
 import { Type } from "@sinclair/typebox";
-import { resolveConfig, cmdInbox, cmdSearch, cmdRead, cmdSend, cmdMeeting, cmdUpdateEvent, cmdQueryEvents } from "./handlers.js";
+import { resolveConfig, cmdInbox, cmdSearch, cmdRead, cmdSend, cmdMeeting, cmdUpdateEvent, cmdDeleteEvent, cmdQueryEvents } from "./handlers.js";
 
 export const createEntry = definePlugin({
   id: "fastmail",
@@ -291,6 +291,36 @@ export const createEntry = definePlugin({
             remove_attendee,
             force,
           });
+          return { status: "ok", output };
+        } catch (e) {
+          return { error: e instanceof Error ? e.message : String(e) };
+        }
+      },
+    }),
+
+    tool({
+      name: "fastmail_delete_event",
+      label: "Delete Event",
+      description:
+        "Delete a calendar event by UID or text search. Attendees receive a cancellation from Fastmail.",
+      parameters: Type.Object({
+        uid: Type.Optional(Type.String({ description: "Exact event UID to delete" })),
+        find: Type.Optional(
+          Type.String({ description: "Free-text search across event title/description" }),
+        ),
+        force: Type.Optional(
+          Type.Boolean({
+            description: "Delete all matching events when multiple found",
+          }),
+        ),
+      }),
+      async execute({ uid, find, force }, config) {
+        try {
+          const resolvedConfig = resolveConfig({
+            ...config,
+            fromName: config.fromName?.trim() || "OpenClaw Assistant",
+          });
+          const output = await cmdDeleteEvent(resolvedConfig, { uid, find, force });
           return { status: "ok", output };
         } catch (e) {
           return { error: e instanceof Error ? e.message : String(e) };
