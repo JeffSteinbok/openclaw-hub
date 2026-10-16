@@ -50,16 +50,17 @@ describe("plugin entry", () => {
     expect(entry.name).toBe("FastMail tools");
   });
 
-  it("registers all 7 tools", async () => {
+  it("registers all 8 tools", async () => {
     const { api } = await loadPlugin();
     const toolNames = Object.keys(api.tools);
-    expect(toolNames).toHaveLength(7);
+    expect(toolNames).toHaveLength(8);
     expect(toolNames).toContain("fastmail_send");
     expect(toolNames).toContain("fastmail_search");
     expect(toolNames).toContain("fastmail_read");
     expect(toolNames).toContain("fastmail_inbox");
     expect(toolNames).toContain("fastmail_meeting");
     expect(toolNames).toContain("fastmail_update_event");
+    expect(toolNames).toContain("fastmail_delete_event");
     expect(toolNames).toContain("fastmail_query_events");
   });
 
