@@ -35,6 +35,26 @@ services/             Long-running services (e.g. fastmail-sse)
 scripts/              Build and export tooling
 ```
 
+## Deploying plugins
+
+Plugins are installed into OpenClaw as packed, managed installs rather than loaded from this checkout via `plugins.load.paths`. That keeps dev `node_modules` out of the gateway (and out of `openclaw update` snapshots).
+
+```bash
+npm run deploy -- <id>           # e.g. npm run deploy -- glances
+npm run deploy -- --all
+npm run deploy -- <id> --install # also run the install command
+```
+
+`scripts/deploy-plugin.mjs` builds the plugin (plus any workspace library it uses), runs `npm pack` into `out/plugin-packs/<id>.tgz`, checks the tarball contents, and prints the install command:
+
+```bash
+openclaw plugins install npm-pack:<path>/out/plugin-packs/<id>.tgz --force
+```
+
+OpenClaw installs the pack into its managed plugin root with production dependencies only. What goes into the pack is controlled by the `files` field in each plugin's `package.json` (`dist`, `openclaw.plugin.json`, `README.md`), so anything a plugin imports at runtime must be in `dependencies`, not `devDependencies`.
+
+Dev loop: edit → `npm run deploy -- <id> --install`.
+
 ## Adding a new plugin
 
 New plugins should be created as **standalone repos** using the [carapace-plugin-template](https://github.com/JeffSteinbok/carapace-plugin-template). See the [Carapace SDK](https://github.com/JeffSteinbok/carapace-plugin-sdk) for details.
