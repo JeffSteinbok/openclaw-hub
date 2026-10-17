@@ -7,5 +7,5 @@ import base from "../tsup.base";
  */
 export default defineConfig({
   ...base,
-  noExternal: ["@openclaw/mail-action-usps"],
+  noExternal: [...(base.noExternal ?? []), "@openclaw/mail-action-usps"],
 });

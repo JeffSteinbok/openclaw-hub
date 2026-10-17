@@ -17,13 +17,13 @@
   },
   "dependencies": {
     "carapace-plugin-sdk": "^3.0.0",
-    "@sinclair/typebox": "^0.34.52",
     "playwright": "^1.64.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
     "tsup": "^8.3.0",
-    "typescript": "^7"
+    "typescript": "^7",
+    "@sinclair/typebox": "^0.34.52"
   },
   "openclaw": {
     "extensions": [
