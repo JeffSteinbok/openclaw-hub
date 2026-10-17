@@ -16,7 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "carapace-plugin-sdk": "^3.0.0"
+    "carapace-plugin-sdk": "^3.0.1"
   },
   "devDependencies": {
     "@openclaw/mail-action-usps": "*",
