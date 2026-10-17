@@ -6,6 +6,11 @@
   "bin": {
     "homeassistant": "./dist/bin/homeassistant.js"
   },
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
     "test": "vitest run"

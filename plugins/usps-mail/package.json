@@ -6,16 +6,21 @@
   "bin": {
     "usps-mail": "./dist/bin/usps-mail.js"
   },
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
     "test": "vitest run"
   },
   "dependencies": {
-    "@openclaw/mail-action-usps": "*",
     "@sinclair/typebox": "^0.34.52",
     "carapace-plugin-sdk": "^3.0.0"
   },
   "devDependencies": {
+    "@openclaw/mail-action-usps": "*",
     "@types/node": "^26.6.4",
     "tsup": "^8.3.0",
     "typescript": "^7",

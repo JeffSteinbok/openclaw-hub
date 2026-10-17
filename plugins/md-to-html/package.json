@@ -9,16 +9,21 @@
   "bin": {
     "md-to-html": "./dist/bin/md-to-html.js"
   },
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
     "test": "vitest run"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.52"
+    "@sinclair/typebox": "^0.34.52",
+    "carapace-plugin-sdk": "^3.0.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
-    "carapace-plugin-sdk": "^3.0.0",
     "tsup": "^8.3.0",
     "typescript": "^7",
     "vitest": "^5.0.3"

@@ -12,6 +12,7 @@ node_modules/
 out/export/
 out/docs-satellite/
 out/release-assets/
+out/plugin-packs/
 libs/ts/*/dist/
 libs/ts/*/tests/*.js
 libs/ts/*/tests/*.d.ts

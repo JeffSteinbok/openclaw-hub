@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",

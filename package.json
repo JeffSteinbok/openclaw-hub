@@ -29,7 +29,8 @@
     "build": "npm run build:libs && npm run build:plugins",
     "test:scripts": "python3 -m unittest scripts.tests.test_export_artifacts",
     "export:artifacts": "python3 scripts/export_artifacts.py",
-    "export:release": "python3 scripts/export_artifacts.py --all-plugins --all-services"
+    "export:release": "python3 scripts/export_artifacts.py --all-plugins --all-services",
+    "deploy": "node scripts/deploy-plugin.mjs"
   },
   "devDependencies": {
     "tsx": "^4.23.15"
