@@ -12,7 +12,9 @@ The logs directory defaults to ~/.openclaw/logs but can be overridden with
 the OPENCLAW_LOGS_DIR environment variable.
 
 Data flow:
-  <OPENCLAW_DIR>/agents/*/sessions/*.trajectory.jsonl
+  <OPENCLAW_DIR>/agents/*/agent/openclaw-agent.sqlite (transcript_events)
+    -> parse assistant messages that carry usage
+  <OPENCLAW_DIR>/agents/*/sessions/*.trajectory.jsonl (pre-SQLite archives)
     -> parse model.completed events
     -> aggregate by (date, agent, provider, model)
     -> update <LOGS_DIR>/usage-trends.csv (atomic rewrite)
@@ -27,7 +29,7 @@ Usage:
   python3 usage_summary.py --post       # post summary to a configured channel
 """
 
-import json, os, re, sys, csv, tempfile, shutil
+import json, os, re, sys, csv, tempfile, shutil, sqlite3, subprocess
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from collections import defaultdict
@@ -94,6 +96,8 @@ CSV_ONLY = "--csv" in args
 def _model_price(model_id: str) -> dict:
     # Strip provider prefix (e.g. "github-copilot/claude-sonnet-4.6" -> "claude-sonnet-4.6")
     key = model_id.split("/")[-1].lower() if model_id else ""
+    # Anthropic IDs use dashes for the version ("claude-haiku-4-5"); the table uses dots.
+    key = re.sub(r"-(\d+)-(\d+)$", r"-\1.\2", key)
     return MODEL_PRICING.get(key, _DEFAULT_PRICE)
 
 def est_cost(inp, out, cr, cw=0, model=None):
@@ -125,6 +129,89 @@ def parse_trajectory(path, since_ts):
                 yield ts, agent, d.get("sessionKey",""), d.get("runId",""),                       d.get("provider","unknown"), d.get("modelId","unknown"), usage
     except Exception:
         pass
+
+
+def _decode_transcript_row(event_json, event_zstd):
+    """Decode one transcript_events row (plain JSON or a zstd frame)."""
+    raw = event_json
+    if raw is None and event_zstd is not None:
+        result = subprocess.run(["zstd", "-d", "-c"], input=event_zstd, capture_output=True)
+        if result.returncode != 0:
+            return None
+        raw = result.stdout.decode("utf-8", errors="replace")
+    try:
+        record = json.loads(raw) if raw else None
+    except json.JSONDecodeError:
+        return None
+    return record if isinstance(record, dict) else None
+
+
+def parse_sqlite_usage(since_ts):
+    """
+    Yield usage from the per-agent SQLite stores used since OpenClaw 2026.9.x.
+
+    Each assistant message in transcript_events carries its model call's usage.
+    Compressed rows are only decoded when navigation_json marks them as assistant
+    messages. Databases are opened read-only.
+    """
+    since_ms = int(since_ts.timestamp() * 1000) if since_ts else 0
+    have_zstd = shutil.which("zstd") is not None
+    for db_path in sorted(AGENTS_DIR.glob("*/agent/openclaw-agent.sqlite")):
+        agent = db_path.relative_to(AGENTS_DIR).parts[0]
+        try:
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=10)
+        except sqlite3.Error as exc:
+            print(f"WARN: unreadable session database {db_path}: {exc}", file=sys.stderr)
+            continue
+        try:
+            rows = conn.execute(
+                "SELECT e.session_id, w.session_key, e.event_json, e.event_zstd"
+                " FROM transcript_events e LEFT JOIN session_windows w USING (session_id)"
+                " WHERE e.created_at >= ?"
+                " AND ((e.event_json IS NOT NULL AND e.event_json LIKE '%\"usage\"%')"
+                "      OR (e.event_zstd IS NOT NULL AND e.navigation_json LIKE '%\"role\":\"assistant\"%'))",
+                (since_ms,),
+            )
+            for sid, session_key, event_json, event_zstd in rows:
+                if event_json is None and not have_zstd:
+                    continue
+                record = _decode_transcript_row(event_json, event_zstd)
+                msg = (record or {}).get("message")
+                if not isinstance(msg, dict) or msg.get("role") != "assistant":
+                    continue
+                usage = msg.get("usage")
+                if not isinstance(usage, dict):
+                    continue
+                ts_raw = record.get("timestamp") or msg.get("timestamp")
+                try:
+                    if isinstance(ts_raw, (int, float)):
+                        ts = datetime.fromtimestamp(ts_raw / 1000, tz=timezone.utc)
+                    else:
+                        ts = datetime.fromisoformat(str(ts_raw).replace("Z", "+00:00"))
+                except (TypeError, ValueError):
+                    continue
+                if since_ts and ts < since_ts:
+                    continue
+                usage = dict(usage)
+                usage.setdefault("total", usage.get("totalTokens", 0))
+                yield (ts, agent, session_key or "", "", msg.get("provider") or "unknown",
+                       msg.get("model") or "unknown", usage, sid)
+        except sqlite3.Error as exc:
+            print(f"WARN: failed reading session database {db_path}: {exc}", file=sys.stderr)
+        finally:
+            conn.close()
+    if not have_zstd:
+        print("WARN: zstd not installed; compressed transcript rows were skipped", file=sys.stderr)
+
+
+def _usage_events(since):
+    """Usage from pre-SQLite trajectory archives, then from the SQLite stores."""
+    for path in AGENTS_DIR.glob("*/sessions/*.trajectory.jsonl"):
+        sid = path.stem.replace(".trajectory", "")
+        for event in parse_trajectory(path, since):
+            yield (*event, sid, Path(str(path).replace(".trajectory.jsonl", ".jsonl")))
+    for *event, sid in parse_sqlite_usage(since):
+        yield (*event, sid, None)
 
 
 def extract_session_label(session_file):
@@ -228,46 +315,42 @@ def main():
     session_labels = {}
     enriched_labels = load_enriched_labels()
 
-    for path in AGENTS_DIR.glob("*/sessions/*.trajectory.jsonl"):
-        sf = Path(str(path).replace(".trajectory.jsonl",".jsonl"))
-        sid = path.stem.replace(".trajectory","")
+    for ts, agent, sk, rid, provider, model, usage, sid, sf in _usage_events(since):
+        ds = ts.astimezone(PACIFIC).strftime("%Y-%m-%d")
+        key = (ds,agent,provider,model)
+        for f,k in [("input","input"),("output","output"),
+                    ("cacheRead","cache_read"),("cacheWrite","cache_write"),("total","total")]:
+            agg[key][k] += usage.get(f,0)
+        agg[key]["calls"] += 1
 
-        for ts, agent, sk, rid, provider, model, usage in parse_trajectory(path, since):
-            ds = ts.astimezone(PACIFIC).strftime("%Y-%m-%d")
-            key = (ds,agent,provider,model)
-            for f,k in [("input","input"),("output","output"),
-                        ("cacheRead","cache_read"),("cacheWrite","cache_write"),("total","total")]:
-                agg[key][k] += usage.get(f,0)
-            agg[key]["calls"] += 1
+        cc = est_cost(usage.get("input",0),usage.get("output",0),
+                      usage.get("cacheRead",0),usage.get("cacheWrite",0),
+                      model=model)
+        agg_agent_day[(ds,agent)]["calls"] += 1
+        agg_agent_day[(ds,agent)]["cost"]  += cc
 
-            cc = est_cost(usage.get("input",0),usage.get("output",0),
-                          usage.get("cacheRead",0),usage.get("cacheWrite",0),
-                          model=model)
-            agg_agent_day[(ds,agent)]["calls"] += 1
-            agg_agent_day[(ds,agent)]["cost"]  += cc
+        is_auto = agent in AUTO_AGENTS or any(sk.startswith(p) for p in AUTO_SESSION_PREFIXES)
+        kind = "automated" if is_auto else "interactive"
+        agg_type_day[(ds,kind)]["calls"] += 1
+        agg_type_day[(ds,kind)]["cost"]  += cc
 
-            is_auto = agent in AUTO_AGENTS or any(sk.startswith(p) for p in AUTO_SESSION_PREFIXES)
-            kind = "automated" if is_auto else "interactive"
-            agg_type_day[(ds,kind)]["calls"] += 1
-            agg_type_day[(ds,kind)]["cost"]  += cc
+        s_key = (ds,agent,sid,provider,model)
+        for f,k in [("input","input"),("output","output"),
+                    ("cacheRead","cache_read"),("cacheWrite","cache_write"),("total","total")]:
+            session_agg[s_key][k] += usage.get(f,0)
+        session_agg[s_key]["calls"] += 1
 
-            s_key = (ds,agent,sid,provider,model)
-            for f,k in [("input","input"),("output","output"),
-                        ("cacheRead","cache_read"),("cacheWrite","cache_write"),("total","total")]:
-                session_agg[s_key][k] += usage.get(f,0)
-            session_agg[s_key]["calls"] += 1
-
-            if sid not in session_labels:
-                if sid in enriched_labels:
-                    # Use higher-fidelity label from enrich_sessions.py
-                    session_labels[sid] = enriched_labels[sid]
-                elif sf.exists():
-                    session_labels[sid] = extract_session_label(sf)
-                elif sk.startswith("cron:"):
-                    job = sk.split(":")[-1]
-                    session_labels[sid] = ("cron",job,job)
-                else:
-                    session_labels[sid] = ("unknown","unknown","")
+        if sid not in session_labels:
+            if sid in enriched_labels:
+                # Use higher-fidelity label from enrich_sessions.py
+                session_labels[sid] = enriched_labels[sid]
+            elif sf is not None and sf.exists():
+                session_labels[sid] = extract_session_label(sf)
+            elif sk.startswith("cron:"):
+                job = sk.split(":")[-1]
+                session_labels[sid] = ("cron",job,job)
+            else:
+                session_labels[sid] = ("unknown","unknown","")
 
     # ── Trends CSV ──────────────────────────────────────────────────────────
     TRENDS_CSV.parent.mkdir(parents=True, exist_ok=True)
@@ -291,7 +374,10 @@ def main():
         else:
             for r in ex_rows:
                 if (r["date"],r["agent"],r["provider"],r["model"]) == k:
-                    r.update(row); break
+                    # Older days may be only partly in the SQLite store; never shrink a row.
+                    if int(row["calls"]) >= int(r["calls"] or 0):
+                        r.update(row)
+                    break
 
     fd,tmp = tempfile.mkstemp(dir=TRENDS_CSV.parent, suffix=".tmp")
     with os.fdopen(fd,"w",newline="") as f:
@@ -327,8 +413,9 @@ def main():
                     r["category"] = cat
                     r["subcategory"] = sub
                     r["label"] = lbl[:120]
-                    # Also refresh token/cost counts in case trajectory grew
-                    r.update({k: row[k] for k in ("calls","input","output","cache_read","cache_write","total","est_cost_usd")})
+                    # Also refresh token/cost counts in case the session grew (never shrink)
+                    if int(row["calls"]) >= int(r["calls"] or 0):
+                        r.update({k: row[k] for k in ("calls","input","output","cache_read","cache_write","total","est_cost_usd")})
                     break
 
     fd2,tmp2 = tempfile.mkstemp(dir=SESSION_CSV.parent, suffix=".tmp")
