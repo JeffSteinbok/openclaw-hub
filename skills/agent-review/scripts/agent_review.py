@@ -75,6 +75,25 @@ CORRECTION_KEYWORDS = [
 ]
 CORRECTION_PATTERN = re.compile("|".join(CORRECTION_KEYWORDS), re.IGNORECASE)
 
+# skill-collection-review cron runs are locked to the Workshop folder, so
+# path-escape and read-a-directory errors are the lock working as intended;
+# exec denials come from agents (e.g. family) whose exec policy needs
+# interactive approval an unattended run can never get. Suppressed only when
+# the run still finished ok (session window status "done").
+SKILL_REVIEW_JOB_MARKER = "skill-collection-review"
+SKILL_REVIEW_NOISE_PATTERN = re.compile(
+    "|".join(
+        [
+            r"path escapes sandbox root",
+            r"outside.*sandbox",
+            r"read requires a file path",
+            r"is a directory",
+            r"exec denied: automation runs cannot wait for interactive exec approval",
+        ]
+    ),
+    re.IGNORECASE,
+)
+
 # Max error message characters stored per unique error
 MAX_ERROR_LEN = 200
 # Max unique error messages stored per tool
@@ -505,6 +524,7 @@ def _parse_session_records(
     stats: dict,
     issues: list[str],
     session_key_hint: str = "",
+    run_status: str = "",
 ) -> list[dict]:
     """
     Extract error events from one session's transcript records, in order.
@@ -514,6 +534,8 @@ def _parse_session_records(
     ``session_key_hint`` is the stored session key when known (SQLite); cron
     runs are then recognised from it even if the ``[cron:`` user message has
     been archived out of the window.
+    ``run_status`` is the session window status when known (SQLite); expected
+    skill-collection-review noise is dropped only for runs that ended "done".
     """
     events: list[dict] = []
     default_key = session_key_hint or f"agent:{agent}:{session_id}"
@@ -641,6 +663,17 @@ def _parse_session_records(
                 }
             )
 
+    final_key = session_key if cron_resolved else default_key
+    if is_cron and run_status == "done" and SKILL_REVIEW_JOB_MARKER in final_key:
+        kept = [
+            e
+            for e in events
+            if e["event_type"] not in ("tool.error", "tool.failed")
+            or not SKILL_REVIEW_NOISE_PATTERN.search(e["error_msg"])
+        ]
+        stats["suppressed_expected_noise"] = stats.get("suppressed_expected_noise", 0) + len(events) - len(kept)
+        events = kept
+
     # Record every cron session active in the window (not just errored ones)
     # so cron_stats can report ok vs errored runs.
     if is_cron and last_in_window is not None:
@@ -648,7 +681,7 @@ def _parse_session_records(
             {
                 "ts": last_in_window,
                 "agent": agent,
-                "session_key": session_key if cron_resolved else default_key,
+                "session_key": final_key,
                 "event_type": "session.seen",
                 "tool_name": "",
                 "error_msg": "",
@@ -764,6 +797,7 @@ def parse_sqlite_sessions(since_ts: datetime) -> tuple[list[dict], dict, list[st
         "compressed_events": 0,
         "undecodable_events": 0,
         "invalid_timestamps": 0,
+        "suppressed_expected_noise": 0,
     }
     issues: list[str] = []
     since_ms = int(since_ts.timestamp() * 1000)
@@ -780,12 +814,12 @@ def parse_sqlite_sessions(since_ts: datetime) -> tuple[list[dict], dict, list[st
             continue
         try:
             session_rows = conn.execute(
-                "SELECT DISTINCT e.session_id, w.session_key"
+                "SELECT DISTINCT e.session_id, w.session_key, w.status"
                 " FROM transcript_events e LEFT JOIN session_windows w USING (session_id)"
                 " WHERE e.created_at >= ?",
                 (since_ms,),
             ).fetchall()
-            for session_id, session_key in session_rows:
+            for session_id, session_key, run_status in session_rows:
                 stats["sessions_in_window"] += 1
                 records: list[tuple[str, dict]] = []
                 rows = conn.execute(
@@ -814,6 +848,7 @@ def parse_sqlite_sessions(since_ts: datetime) -> tuple[list[dict], dict, list[st
                         stats=stats,
                         issues=issues,
                         session_key_hint=session_key or "",
+                        run_status=run_status or "",
                     )
                 )
             stats["databases_read"] += 1
