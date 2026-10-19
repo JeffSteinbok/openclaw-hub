@@ -6,19 +6,24 @@
   "bin": {
     "goodreads": "./dist/bin/goodreads.js"
   },
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
     "test": "echo \"No tests yet\""
   },
   "dependencies": {
-    "carapace-plugin-sdk": "^3.0.0",
-    "@sinclair/typebox": "^0.34.52",
+    "carapace-plugin-sdk": "^3.0.1",
     "playwright": "^1.64.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
     "tsup": "^8.3.0",
-    "typescript": "^7"
+    "typescript": "^7",
+    "@sinclair/typebox": "^0.34.52"
   },
   "openclaw": {
     "extensions": [

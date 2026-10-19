@@ -12,6 +12,7 @@ node_modules/
 out/export/
 out/docs-satellite/
 out/release-assets/
+out/plugin-packs/
 libs/ts/*/dist/
 libs/ts/*/tests/*.js
 libs/ts/*/tests/*.d.ts
@@ -32,3 +33,5 @@ tsup.config.js
 
 # Generated plugin manifests (rebuilt by carapace-generate-cli)
 openclaw.plugin.json
+# fs-utils registers tools directly (no carapace SDK), so its manifest is hand-written
+!plugins/fs-utils/openclaw.plugin.json

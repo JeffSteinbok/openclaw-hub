@@ -15,4 +15,6 @@ export default defineConfig({
   splitting: false,
   shims: false,
   skipNodeModulesBundle: true,
+  // Inline typebox so packed installs don't each ship a ~1,100-file copy.
+  noExternal: [/^@sinclair\/typebox(\/|$)/],
 });
