@@ -26,8 +26,10 @@ function makeMockGet(body: string, statusCode = 200) {
   return { res, req, flush };
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks();
+  const { resetApiVersionCache } = await import("../src/handlers.js");
+  resetApiVersionCache();
 });
 
 // ---------------------------------------------------------------------------
@@ -260,5 +262,56 @@ describe("HTTP error propagation", () => {
 
     const data = resultText(await api.tools["glances_memory_get"].execute("id", {}));
     expect(data).toMatchObject({ error: expect.stringContaining("ECONNREFUSED") });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Glances API version detection
+// ---------------------------------------------------------------------------
+
+describe("API version detection", () => {
+  function respond(body: string, status: number, urls: string[]) {
+    return ((url: unknown, _opts: unknown, cb?: (res: unknown) => void) => {
+      urls.push(url as string);
+      const mock = makeMockGet(body, status);
+      if (cb) cb(mock.res);
+      setTimeout(mock.flush, 0);
+      return mock.req as unknown as ReturnType<typeof http.get>;
+    }) as unknown as typeof http.get;
+  }
+
+  it("falls back to /api/4 when /api/3 returns 404, then remembers it", async () => {
+    const { api } = await loadPlugin({ url: "http://glances4:61208" });
+    const urls: string[] = [];
+    vi.spyOn(http, "get")
+      .mockImplementationOnce(respond("Not Found", 404, urls))
+      .mockImplementationOnce(respond(JSON.stringify({ percent: 65.3, used: 1 }), 200, urls))
+      .mockImplementationOnce(respond(JSON.stringify({ percent: 66.0, used: 1 }), 200, urls));
+
+    const first = resultText(await api.tools["glances_memory_get"].execute("id", {})) as { output: Record<string, unknown> };
+    expect(first.output.percent_used).toBe(65.3);
+    await api.tools["glances_memory_get"].execute("id", {});
+    expect(urls).toEqual([
+      "http://glances4:61208/api/3/mem",
+      "http://glances4:61208/api/4/mem",
+      "http://glances4:61208/api/4/mem",
+    ]);
+  });
+
+  it("does not fall back on non-404 errors", async () => {
+    const { api } = await loadPlugin({ url: "http://glances3:61208" });
+    const urls: string[] = [];
+    vi.spyOn(http, "get").mockImplementationOnce(respond("boom", 500, urls));
+    const data = resultText(await api.tools["glances_memory_get"].execute("id", {}));
+    expect(data).toHaveProperty("error");
+    expect(urls).toEqual(["http://glances3:61208/api/3/mem"]);
+  });
+
+  it("glances_endpoint_get accepts /api/4/ paths", async () => {
+    const { api } = await loadPlugin({ url: "http://localhost:61208" });
+    const urls: string[] = [];
+    vi.spyOn(http, "get").mockImplementationOnce(respond(JSON.stringify("2 days"), 200, urls));
+    await api.tools["glances_endpoint_get"].execute("id", { path: "/api/4/uptime" });
+    expect(urls).toEqual(["http://localhost:61208/api/4/uptime"]);
   });
 });
