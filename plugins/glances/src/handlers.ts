@@ -78,6 +78,39 @@ export async function apiGet(
   }
 }
 
+/** Detected Glances REST API version per base URL (Glances 3.x serves /api/3, 4.x only /api/4). */
+const apiVersionByBase = new Map<string, 3 | 4>();
+
+/**
+ * GET a Glances endpoint (e.g. "cpu") on whichever API version the server speaks.
+ * Tries /api/3 first, falls back to /api/4 on HTTP 404, and remembers the answer.
+ */
+export async function glancesGet(
+  baseUrl: string,
+  endpoint: string,
+  timeoutMs = 10_000,
+): Promise<{ output: unknown } | { error: string; url: string }> {
+  const base = normalizeBaseUrl(baseUrl);
+  const known = apiVersionByBase.get(base);
+  if (known) return apiGet(base, `/api/${known}/${endpoint}`, timeoutMs);
+
+  const v3 = await apiGet(base, `/api/3/${endpoint}`, timeoutMs);
+  if (!("error" in v3)) {
+    apiVersionByBase.set(base, 3);
+    return v3;
+  }
+  if (!v3.error.startsWith("HTTP 404")) return v3;
+
+  const v4 = await apiGet(base, `/api/4/${endpoint}`, timeoutMs);
+  if (!("error" in v4)) apiVersionByBase.set(base, 4);
+  return v4;
+}
+
+/** Test hook: forget detected API versions. */
+export function resetApiVersionCache(): void {
+  apiVersionByBase.clear();
+}
+
 // ---------------------------------------------------------------------------
 // Data helpers
 // ---------------------------------------------------------------------------
@@ -120,9 +153,9 @@ export function shapeDisk(entry: FsEntry | null): unknown {
 
 export async function handleSummaryGet(baseUrl: string, mountPoint: string): Promise<unknown> {
   const [quicklookRes, fsRes, uptimeRes] = await Promise.all([
-    apiGet(baseUrl, "/api/3/quicklook"),
-    apiGet(baseUrl, "/api/3/fs"),
-    apiGet(baseUrl, "/api/3/uptime"),
+    glancesGet(baseUrl, "quicklook"),
+    glancesGet(baseUrl, "fs"),
+    glancesGet(baseUrl, "uptime"),
   ]);
 
   for (const res of [quicklookRes, fsRes, uptimeRes]) {
@@ -152,13 +185,13 @@ export async function handleSummaryGet(baseUrl: string, mountPoint: string): Pro
 }
 
 export async function handleCpuGet(baseUrl: string, includePercpu: boolean): Promise<unknown> {
-  const cpuRes = await apiGet(baseUrl, "/api/3/cpu");
+  const cpuRes = await glancesGet(baseUrl, "cpu");
   if ("error" in cpuRes) return cpuRes;
 
   const output = { ...(cpuRes as { output: Record<string, unknown> }).output };
 
   if (includePercpu) {
-    const quicklookRes = await apiGet(baseUrl, "/api/3/quicklook");
+    const quicklookRes = await glancesGet(baseUrl, "quicklook");
     if ("error" in quicklookRes) return quicklookRes;
     const ql = (quicklookRes as { output: Record<string, unknown> }).output;
     output.percpu = ql.percpu ?? [];
@@ -168,7 +201,7 @@ export async function handleCpuGet(baseUrl: string, includePercpu: boolean): Pro
 }
 
 export async function handleMemoryGet(baseUrl: string): Promise<unknown> {
-  const result = await apiGet(baseUrl, "/api/3/mem");
+  const result = await glancesGet(baseUrl, "mem");
   if ("error" in result) return result;
 
   const mem = (result as { output: Record<string, unknown> }).output;
@@ -188,7 +221,7 @@ export async function handleMemoryGet(baseUrl: string): Promise<unknown> {
 }
 
 export async function handleDiskGet(baseUrl: string, mountPoint: string): Promise<unknown> {
-  const result = await apiGet(baseUrl, "/api/3/fs");
+  const result = await glancesGet(baseUrl, "fs");
   if ("error" in result) return result;
 
   const entries = (result as { output: unknown }).output;
@@ -201,6 +234,6 @@ export async function handleDiskGet(baseUrl: string, mountPoint: string): Promis
 
 export async function handleEndpointGet(baseUrl: string, path: string): Promise<unknown> {
   if (!path) return { error: "path is required" };
-  if (!path.startsWith("/api/3/")) return { error: "path must start with /api/3/" };
+  if (!/^\/api\/[34]\//.test(path)) return { error: "path must start with /api/3/ or /api/4/" };
   return apiGet(baseUrl, path, 20_000);
 }
