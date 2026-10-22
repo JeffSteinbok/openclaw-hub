@@ -97,10 +97,10 @@ export const createEntry = definePlugin({
     tool({
       name: "glances_endpoint_get",
       label: "Glances Endpoint",
-      description: "Fetch a raw JSON payload from a specific Glances /api/3 endpoint.",
+      description: "Fetch a raw JSON payload from a specific Glances REST endpoint (/api/3 for Glances 3.x, /api/4 for Glances 4.x).",
       parameters: Type.Object({
         path: Type.String({
-          description: "Glances API path beginning with /api/3/ (for example /api/3/uptime).",
+          description: "Glances API path beginning with /api/3/ or /api/4/ (for example /api/4/uptime).",
         }),
       }),
       async execute({ path }, config) {

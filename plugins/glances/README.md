@@ -10,7 +10,7 @@ Read live system metrics from a Glances server. This plugin focuses on the commo
 | [`glances_cpu_get`](#tool-glances_cpu_get) | Get current CPU metrics, optionally including per-core usage |
 | [`glances_memory_get`](#tool-glances_memory_get) | Get current memory usage metrics |
 | [`glances_disk_get`](#tool-glances_disk_get) | Get filesystem usage metrics for one mount point |
-| [`glances_endpoint_get`](#tool-glances_endpoint_get) | Fetch a raw JSON payload from a specific `/api/3/` endpoint |
+| [`glances_endpoint_get`](#tool-glances_endpoint_get) | Fetch a raw JSON payload from a specific `/api/3/` or `/api/4/` endpoint |
 
 ## Configuration Schema
 
@@ -69,13 +69,13 @@ If omitted, the plugin defaults to `http://127.0.0.1:61208`.
 
 ### `glances_endpoint_get`
 
-- `path` — required Glances API path beginning with `/api/3/`
+- `path` — required Glances API path beginning with `/api/3/` (Glances 3.x) or `/api/4/` (Glances 4.x)
 
 ## Notes
 
 - The plugin targets Glances v3 REST endpoints.
 - Disk summaries default to the `/` mount point unless you pass a different `mount_point`.
-- `glances_endpoint_get` is intentionally limited to `/api/3/` paths.
+- `glances_endpoint_get` is intentionally limited to `/api/3/` and `/api/4/` paths. The other tools detect the server's API version automatically (try `/api/3`, fall back to `/api/4` on 404).
 
 ## Development
 
