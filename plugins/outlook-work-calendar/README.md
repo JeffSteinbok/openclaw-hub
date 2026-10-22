@@ -14,6 +14,7 @@ Read upcoming events from a published Outlook work calendar without going throug
 |-------|------|----------|-------------|
 | `url` | string | Optional | Published Outlook work calendar base URL |
 | `folderId` | string | Optional | EWS folder identifier for the published calendar |
+| `access` | object | Optional | Read access by agent and verified sender for the calendar id `work` (see [Access control](#access-control)) |
 
 ## Example config
 
@@ -34,6 +35,46 @@ Set Outlook Work Calendar under `plugins.entries["outlook-work-calendar"].config
   }
 }
 ```
+
+## Access control
+
+This plugin serves one calendar, with the ACL id `work`. Add
+`access.calendars.work` to choose which agents and verified senders may read
+it:
+
+```json
+{
+  "accessGroups": {
+    "alex": { "type": "message.senders", "members": { "imessage": ["+14255550199"], "discord": ["123456789012345678"] } }
+  },
+  "plugins": {
+    "entries": {
+      "outlook-work-calendar": {
+        "config": {
+          "access": {
+            "calendars": {
+              "work": { "read": [{ "agent": "main" }, { "sender": "alex" }] }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Grant semantics come from
+[carapace-plugin-sdk](https://github.com/JeffSteinbok/carapace-plugin-sdk#call-context-and-access-control-v31):
+
+- **A grant** is `"*"` or `{ "agent": ..., "sender": ... }`. Every field in a grant must match, and any one matching grant allows the call.
+- **`sender`** names an OpenClaw root-config `accessGroups` entry, or `"owner"`.
+- **Turns with no sender** (cron, CLI) match only grants with no `sender` field.
+- **No `access` block** allows everything.
+- **An ACL without `work`** denies it.
+
+A denied call returns
+`Access denied: agent "family" (no sender) may not read calendar "work"`
+without calling EWS.
 
 ## Environment Variables
 

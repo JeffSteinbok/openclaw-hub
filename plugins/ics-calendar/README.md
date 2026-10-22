@@ -16,6 +16,7 @@ Fetch upcoming events from published ICS calendar feeds, including personal, fam
 | `calendars[].id` | string | Required | Stable calendar identifier used by tool calls |
 | `calendars[].label` | string | Optional | Friendly display name used in output |
 | `calendars[].url` | string | Required | Published ICS feed URL |
+| `access` | object | Optional | Per-calendar read access by agent and verified sender (see [Access control](#access-control)) |
 
 ## Example config
 
@@ -53,6 +54,53 @@ Set calendars in `plugins.entries["ics-calendar"].config`:
 ```
 
 Use `${...}` interpolation if you want the actual feed URLs to come from `.env`.
+
+## Access control
+
+Add `access.calendars` to restrict which agents and verified senders may read
+each configured calendar. The keys are the `calendars[].id` values. The
+pseudo-id `_url` governs fetches by ad-hoc `url`, and when `url` is passed it
+is the only thing checked, even if `calendar_id` is also given. Grants and
+matching come from
+[carapace-plugin-sdk](https://github.com/JeffSteinbok/carapace-plugin-sdk#call-context-and-access-control-v31):
+
+- **A grant** is `"*"` or `{ "agent": ..., "sender": ... }`. Every field in a grant must match, and any one matching grant allows the call.
+- **`sender`** names an OpenClaw root-config `accessGroups` entry (`type: "message.senders"`), or the special name `"owner"`.
+- **Turns with no sender** (cron, CLI) match only grants with no `sender` field.
+- **No `access` block** allows everything, the same as before.
+- **Default-deny** applies once `access.calendars` exists. An unlisted id, including `_url`, is denied.
+
+```json
+{
+  "accessGroups": {
+    "alex": { "type": "message.senders", "members": { "imessage": ["+14255550199"] } }
+  },
+  "plugins": {
+    "entries": {
+      "ics-calendar": {
+        "config": {
+          "calendars": [
+            { "id": "family", "label": "Family", "url": "${CALENDAR_FAMILY_ICS_URL}" },
+            { "id": "alex", "label": "Alex", "url": "${CALENDAR_ALEX_ICS_URL}" }
+          ],
+          "access": {
+            "calendars": {
+              "family": { "read": ["*"] },
+              "alex":   { "read": [{ "agent": "main" }, { "sender": "alex" }] },
+              "_url":   { "read": [{ "agent": "main" }] }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+A denied call returns a tool error, for example
+`Access denied: agent "family" (no sender) may not read calendar "alex"`, and
+nothing is fetched. The standalone CLI has no `access` block, so it is not
+restricted.
 
 ## Tool Parameters
 
