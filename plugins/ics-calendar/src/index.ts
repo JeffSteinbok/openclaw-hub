@@ -2,9 +2,12 @@
  * ICS Calendar plugin — OpenClaw plugin shim.
  */
 
-import { definePlugin } from "carapace-plugin-sdk";
+import { ACCESS_CONFIG_SCHEMA, checkAccess, definePlugin, type AccessConfig } from "carapace-plugin-sdk";
 import { Type } from "@sinclair/typebox";
 import { fetchCalendarEvents, type IcsCalendarConfig } from "./handlers.js";
+
+/** ACL id for fetches by ad-hoc `url` rather than a configured `calendar_id`. */
+export const URL_PSEUDO_CALENDAR = "_url";
 
 export const createEntry = definePlugin({
   id: "ics-calendar",
@@ -22,6 +25,12 @@ export const createEntry = definePlugin({
         { description: "List of calendar configs with id, label, url" },
       ),
     ),
+    access: Type.Optional(Type.Unsafe<AccessConfig>({
+      ...ACCESS_CONFIG_SCHEMA,
+      description:
+        "Per-calendar read access keyed on agent and verified sender. Keys of access.calendars are configured calendar ids; " +
+        'the pseudo-id "_url" governs ad-hoc url fetches. Omit to allow every caller; once access.calendars is set, unlisted ids are denied.',
+    })),
   }),
 
   tools: (tool) => [
@@ -35,8 +44,15 @@ export const createEntry = definePlugin({
         label: Type.Optional(Type.String({ description: "Optional display label when using a direct URL override" })),
         days: Type.Optional(Type.Integer({ description: "Number of days ahead to fetch (default 7)", default: 7 })),
       }),
-      async execute({ calendar_id, url, label, days }, config) {
+      async execute({ calendar_id, url, label, days }, config, ctx) {
         try {
+          // An ad-hoc url is checked as the pseudo-calendar "_url" (it takes
+          // precedence over calendar_id in the handler, so check it first).
+          const resourceId = url ? URL_PSEUDO_CALENDAR : calendar_id;
+          if (resourceId) {
+            const decision = checkAccess(config.access, "calendars", resourceId, "read", ctx);
+            if (!decision.allowed) return { error: decision.message };
+          }
           const pluginConfig: IcsCalendarConfig = {
             calendars: config.calendars ?? [],
           };
