@@ -33,6 +33,9 @@ export const GATEWAY_TOKEN = process.env["OPENCLAW_GATEWAY_AUTH_TOKEN"] ?? "";
 /** systemd unit name for the gateway */
 export const GATEWAY_UNIT = process.env["OPENCLAW_SYSTEMD_UNIT"] ?? "openclaw-gateway.service";
 
+/** launchd label for the gateway (macOS) */
+export const GATEWAY_LAUNCHD_LABEL = process.env["OPENCLAW_LAUNCHD_LABEL"] ?? "ai.openclaw.gateway";
+
 /** GitHub repo for filing incident issues: owner/repo */
 export const GITHUB_REPO_OWNER = process.env["WATCHDOG_GITHUB_OWNER"] ?? "JeffSteinbok";
 export const GITHUB_REPO_NAME  = process.env["WATCHDOG_GITHUB_REPO"]  ?? "octo";

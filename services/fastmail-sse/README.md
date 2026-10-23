@@ -312,13 +312,27 @@ For each incoming email the daemon:
 - When a delivery confirmation email arrives the corresponding package is automatically removed from tracking.
 - Logs each added package: `📦 added package: 1Z999AA10123456784 (UPS) — Personal: …`
 
-## Systemd Service
+## Running as a Service
+
+### Linux (systemd --user)
 
 Install: `systemctl --user enable fastmail-sse && systemctl --user start fastmail-sse`
 
 Status: `systemctl --user status fastmail-sse`
 
 Logs: `journalctl --user -u fastmail-sse -f`
+
+### macOS (launchd)
+
+Run it from a LaunchAgent in `~/Library/LaunchAgents/` whose `ProgramArguments` are `node --env-file=<your .env> <repo>/services/fastmail-sse/dist/index.js`, with `RunAtLoad` and `KeepAlive` set and `StandardOutPath`/`StandardErrorPath` pointing at a log file (e.g. `~/Library/Logs/openclaw-fastmail-sse.log`).
+
+Install: `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/<label>.plist`
+
+Restart: `launchctl kickstart -k gui/$(id -u)/<label>`
+
+Status: `launchctl print gui/$(id -u)/<label>`
+
+Logs: `tail -f ~/Library/Logs/openclaw-fastmail-sse.log`
 
 ## Notification Examples
 

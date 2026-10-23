@@ -3,6 +3,7 @@
  * Uses carapace-plugin-sdk definePlugin pattern (modeled after withings).
  */
 
+import os from "node:os";
 import path from "node:path";
 import { definePlugin } from "carapace-plugin-sdk";
 import { Type } from "@sinclair/typebox";
@@ -16,7 +17,7 @@ import {
   type GoodreadsConfig,
 } from "./handlers.js";
 
-const HOME = process.env.HOME ?? "/home/openclaw";
+const HOME = os.homedir();
 const DEFAULT_STATE_PATH = path.join(HOME, ".openclaw/state/goodreads.json");
 
 function buildConfig(config: {

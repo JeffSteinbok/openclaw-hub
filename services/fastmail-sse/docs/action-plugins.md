@@ -150,7 +150,11 @@ npm run build
 ### 4. Restart
 
 ```sh
+# Linux (systemd --user)
 systemctl --user restart fastmail-sse.service
+
+# macOS (launchd) — use your LaunchAgent's label
+launchctl kickstart -k gui/$(id -u)/<label>
 ```
 
 You should see a log line like:
