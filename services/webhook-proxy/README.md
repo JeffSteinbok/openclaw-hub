@@ -108,7 +108,7 @@ npm install
 npm run build
 ```
 
-### systemd service
+### systemd service (Linux)
 
 Create `/etc/systemd/system/webhook-proxy.service` (adjust paths/user as needed):
 
@@ -119,18 +119,18 @@ After=network.target
 
 [Service]
 Type=simple
-User=openclaw
-WorkingDirectory=/home/openclaw/git/openclaw-hub/services/webhook-proxy
+User=<user>
+WorkingDirectory=/home/<user>/git/openclaw-hub/services/webhook-proxy
 ExecStart=/usr/bin/node dist/index.js
 Restart=on-failure
 RestartSec=5
-EnvironmentFile=/home/openclaw/.openclaw/services/webhook-proxy.env
+EnvironmentFile=/home/<user>/.openclaw/services/webhook-proxy.env
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Create `/home/openclaw/.openclaw/services/webhook-proxy.env`:
+Create `~/.openclaw/services/webhook-proxy.env`:
 
 ```env
 OPENCLAW_HOOKS_TOKEN=your-openclaw-hooks-token-here
@@ -143,6 +143,37 @@ Enable and start:
 sudo systemctl daemon-reload
 sudo systemctl enable webhook-proxy
 sudo systemctl start webhook-proxy
+```
+
+### launchd agent (macOS)
+
+Create `~/Library/LaunchAgents/com.openclaw.webhook-proxy.plist` (replace `<user>` and the node path with yours):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.openclaw.webhook-proxy</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>--env-file=/Users/<user>/.openclaw/services/webhook-proxy.env</string>
+    <string>/Users/<user>/git/openclaw-hub/services/webhook-proxy/dist/index.js</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/<user>/Library/Logs/openclaw-webhook-proxy.log</string>
+  <key>StandardErrorPath</key><string>/Users/<user>/Library/Logs/openclaw-webhook-proxy.log</string>
+</dict>
+</plist>
+```
+
+Load it and restart after changes:
+
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.openclaw.webhook-proxy.plist
+launchctl kickstart -k gui/$(id -u)/com.openclaw.webhook-proxy
 ```
 
 ### Tailscale Funnel routing

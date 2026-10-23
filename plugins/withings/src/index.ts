@@ -3,6 +3,7 @@
  * OAuth2 flow + health data fetching.
  */
 
+import os from "node:os";
 import path from "node:path";
 import { definePlugin } from "carapace-plugin-sdk";
 import { Type } from "@sinclair/typebox";
@@ -17,7 +18,7 @@ import {
   type WithingsConfig,
 } from "./handlers.js";
 
-const HOME = process.env.HOME ?? "/home/openclaw";
+const HOME = os.homedir();
 
 export const createEntry = definePlugin({
   id: "withings",

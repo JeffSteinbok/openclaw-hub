@@ -2,6 +2,7 @@
  * Spotify plugin — thin shim delegating to handlers.ts.
  */
 
+import os from "node:os";
 import path from "node:path";
 import { definePlugin } from "carapace-plugin-sdk";
 import { Type } from "@sinclair/typebox";
@@ -10,7 +11,7 @@ import {
   nowPlaying, play, pause, next, previous, search, getDevices, getPlaylists, addToPlaylist,
 } from "./handlers.js";
 
-const HOME = process.env.HOME ?? "/home/openclaw";
+const HOME = os.homedir();
 
 export const createEntry = definePlugin({
   id: "spotify",

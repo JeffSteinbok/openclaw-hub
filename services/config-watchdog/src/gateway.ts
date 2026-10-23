@@ -7,6 +7,7 @@ import {
   GATEWAY_URL,
   GATEWAY_TOKEN,
   GATEWAY_UNIT,
+  GATEWAY_LAUNCHD_LABEL,
   HEALTH_TIMEOUT_MS,
   HEALTH_POLL_INTERVAL_MS,
   log,
@@ -39,8 +40,14 @@ export async function waitForHealth(): Promise<boolean> {
   return false;
 }
 
-/** Restart the gateway systemd unit. */
+/** Restart the gateway service: launchd LaunchAgent on macOS, systemd user unit elsewhere. */
 export function restartGateway(): void {
+  if (process.platform === "darwin") {
+    const target = `gui/${process.getuid!()}/${GATEWAY_LAUNCHD_LABEL}`;
+    log(`restarting ${target} via launchctl kickstart`);
+    spawnSync("launchctl", ["kickstart", "-k", target], { stdio: "inherit" });
+    return;
+  }
   log(`restarting ${GATEWAY_UNIT} via systemctl --user`);
   spawnSync("systemctl", ["--user", "restart", GATEWAY_UNIT], { stdio: "inherit" });
 }
