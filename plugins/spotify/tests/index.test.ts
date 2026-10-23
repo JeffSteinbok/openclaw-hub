@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import https from "node:https";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 
@@ -33,7 +34,7 @@ async function loadPlugin(config: Record<string,unknown> = {}) {
 }
 
 // Write a fake token cache so getToken() doesn't try to refresh
-const HOME = process.env.HOME ?? "/home/openclaw";
+const HOME = os.homedir();
 const TOKEN_CACHE = path.join(HOME, ".openclaw/.spotify_token_cache");
 const FAKE_CACHE = JSON.stringify({ access_token: "test-access-token", expires_at: Date.now()/1000 + 3600 });
 

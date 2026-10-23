@@ -1,5 +1,7 @@
 # config-watchdog
 
+> **Linux only (systemd).** This service ships only a systemd user unit. There is no launchd version yet, so it doesn't run on macOS (including Octo's Mac mini host since the 2026-10-21 move). The restart helper does use `launchctl kickstart` on macOS, but you would have to write the LaunchAgent yourself.
+
 A daemon that watches the OpenClaw config file (`openclaw.json`) and automatically recovers the gateway if a bad config is detected.
 
 ## What it does
@@ -29,7 +31,8 @@ Bad configs are stashed as `openclaw.json.bad.<timestamp>` — nothing is ever d
 | `WATCHDOG_HEALTH_POLL_INTERVAL_MS` | `2000` | Ms between health polls |
 | `OPENCLAW_GATEWAY_URL` | `http://127.0.0.1:18789` | Gateway base URL |
 | `OPENCLAW_GATEWAY_AUTH_TOKEN` | _(none)_ | Bearer token for health endpoint |
-| `OPENCLAW_SYSTEMD_UNIT` | `openclaw-gateway.service` | systemd unit to restart |
+| `OPENCLAW_SYSTEMD_UNIT` | `openclaw-gateway.service` | systemd unit to restart (Linux) |
+| `OPENCLAW_LAUNCHD_LABEL` | `ai.openclaw.gateway` | launchd label to restart (macOS) |
 | `GITHUB_TOKEN` | _(required for incidents)_ | GitHub token for filing issues |
 | `WATCHDOG_GITHUB_OWNER` | `JeffSteinbok` | GitHub repo owner |
 | `WATCHDOG_GITHUB_REPO` | `octo` | GitHub repo name |

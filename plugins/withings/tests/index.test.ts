@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import https from "node:https";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 
@@ -32,7 +33,7 @@ async function loadPlugin(config: Record<string,unknown> = {}) {
   return { entry, api };
 }
 
-const HOME = process.env.HOME ?? "/home/openclaw";
+const HOME = os.homedir();
 const TOKEN_FILE = path.join(HOME, ".openclaw/withings_tokens.json");
 const FAKE_TOKENS = JSON.stringify({ access_token: "test-access", refresh_token: "test-refresh", expires_at: Date.now()/1000 + 3600, userid: "12345" });
 
