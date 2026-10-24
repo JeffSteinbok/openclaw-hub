@@ -3,7 +3,7 @@
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { simpleParser, type ParsedMail, type Attachment } from "mailparser";
 import type {
   AttachmentMeta,
@@ -91,10 +91,10 @@ export class FastmailProviderClient implements MailProviderClient {
     const parsed = await this.loadMimeMessage(envelope);
     const attachments: AttachmentMeta[] = [];
 
+    const usedNames = new Set<string>();
     for (const att of parsed.attachments ?? []) {
       const contentId = att.contentId?.replace(/^<|>$/g, "") || null;
-      const filename =
-        att.filename || (contentId ? `${contentId}.bin` : undefined);
+      const filename = attachmentFilename(att, contentId, usedNames);
       if (!filename) continue;
 
       attachments.push({
@@ -134,10 +134,10 @@ export class FastmailProviderClient implements MailProviderClient {
       }
     }
 
+    const usedNames = new Set<string>(saved);
     for (const att of parsed.attachments ?? []) {
       const contentId = att.contentId?.replace(/^<|>$/g, "") || null;
-      const filename =
-        att.filename || (contentId ? `${contentId}.bin` : undefined);
+      const filename = attachmentFilename(att, contentId, usedNames);
       if (!filename) continue;
 
       const isInline =
@@ -236,4 +236,30 @@ export class FastmailProviderClient implements MailProviderClient {
   private extractHtmlBody(parsed: ParsedMail): string {
     return (typeof parsed.html === "string" ? parsed.html : "") || "";
   }
+}
+
+/**
+ * A safe, unique filename for an attachment. Names come from the sender, so
+ * any path is stripped; nameless inline parts are named after their cid with
+ * an extension from their content type.
+ */
+export function attachmentFilename(
+  att: Attachment,
+  contentId: string | null,
+  usedNames: Set<string>,
+): string | null {
+  const raw = att.filename || (contentId ? `${contentId}${inferExtension(att.contentType)}` : "");
+  const name = basename(raw.replace(/\\/g, "/"));
+  if (!name || name === "." || name === "..") return null;
+  let unique = name;
+  for (let n = 1; usedNames.has(unique); n++) unique = `${n}-${name}`;
+  usedNames.add(unique);
+  return unique;
+}
+
+function inferExtension(contentType: string | undefined): string {
+  const subtype = (contentType ?? "").toLowerCase().split(";", 1)[0].split("/")[1] ?? "";
+  if (subtype === "jpeg") return ".jpg";
+  if (["png", "gif", "webp"].includes(subtype)) return `.${subtype}`;
+  return ".bin";
 }

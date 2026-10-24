@@ -31,13 +31,15 @@ export const EMAIL_PROPS = [
   "htmlBody",
   "bodyValues",
   "blobId",
-  "header:Authentication-Results:asText",
+  "header:Authentication-Results:asText:all",
 ];
 
 // ── Types ────────────────────────────────────────────────────
 
 export interface AccountConfig {
   label: string;
+  /** Mark processed inbox mail as read. Off by default so a person's own inbox is left alone. */
+  mark_read?: boolean;
   [key: string]: unknown;
 }
 

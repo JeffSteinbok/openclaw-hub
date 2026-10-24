@@ -114,7 +114,8 @@ Create `~/.openclaw/services/fastmail-sse-config.json` (see `config.example.json
 {
   "accounts": {
     "<account-id-1>": {
-      "label": "assistant@example.com"
+      "label": "assistant@example.com",
+      "mark_read": true
     },
     "<account-id-2>": {
       "label": "personal@example.com"
@@ -133,6 +134,8 @@ Create `~/.openclaw/services/fastmail-sse-config.json` (see `config.example.json
 **Account ID**: Your FastMail JMAP account ID (find via JMAP session endpoint or FastMail API docs)
 
 **Label**: Human-readable label for the account (displayed in multi-account notifications)
+
+**mark_read**: Mark processed inbox mail as read (default `false`). Turn it on for an assistant's own inbox, and leave it off for personal inboxes the service only watches.
 
 Generic `mail_rules` syntax, match fields, ordering, and reusable examples live in the [Carapace Mail Runtime](https://github.com/JeffSteinbok/carapace-mail-runtime).
 
