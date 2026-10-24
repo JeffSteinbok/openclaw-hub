@@ -182,6 +182,41 @@ describe("writeMemoryForDate", () => {
       cleanupMocks(mocks);
     }
   });
+
+  it("fills an empty date header left by an earlier empty run", () => {
+    const td = mkdtempSync(join(tmpdir(), "usps-mem-"));
+    const { ltmDir, mocks } = patchPaths(td);
+    try {
+      writeMemoryForDate("2024-01-15", [], "test");
+      writeMemoryForDate("2024-01-16", [{ sender: "Bank", addressee: "Jeff" }], "test");
+      writeMemoryForDate("2024-01-15", [{ sender: "ACME", addressee: "Jeff" }], "test");
+      const content = readFileSync(join(ltmDir, "mail_memory_2024-01.md"), "utf-8");
+      expect((content.match(/\(2024-01-15\)/g) ?? []).length).toBe(1);
+      expect(content).toContain("ACME");
+      // Filled in place, ahead of the later date
+      expect(content.indexOf("ACME")).toBeLessThan(content.indexOf("(2024-01-16)"));
+      expect(content.indexOf("(2024-01-15)")).toBeLessThan(content.indexOf("ACME"));
+      expect(content).toContain("Bank");
+    } finally {
+      cleanupMocks(mocks);
+    }
+  });
+
+  it("fills an empty date header at the end of the file", () => {
+    const td = mkdtempSync(join(tmpdir(), "usps-mem-"));
+    const { ltmDir, mocks } = patchPaths(td);
+    try {
+      writeMemoryForDate("2024-01-15", [], "test");
+      writeMemoryForDate("2024-01-15", [{ sender: "ACME", addressee: "Jeff" }], "test");
+      writeMemoryForDate("2024-01-15", [{ sender: "Other", addressee: "Jeff" }], "test");
+      const content = readFileSync(join(ltmDir, "mail_memory_2024-01.md"), "utf-8");
+      expect((content.match(/\(2024-01-15\)/g) ?? []).length).toBe(1);
+      expect(content).toContain("ACME");
+      expect(content).not.toContain("Other");
+    } finally {
+      cleanupMocks(mocks);
+    }
+  });
 });
 
 describe("lookup", () => {

@@ -180,13 +180,23 @@ export function writeMemoryForDate(
     existingContent = readFileSync(memPath, "utf-8");
   }
 
-  // If date already in file, skip (idempotent)
-  if (existingContent.includes(`## ${fmtDate(dateStr)} (${dateStr})`)) {
-    return memPath;
+  // If the date already has entries, skip (idempotent). An empty header left by
+  // a run with no analyzed items is filled in place instead.
+  const heading = `## ${fmtDate(dateStr)} (${dateStr})`;
+  const headingIdx = existingContent.indexOf(heading);
+  let emptySection: { start: number; end: number } | null = null;
+  if (headingIdx !== -1) {
+    const bodyStart = headingIdx + heading.length;
+    const nextIdx = existingContent.indexOf("\n## ", bodyStart);
+    const end = nextIdx === -1 ? existingContent.length : nextIdx + 1;
+    if (/^- /m.test(existingContent.slice(bodyStart, end)) || items.length === 0) {
+      return memPath;
+    }
+    emptySection = { start: headingIdx, end };
   }
 
   // Build the new date section
-  const lines: string[] = [`\n## ${fmtDate(dateStr)} (${dateStr})\n`];
+  const lines: string[] = [`\n${heading}\n`];
   for (const item of items) {
     const sender = item.sender ?? "Unknown";
     const addressee = item.addressee ?? "Unknown";
@@ -210,7 +220,13 @@ export function writeMemoryForDate(
 
   const newSection = lines.join("");
 
-  if (!existingContent) {
+  if (emptySection) {
+    // Replace the empty header (and its trailing blank lines) with the section
+    const before = existingContent.slice(0, emptySection.start);
+    const after = existingContent.slice(emptySection.end);
+    const section = before.endsWith("\n") ? newSection.slice(1) : newSection;
+    writeFileSync(memPath, before + section + (after ? "\n" + after : ""));
+  } else if (!existingContent) {
     // New file — add header
     const monthDate = new Date(month + "-01T00:00:00");
     const monthLabel = monthDate.toLocaleDateString("en-US", {
