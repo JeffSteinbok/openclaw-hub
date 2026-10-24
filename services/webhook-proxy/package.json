@@ -14,10 +14,12 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "node --watch dist/index.js"
+    "dev": "node --watch dist/index.js",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
-    "typescript": "^6"
+    "typescript": "^6",
+    "vitest": "^5.0.3"
   }
 }

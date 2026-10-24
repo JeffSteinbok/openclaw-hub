@@ -39,11 +39,26 @@ export interface NoneAuth {
 
 export type RouteAuth = HmacAuth | BearerAuth | NoneAuth;
 
+/** GitHub issues filter: forward only actionable `labeled` events from allowed senders. */
+export interface GithubIssuesFilter {
+  type: "github-issues";
+  allowedSenders: string[];
+  actionableLabels: string[];
+}
+
+export type RouteFilter = GithubIssuesFilter;
+
 export interface Route {
-  /** Incoming request path to match (exact) */
+  /**
+   * Request path to match (exact, query string ignored), as the proxy sees it.
+   * Tailscale strips the Funnel mount prefix, so with the `/hooksproxy` mount
+   * the external URL /hooksproxy/github-issues arrives as /github-issues.
+   */
   path: string;
   /** Auth validation to perform before forwarding */
   auth: RouteAuth;
+  /** Optional event filter applied after auth; dropped events get 204 */
+  filter?: RouteFilter;
   /**
    * Path to forward to on the OpenClaw instance.
    * Defaults to the same as `path` if omitted.
@@ -56,9 +71,21 @@ export interface Config {
   openclaw_url: string;
   /** Env var name containing the OpenClaw hooks bearer token */
   openclaw_bearer_env: string;
-  /** Route rules, evaluated in order — first match wins */
+  /** Route rules, matched by exact path */
   routes: Route[];
+  /** Interface to listen on. Default 127.0.0.1; use a LAN address for LAN senders. */
+  bind_host?: string;
+  /** Maximum request body size in bytes. Default 1 MiB. */
+  max_body_bytes?: number;
+  /** Auth-failure lockout. Defaults: 10 failures / 60 s → locked 300 s. */
+  auth_failure_limit?: {
+    max_failures?: number;
+    window_ms?: number;
+    lockout_ms?: number;
+  };
 }
+
+export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
 
 // ── Helpers ──────────────────────────────────────────────────
 

@@ -12,14 +12,30 @@ export interface AuthResult {
   reason?: string;
 }
 
+export class BodyTooLargeError extends Error {
+  constructor(limit: number) {
+    super(`request body exceeds ${limit} bytes`);
+  }
+}
+
 /**
- * Read the full raw body from an IncomingMessage.
+ * Read the full raw body from an IncomingMessage, up to `maxBytes`.
  * Returns a Buffer so HMAC can operate on raw bytes.
+ * Rejects with BodyTooLargeError as soon as the limit is exceeded.
  */
-export async function readBody(req: IncomingMessage): Promise<Buffer> {
+export async function readBody(req: IncomingMessage, maxBytes: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    let size = 0;
+    req.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        req.pause();
+        reject(new BodyTooLargeError(maxBytes));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
