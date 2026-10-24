@@ -53,6 +53,16 @@ Lightweight command-line tools the agent runs as subprocesses. See [`clis/`](cli
 
 ---
 
+## MCP Servers
+
+Model Context Protocol servers the gateway runs as subprocesses, registered with `openclaw mcp add`.
+
+| | Server | Description |
+|---|--------|-------------|
+| 🗺️ | [MapKit](mcp/mapkit/) | Apple Maps via native MapKit: place lookup, drive times, directions, map images (macOS). Also a CLI, `applemaps` |
+
+---
+
 ## Services & Libraries
 
 | Component | Purpose |
