@@ -117,6 +117,8 @@ restricted.
 
 Times are local wall time (`YYYY-MM-DD HH:MM`; UTC times in the feed are converted); all-day events are a bare date.
 
+The model sees one line per event (`2026-10-27 09:00–10:00 Dentist @ Main St`); code and scripts still get the full events, including descriptions and UIDs ([SDK compact view](https://github.com/JeffSteinbok/carapace-plugin-sdk#compact-results-for-the-model-v32)).
+
 ## Notes
 
 - Uses published ICS feed URLs from plugin config.

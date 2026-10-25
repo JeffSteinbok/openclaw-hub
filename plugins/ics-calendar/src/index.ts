@@ -4,7 +4,7 @@
 
 import { ACCESS_CONFIG_SCHEMA, checkAccess, definePlugin, type AccessConfig } from "carapace-plugin-sdk";
 import { Type } from "@sinclair/typebox";
-import { fetchCalendarEvents, type IcsCalendarConfig } from "./handlers.js";
+import { fetchCalendarEvents, type IcsCalendarConfig, calendarView } from "./handlers.js";
 
 /** ACL id for fetches by ad-hoc `url` rather than a configured `calendar_id`. */
 export const URL_PSEUDO_CALENDAR = "_url";
@@ -63,6 +63,7 @@ export const createEntry = definePlugin({
           return { error: (e as Error).message };
         }
       },
+      view: calendarView,
     }),
   ],
 });

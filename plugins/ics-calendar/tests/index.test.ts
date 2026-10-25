@@ -27,7 +27,9 @@ function makeApi(config: Record<string, unknown> = {}) {
   const tools: Record<string, ToolDef> = {};
   return { pluginConfig: config, registerTool(t: unknown) { const td = t as ToolDef; tools[td.name] = td; }, tools };
 }
-function resultText(r: unknown) { return JSON.parse((r as { content: Array<{text:string}> }).content[0].text); }
+// The full result (content is a compact view for the model).
+function resultText(r: unknown) { return (r as { details: unknown }).details as any; }
+function modelText(r: unknown) { return (r as { content: Array<{ text: string }> }).content[0].text; }
 
 async function loadPlugin(config: Record<string, unknown> = {}) {
   const { createEntry } = await import("../src/index.js");
@@ -118,6 +120,23 @@ END:VCALENDAR`;
     mockHttp(ics);
     const two = resultText(await api.tools["ics_calendar_fetch"].execute("id", { url: "http://example.com/c.ics", after: "2026-10-27", before: "2026-10-28" }));
     expect(two.events.map((e: { start: string }) => e.start)).toEqual(["2026-10-27 09:00", "2026-10-28"]);
+  });
+
+  it("shows the model one line per event", async () => {
+    const { api } = await loadPlugin();
+    mockHttp(`BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:20261027T090000
+DTEND:20261027T100000
+SUMMARY:Dentist
+LOCATION:Main St
+DESCRIPTION:Bring the forms
+UID:x
+END:VEVENT
+END:VCALENDAR`);
+    const r = await api.tools["ics_calendar_fetch"].execute("id", { url: "http://example.com/c.ics", label: "Family", after: "2026-10-27", before: "2026-10-27" });
+    expect(modelText(r)).toBe("Family: 1 events, 2026-10-27 to 2026-10-28\n2026-10-27 09:00–10:00 Dentist @ Main St");
+    expect(resultText(r).events[0].description).toBe("Bring the forms");
   });
 
   it("converts UTC times to local wall time", async () => {

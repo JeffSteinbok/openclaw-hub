@@ -14,7 +14,8 @@ async function loadTool(config: Record<string, unknown>) {
   createEntry().register({ pluginConfig: config, registerTool(t: unknown, o?: unknown) { tool = t as Factory; opts = o; } });
   return { tool: tool!, opts };
 }
-const text = (r: unknown) => JSON.parse((r as { content: Array<{ text: string }> }).content[0].text);
+// The full result (content is a compact view for the model).
+const text = (r: unknown) => (r as { details: unknown }).details as Record<string, unknown>;
 
 const accessGroups = { nicole: { type: "message.senders", members: { imessage: ["+14255550199"] } } };
 const CONFIG = {

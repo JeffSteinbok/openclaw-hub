@@ -4,7 +4,7 @@
 
 import { ACCESS_CONFIG_SCHEMA, checkAccess, definePlugin, type AccessConfig } from "carapace-plugin-sdk";
 import { Type } from "@sinclair/typebox";
-import { fetchWorkCalendar, type OutlookWorkCalendarConfig } from "./handlers.js";
+import { fetchWorkCalendar, type OutlookWorkCalendarConfig, calendarView } from "./handlers.js";
 
 /** ACL id of the single calendar this plugin serves. */
 export const WORK_CALENDAR_ID = "work";
@@ -48,6 +48,7 @@ export const createEntry = definePlugin({
           return { error: (e as Error).message };
         }
       },
+      view: calendarView,
     }),
   ],
 });

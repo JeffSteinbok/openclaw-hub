@@ -1,6 +1,6 @@
 {
   "name": "homeassistant-cli",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -16,14 +16,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "carapace-plugin-sdk": "^3.0.1"
+    "carapace-plugin-sdk": "^3.2.0"
   },
   "devDependencies": {
+    "@sinclair/typebox": "^0.34.52",
     "@types/node": "^26.6.4",
     "tsup": "^8.3.0",
     "typescript": "^7",
-    "vitest": "^5.0.3",
-    "@sinclair/typebox": "^0.34.52"
+    "vitest": "^5.0.3"
   },
   "peerDependencies": {
     "openclaw": "^2026.4.23"

@@ -295,6 +295,44 @@ export async function stateList(config: HomeAssistantConfig, params: { domain?: 
   return { output: cleaned, count: cleaned.length };
 }
 
+/** Attributes worth showing the model, per domain (state and name are always shown). */
+const VIEW_ATTRIBUTES: Record<string, string[]> = {
+  light: ["brightness"],
+  climate: ["hvac_action", "current_temperature", "temperature", "target_temp_low", "target_temp_high"],
+  cover: ["current_position"],
+  fan: ["percentage"],
+  media_player: ["media_title", "media_artist", "source", "volume_level"],
+  sensor: ["unit_of_measurement"],
+  water_heater: ["temperature"],
+};
+
+function viewValue(key: string, value: unknown): string {
+  if (key === "brightness" && typeof value === "number") return `${Math.round((value / 255) * 100)}%`;
+  if (key === "volume_level" && typeof value === "number") return `volume ${Math.round(value * 100)}%`;
+  return String(value);
+}
+
+/**
+ * What the model reads from hass_state_list: one line per entity,
+ * `entity_id "Friendly name": state (useful attributes)`. The full result
+ * stays in `details` for code (e.g. condensers).
+ */
+export function stateListView(result: unknown): unknown {
+  const r = result as { output?: unknown; count?: number };
+  if (!Array.isArray(r?.output)) return result; // domain counts, errors: already small
+  const lines = (r.output as HassEntity[]).map((e) => {
+    const attrs = (e.attributes ?? {}) as Record<string, unknown>;
+    const name = attrs.friendly_name ?? (e as { friendly_name?: unknown }).friendly_name;
+    const extras = (VIEW_ATTRIBUTES[e.entity_id?.split(".")[0] ?? ""] ?? [])
+      .filter((k) => attrs[k] !== undefined && attrs[k] !== null && attrs[k] !== "")
+      .map((k) => (k === "unit_of_measurement" ? String(attrs[k]) : `${k.replace(/_/g, " ")} ${viewValue(k, attrs[k])}`));
+    const state = extras.length && e.entity_id?.startsWith("sensor.") ? `${e.state} ${extras.join(" ")}` : e.state;
+    const rest = extras.length && !e.entity_id?.startsWith("sensor.") ? ` (${extras.join(", ")})` : "";
+    return `${e.entity_id}${name ? ` "${String(name)}"` : ""}: ${state}${rest}`;
+  });
+  return `${r.count ?? lines.length} entities\n${lines.join("\n")}`;
+}
+
 export async function serviceCall(config: HomeAssistantConfig, params: { domain: string; service: string; entity_id?: string; data?: Record<string, unknown> }): Promise<unknown> {
   const { server, token } = config;
   const domain = params.domain?.trim();

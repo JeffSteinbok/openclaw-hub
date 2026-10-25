@@ -7,7 +7,8 @@ import { Type } from "@sinclair/typebox";
 import {
   type HomeAssistantConfig,
   CAMERAS, DEFAULT_COLLAGE_CAMERAS,
-  stateGet, stateList, serviceCall, lovelaceGet, lovelaceSet, eventList, personFind,
+  stateGet, stateList,
+  stateListView, serviceCall, lovelaceGet, lovelaceSet, eventList, personFind,
   configList, configGet, configSet,
   speakerVolumeGet, speakerVolumeSet, logbook, cameraList,
   cameraSnapshotHandler, cameraCollageHandler,
@@ -98,6 +99,7 @@ export const createEntry = definePlugin({
           return { error: (e as Error).message };
         }
       },
+      view: stateListView,
     }),
 
     tool({
