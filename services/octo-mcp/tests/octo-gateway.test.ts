@@ -43,6 +43,21 @@ describe("DeviceStore", () => {
     expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
     store.clearToken();
     expect(store.isPaired()).toBe(false);
+    expect(store.loadDestinations()).toEqual({});
+    fs.writeFileSync(
+      path.join(dir, "recipients.json"),
+      JSON.stringify({
+        jeff: "+15555550100",
+        general: { channel: "discord", to: "channel:123" },
+        sms: { channel: "sms", to: "+1555" },
+        "Bad Name": "x",
+        empty: "",
+      }),
+    );
+    expect(store.loadDestinations()).toEqual({
+      jeff: { channel: "imessage", to: "+15555550100" },
+      general: { channel: "discord", to: "channel:123" },
+    });
   });
 });
 

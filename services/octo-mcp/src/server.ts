@@ -10,15 +10,15 @@
  * server publishes its protected resource metadata so ChatGPT can find
  * AuthKit; tokens are checked before the request body is read.
  *
- * Tools: `ping`, and `ask_octo` when the service is paired with the Gateway
- * (questions go to the dedicated `external` agent; see octo-gateway.ts).
+ * Tools are defined in tools.ts; all but `ping` need the service to be paired
+ * with the Gateway (see octo-gateway.ts).
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { authenticate, challenge, protectedResourceMetadata, type AuthConfig } from "./auth.js";
+import { SERVER_INSTRUCTIONS, registerTools, type OctoBackend } from "./tools.js";
 
 export const MCP_PATH = "/mcp";
 const PRM_PATHS = new Set(["/.well-known/oauth-protected-resource", `/.well-known/oauth-protected-resource${MCP_PATH}`]);
@@ -35,47 +35,13 @@ export interface ServerOptions {
   fetch?: typeof fetch;
   log?: (message: string) => void;
   now?: () => Date;
-  /** Sends a question to Octo and returns the reply; omitted when not paired. */
-  ask?: AskOcto;
+  /** Octo behind the tools; omitted when octo-mcp isn't paired with the Gateway. */
+  octo?: OctoBackend;
 }
 
-export type AskOcto = (question: string) => Promise<{ ok: boolean; text: string }>;
-
-export function buildMcpServer(now: () => Date = () => new Date(), ask?: AskOcto): McpServer {
-  const server = new McpServer({ name: "octo", version: "0.1.0" });
-  server.registerTool(
-    "ping",
-    {
-      title: "Ping Octo",
-      description: "Check that the Octo MCP server is reachable. Returns pong and the server time.",
-      annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
-    },
-    async () => ({
-      content: [{ type: "text", text: `pong ${now().toISOString()}` }],
-    }),
-  );
-  if (ask) {
-    server.registerTool(
-      "ask_octo",
-      {
-        title: "Ask Octo",
-        description:
-          "Ask Octo, Jeff's home assistant, about the house or Jeff's calendar, or ask it to change something in the " +
-          "house (lights, TV, fans, thermostat). Examples: 'which lights are on?', 'turn off the office light', " +
-          "'what's on my calendar tomorrow?'. Returns Octo's answer as text.",
-        inputSchema: { question: z.string().min(1).max(2000).describe("The question or request, in plain English") },
-        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-      },
-      async ({ question }) => {
-        try {
-          const reply = await ask(question);
-          return { content: [{ type: "text", text: reply.text }], isError: !reply.ok };
-        } catch (e) {
-          return { content: [{ type: "text", text: `Couldn't reach Octo: ${e instanceof Error ? e.message : e}` }], isError: true };
-        }
-      },
-    );
-  }
+export function buildMcpServer(now: () => Date = () => new Date(), octo?: OctoBackend): McpServer {
+  const server = new McpServer({ name: "octo", version: "0.3.0" }, { instructions: SERVER_INSTRUCTIONS });
+  registerTools(server, now, octo);
   return server;
 }
 
@@ -203,7 +169,7 @@ export function createMcpHttpServer(options: ServerOptions): Server {
       return;
     }
 
-    const server = buildMcpServer(options.now, options.ask);
+    const server = buildMcpServer(options.now, options.octo);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on("close", () => {
       void transport.close();

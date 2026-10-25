@@ -1,14 +1,21 @@
 /**
  * octo-gateway.ts — octo-mcp's connection to the OpenClaw Gateway.
  *
- * octo-mcp is its own paired operator device with only operator.read and
- * operator.write: it can chat with agents, but it can't change config, pair
- * devices or administer the Gateway. It never holds the shared Gateway token;
- * that is used once, by `pair`, to request the pairing.
+ * octo-mcp is its own paired operator device with operator.read and
+ * operator.write. That can't change config, pair devices, or use owner-only
+ * tools, but it does allow tools.invoke and send (see below). It never holds
+ * the shared Gateway token; that is used once, by `pair`, to request pairing.
  *
  * Identity and device token live in OCTO_MCP_DEVICE_DIR (mode 700/600):
- *   device.json  Ed25519 key pair and the device id derived from it
- *   token.json   the device token the Gateway issued, with its scopes
+ *   device.json      Ed25519 key pair and the device id derived from it
+ *   token.json       the device token the Gateway issued, with its scopes
+ *   recipients.json  {"name": {"channel": "imessage"|"discord", "to": "<target>"}}:
+ *                    the destinations send_message may use
+ *
+ * operator.write is the narrowest scope that works for a device: the
+ * session-only scopes need a verified user profile. It also allows tools.invoke
+ * and send, so octo-mcp's own code is what limits it to chat.send to one agent
+ * and send to the destinations file.
  */
 
 import crypto from "node:crypto";
@@ -96,6 +103,26 @@ export class DeviceStore {
     fs.rmSync(this.tokenFile, { force: true });
   }
 
+  /** Allowlisted message destinations, by name. Missing file = nobody. */
+  loadDestinations(): Record<string, Destination> {
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(fs.readFileSync(path.join(this.dir, "recipients.json"), "utf8"));
+    } catch {
+      return {};
+    }
+    const out: Record<string, Destination> = {};
+    for (const [name, value] of Object.entries(data)) {
+      if (!/^[a-z][a-z0-9_-]*$/.test(name)) continue;
+      // A bare string is an iMessage handle (the original format).
+      const dest = typeof value === "string" ? { channel: "imessage", to: value } : (value as Partial<Destination>);
+      if ((dest.channel === "imessage" || dest.channel === "discord") && typeof dest.to === "string" && dest.to) {
+        out[name] = { channel: dest.channel, to: dest.to };
+      }
+    }
+    return out;
+  }
+
   /** Paired = identity on disk and a device token the Gateway issued. */
   isPaired(): boolean {
     return Boolean(this.loadIdentity() && this.loadToken()?.token);
@@ -149,6 +176,12 @@ export function createGatewayClient(opts: GatewayOptions, onReady: () => void, o
       opts.onConnectError?.(err);
     },
   });
+}
+
+export interface Destination {
+  channel: "imessage" | "discord";
+  /** Channel target: an iMessage handle, or a Discord "user:<id>" / "channel:<id>". */
+  to: string;
 }
 
 export interface AskResult {
@@ -222,6 +255,18 @@ export class OctoGateway {
       return { ok: false, text: `Octo finished but its reply couldn't be read (${reply.unavailable ?? "unknown"}).` };
     }
     return { ok: true, text: reply.outputText || "(Octo had nothing to say.)" };
+  }
+
+  /** Send a message directly through the Gateway (no agent involved). */
+  async send(dest: Destination, message: string): Promise<AskResult> {
+    await withTimeout(this.connect(), 15_000, "Octo's gateway didn't accept the connection");
+    await this.client!.request("send", {
+      channel: dest.channel,
+      to: dest.to,
+      message,
+      idempotencyKey: crypto.randomUUID(),
+    });
+    return { ok: true, text: "Sent." };
   }
 
   stop(): void {
