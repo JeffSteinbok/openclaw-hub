@@ -121,9 +121,13 @@ export function createGatewayClient(opts: GatewayOptions, onReady: () => void, o
     ...(opts.bootstrapToken ? { token: opts.bootstrapToken } : {}),
     minProtocol: PROTOCOL_VERSION,
     maxProtocol: PROTOCOL_VERSION,
-    clientName: "gateway-client",
+    // Not "gateway-client": with mode "backend" on loopback plus the shared token,
+    // the Gateway treats that as its own internal helper and skips device pairing
+    // (shouldSkipLocalBackendSelfPairing). "cli" + "backend" gets ordinary
+    // pairing, so octo-mcp ends up with its own scoped device token.
+    clientName: "cli",
     clientDisplayName: "octo-mcp",
-    clientVersion: "0.2.0",
+    clientVersion: "0.2.1",
     mode: "backend",
     platform: "macos",
     role: ROLE,
@@ -191,9 +195,8 @@ export class OctoGateway {
     const scope = { sessionKey: this.sessionKey, agentId: this.agentId };
     const sent = (await client.request("chat.send", {
       ...scope,
-      message: question,
+      message: asPlainText(question),
       deliver: false,
-      suppressCommandInterpretation: true,
       timeoutMs,
       idempotencyKey: crypto.randomUUID(),
     })) as { runId?: string };
@@ -224,6 +227,17 @@ export class OctoGateway {
   stop(): void {
     this.client?.stop();
   }
+}
+
+/**
+ * Keep an outside assistant's text from being read as an OpenClaw command
+ * ("/reset", "!…"). suppressCommandInterpretation would do this, but it's a
+ * system-provenance field that needs operator.admin, which octo-mcp
+ * deliberately doesn't have.
+ */
+export function asPlainText(question: string): string {
+  const trimmed = question.trimStart();
+  return /^[/!]/.test(trimmed) ? `Question: ${trimmed}` : question;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
