@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { DeviceStore, deviceIdFor, publicKeyRawBase64Url, signPayload } from "../src/octo-gateway.js";
+import { DeviceStore, asPlainText, deviceIdFor, publicKeyRawBase64Url, signPayload } from "../src/octo-gateway.js";
 
 describe("device identity", () => {
   it("derives the device id as sha256 of the raw Ed25519 public key (OpenClaw's scheme)", () => {
@@ -43,5 +43,13 @@ describe("DeviceStore", () => {
     expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
     store.clearToken();
     expect(store.isPaired()).toBe(false);
+  });
+});
+
+describe("asPlainText", () => {
+  it("defuses text that would be read as an OpenClaw command", () => {
+    expect(asPlainText("/reset")).toBe("Question: /reset");
+    expect(asPlainText("  !exec ls")).toBe("Question: !exec ls");
+    expect(asPlainText("which lights are on?")).toBe("which lights are on?");
   });
 });
