@@ -20,6 +20,15 @@ function stripTrailingSlashes(s: string): string {
   return s;
 }
 
+/** The server URL comes only from config (no built-in address). */
+function requireServer(server: string | undefined): string {
+  const value = stripTrailingSlashes(server?.trim() ?? "");
+  if (!value) {
+    throw new Error("Home Assistant server is not configured: set the plugin's `server` (e.g. ${HASS_SERVER}).");
+  }
+  return value;
+}
+
 export const createEntry = definePlugin({
   id: "homeassistant",
   name: "Home Assistant",
@@ -28,8 +37,7 @@ export const createEntry = definePlugin({
   configSchema: Type.Object({
     server: Type.Optional(
       Type.String({
-        description: "Home Assistant server URL (e.g. http://192.168.1.76:8123)",
-        default: "http://192.168.1.76:8123",
+        description: "Home Assistant server URL (e.g. http://<home-assistant-host>:8123). Required; set it from the environment, e.g. ${HASS_SERVER}.",
       }),
     ),
     token: Type.Optional(
@@ -48,7 +56,7 @@ export const createEntry = definePlugin({
       async execute({ entity_id }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -69,7 +77,7 @@ export const createEntry = definePlugin({
       async execute({ domain }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -95,7 +103,7 @@ export const createEntry = definePlugin({
       async execute({ domain, service, entity_id, data }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -126,7 +134,7 @@ export const createEntry = definePlugin({
       async execute({ dashboard, view }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -152,7 +160,7 @@ export const createEntry = definePlugin({
       async execute({ dashboard, config: dashboardConfig }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -172,7 +180,7 @@ export const createEntry = definePlugin({
         ? "Automation config id (the `id` attribute, as returned by hass_automation_list) or its entity ID (e.g. automation.porch_lights)."
         : "Script id (e.g. bedtime) or its entity ID (e.g. script.bedtime).";
       const resolve = (config: { server?: string; token?: string }): HomeAssistantConfig => ({
-        server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+        server: requireServer(config.server),
         token: config.token ?? "",
         captureDir: CAPTURE_DIR,
       });
@@ -249,7 +257,7 @@ export const createEntry = definePlugin({
       async execute({ entity_id }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -271,7 +279,7 @@ export const createEntry = definePlugin({
       async execute({ name, entity_id }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -292,7 +300,7 @@ export const createEntry = definePlugin({
       async execute({ entity_id }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -314,7 +322,7 @@ export const createEntry = definePlugin({
       async execute({ entity_id, volume_level }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -343,7 +351,7 @@ export const createEntry = definePlugin({
       async execute({ entity_id, hours, start_time, end_time, keyword, limit }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -388,7 +396,7 @@ export const createEntry = definePlugin({
       async execute({ camera_name }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
@@ -414,7 +422,7 @@ export const createEntry = definePlugin({
       async execute({ camera_names, label }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
-            server: stripTrailingSlashes(config.server?.trim() || "http://192.168.1.76:8123"),
+            server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };

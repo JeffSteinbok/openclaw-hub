@@ -118,5 +118,5 @@ node dist/bin/homeassistant.js <command> [args...] --json
 
 | Variable | Description |
 |----------|-------------|
-| `HOMEASSISTANT_SERVER` | Home Assistant server URL (e.g. http://192.168.1.76:8123) |
+| `HOMEASSISTANT_SERVER` | Home Assistant server URL (e.g. http://<home-assistant-host>:8123) |
 | `HOMEASSISTANT_TOKEN` | Home Assistant long-lived access token |
