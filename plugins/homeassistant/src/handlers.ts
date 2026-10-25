@@ -340,15 +340,45 @@ export async function serviceCall(config: HomeAssistantConfig, params: { domain:
   if (!domain || !service) return { error: "domain and service are required" };
   const body: Record<string, unknown> = { ...(params.data ?? {}) };
   if (params.entity_id) body.entity_id = params.entity_id;
+  const started = Date.now();
   const res = await apiPost(server, token, `/api/services/${domain}/${service}`, body);
   if ("error" in res) return res;
-  if (Array.isArray(res.output) && res.output.length === 0) {
-    return {
-      output: res.output,
-      warning: "No entity changed state. If you expected a change, don't report success: the entity_id may not exist (check with hass_state_get) or it was already in that state.",
-    };
+  if (!Array.isArray(res.output) || res.output.length > 0) return { output: res.output };
+
+  // HA often replies before the device reports back, so an empty list doesn't
+  // mean nothing happened. Re-read the entities before saying anything.
+  const ids = (params.entity_id ?? "").split(",").map((s) => s.trim()).filter(Boolean).slice(0, 10);
+  if (ids.length === 0) {
+    return { output: [], warning: "Home Assistant reported no state change. Check the entity with hass_state_get before telling the user it worked." };
   }
-  return { output: res.output };
+  await new Promise((r) => setTimeout(r, recheck.delayMs));
+  const states = await Promise.all(ids.map((id) => recheckEntity(config, id, started)));
+  const missing = states.filter((s) => s.error).map((s) => s.entity_id);
+  const unchanged = states.filter((s) => !s.error && !s.updated).map((s) => `${s.entity_id} is ${s.state}`);
+  if (missing.length === 0 && unchanged.length === 0) return { output: [], states };
+  const problems = [
+    ...(missing.length ? [`not found: ${missing.join(", ")} (look it up with hass_state_list)`] : []),
+    ...(unchanged.length ? [`no update since the call: ${unchanged.join(", ")} (it was already like that, or the device didn't respond)`] : []),
+  ];
+  return { output: [], states, warning: `Not confirmed — ${problems.join("; ")}. Tell the user what the state is now; don't claim the call changed it.` };
+}
+
+/** Delay before re-reading entities after an empty service_call reply. Tests set it to 0. */
+export const recheck = { delayMs: 1500 };
+
+// Clock slack between this host and Home Assistant.
+const RECHECK_SLACK_MS = 5000;
+
+async function recheckEntity(
+  config: HomeAssistantConfig,
+  id: string,
+  since: number,
+): Promise<{ entity_id: string; state?: string; updated?: boolean; error?: string }> {
+  const r = await apiGet(config.server, config.token, `/api/states/${encodeURIComponent(id)}`, 10_000);
+  if ("error" in r) return { entity_id: id, error: r.error.startsWith("HTTP 404") ? "not found" : r.error };
+  const e = r.output as HassEntity;
+  const updatedAt = Date.parse(String(e.last_updated ?? e.last_changed ?? ""));
+  return { entity_id: id, state: e.state, updated: Number.isFinite(updatedAt) && updatedAt >= since - RECHECK_SLACK_MS };
 }
 
 export async function lovelaceGet(
