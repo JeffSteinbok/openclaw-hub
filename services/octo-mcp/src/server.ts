@@ -6,21 +6,31 @@
  * it through Tailscale Funnel (https://<funnel-host>:8443/mcp →
  * 127.0.0.1:18793).
  *
- * Spike (octo#441): one read-only `ping` tool and no auth. OAuth and the
- * ask_octo tool come in octo#442.
+ * Every /mcp request needs a WorkOS AuthKit access token (see auth.ts). The
+ * server publishes its protected resource metadata so ChatGPT can find
+ * AuthKit; tokens are checked before the request body is read.
+ *
+ * Tools: one read-only `ping` (octo#441). ask_octo comes in octo#442.
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { authenticate, challenge, protectedResourceMetadata, type AuthConfig } from "./auth.js";
 
 export const MCP_PATH = "/mcp";
+const PRM_PATHS = new Set(["/.well-known/oauth-protected-resource", `/.well-known/oauth-protected-resource${MCP_PATH}`]);
+const AS_METADATA_PATH = "/.well-known/oauth-authorization-server";
+const AS_METADATA_TTL_MS = 10 * 60 * 1000;
 export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
 
 export interface ServerOptions {
   /** Host header values accepted (DNS rebinding guard). Empty = accept any. */
   allowedHosts: string[];
+  auth: AuthConfig;
   maxBodyBytes?: number;
+  /** Fetch for the authorization-server metadata fallback (tests stub it). */
+  fetch?: typeof fetch;
   log?: (message: string) => void;
   now?: () => Date;
 }
@@ -92,6 +102,22 @@ export function createMcpHttpServer(options: ServerOptions): Server {
   const log = options.log ?? (() => {});
   const maxBody = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
   const allowed = new Set(options.allowedHosts.map((h) => h.toLowerCase()));
+  const fetchImpl = options.fetch ?? fetch;
+  let asMetadata: { body: unknown; at: number } | null = null;
+
+  // Compatibility fallback (WorkOS docs): clients that look for the
+  // authorization server metadata on the resource origin get AuthKit's copy.
+  async function authorizationServerMetadata(): Promise<unknown> {
+    if (asMetadata && Date.now() - asMetadata.at < AS_METADATA_TTL_MS) {
+      return asMetadata.body;
+    }
+    const res = await fetchImpl(`${options.auth.issuer}${AS_METADATA_PATH}`);
+    if (!res.ok) {
+      throw new Error(`AuthKit metadata ${res.status}`);
+    }
+    asMetadata = { body: await res.json(), at: Date.now() };
+    return asMetadata.body;
+  }
 
   return createServer(async (req, res) => {
     const path = new URL(req.url ?? "/", "http://localhost").pathname;
@@ -103,6 +129,19 @@ export function createMcpHttpServer(options: ServerOptions): Server {
       sendJson(res, 421, { error: "misdirected request" });
       return;
     }
+    if (req.method === "GET" && PRM_PATHS.has(path)) {
+      sendJson(res, 200, protectedResourceMetadata(options.auth), { "cache-control": "max-age=300" });
+      return;
+    }
+    if (req.method === "GET" && path === AS_METADATA_PATH) {
+      try {
+        sendJson(res, 200, await authorizationServerMetadata(), { "cache-control": "max-age=300" });
+      } catch (e) {
+        log(`authorization server metadata unavailable: ${e}`);
+        sendJson(res, 502, { error: "authorization server metadata unavailable" });
+      }
+      return;
+    }
     if (path !== MCP_PATH) {
       sendJson(res, 404, { error: "not found" });
       return;
@@ -110,6 +149,16 @@ export function createMcpHttpServer(options: ServerOptions): Server {
     if (req.method !== "POST") {
       // Stateless mode has no standalone SSE stream or session to delete.
       res.writeHead(405, { allow: "POST" }).end();
+      return;
+    }
+
+    const auth = await authenticate(req.headers.authorization, options.auth);
+    if (!auth.ok) {
+      log(`${auth.status} ${auth.error}: ${auth.description}${auth.sub ? ` (sub=${auth.sub})` : ""}`);
+      req.resume();
+      sendJson(res, auth.status, { error: auth.error, error_description: auth.description }, {
+        "www-authenticate": challenge(options.auth, auth.error, auth.description),
+      });
       return;
     }
 
