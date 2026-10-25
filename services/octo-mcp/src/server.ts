@@ -50,19 +50,18 @@ function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<unknown> 
     let tooLarge = false;
     req.on("data", (chunk: Buffer) => {
       size += chunk.length;
-      if (tooLarge) {
-        return; // discard the rest so the 413 can still be read
-      }
       if (size > maxBytes) {
+        // Keep reading but drop the bytes: answering before the upload ends
+        // can reset the connection before the client reads the 413.
         tooLarge = true;
         chunks.length = 0;
-        reject(new BodyTooLargeError());
         return;
       }
       chunks.push(chunk);
     });
     req.on("end", () => {
       if (tooLarge) {
+        reject(new BodyTooLargeError());
         return;
       }
       const text = Buffer.concat(chunks).toString("utf8");
@@ -119,7 +118,6 @@ export function createMcpHttpServer(options: ServerOptions): Server {
       body = await readJsonBody(req, maxBody);
     } catch (e) {
       if (e instanceof BodyTooLargeError) {
-        res.setHeader("connection", "close");
         jsonRpcError(res, 413, -32600, "request body too large");
       } else {
         jsonRpcError(res, 400, -32700, "parse error");
