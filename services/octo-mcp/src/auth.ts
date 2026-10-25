@@ -17,7 +17,7 @@ import { createRemoteJWKSet, errors, jwtVerify, type JWTVerifyGetKey } from "jos
 export interface AuthConfig {
   /** AuthKit issuer, e.g. https://example.authkit.app (no trailing slash). */
   issuer: string;
-  /** Canonical resource URL, e.g. https://octo.tail498490.ts.net/mcp. */
+  /** Canonical resource URL, e.g. https://<funnel-host>/mcp. */
   resource: string;
   /** WorkOS user ids (`sub`) allowed to use the server. Empty = nobody. */
   allowedSubjects: string[];

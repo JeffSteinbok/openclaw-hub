@@ -3,7 +3,7 @@
  *
  * Streamable HTTP in stateless mode: every POST /mcp gets a fresh McpServer
  * and transport, so no session state lives in the process. ChatGPT reaches
- * it through Tailscale Funnel (https://octo.tail498490.ts.net/mcp →
+ * it through Tailscale Funnel (https://<funnel-host>/mcp →
  * 127.0.0.1:18793).
  *
  * Every /mcp request needs a WorkOS AuthKit access token (see auth.ts). The

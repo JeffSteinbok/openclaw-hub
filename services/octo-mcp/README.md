@@ -33,7 +33,7 @@ shared Gateway token.
   device doesn't have. Revisit if OpenClaw user profiles are set up.
 
 - Streamable HTTP, stateless (a fresh `McpServer` per request), JSON responses.
-- Listens on `127.0.0.1:18793`, path `/mcp`. Public URL: `https://octo.tail498490.ts.net/mcp`. Tailscale Funnel on
+- Listens on `127.0.0.1:18793`, path `/mcp`. Public URL: `https://<funnel-host>/mcp`. Tailscale Funnel on
   :443 mounts `/mcp`, `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server` onto the
   same paths here; everything else on :443 is the OpenClaw Gateway. ChatGPT doesn't connect to non-443 ports (it never
   requested anything from the :8443 spike), so the server can't have its own Funnel port.
@@ -56,7 +56,7 @@ WorkOS AuthKit is the authorization server; this service is only the resource se
 - Without `OCTO_MCP_AUTHKIT_ISSUER` (an `https://` origin) the service exits instead of starting.
 
 WorkOS dashboard: enable Client ID Metadata Document and Dynamic Client Registration (Connect → Configuration), add
-the resource indicator `https://octo.tail498490.ts.net/mcp` and set it as the default, and disable public sign-up.
+the resource indicator `https://<funnel-host>/mcp` and set it as the default, and disable public sign-up.
 
 ## Pairing with OpenClaw (once)
 
@@ -92,9 +92,9 @@ OCTO_MCP_AUTHKIT_ISSUER=https://<subdomain>.authkit.app OCTO_MCP_ALLOWED_SUBJECT
 | `OCTO_MCP_DEVICE_DIR` | `~/.openclaw/secrets/octo-mcp` |
 | `OCTO_MCP_GATEWAY_URL` | `ws://127.0.0.1:18789` |
 | `OCTO_MCP_AGENT` | `external` (the agent behind the house and calendar tools) |
-| `OCTO_MCP_ALLOWED_HOSTS` | `127.0.0.1:<port>,localhost:<port>,octo.tail498490.ts.net` |
+| `OCTO_MCP_ALLOWED_HOSTS` | loopback plus the host of `OCTO_MCP_RESOURCE` |
 | `OCTO_MCP_AUTHKIT_ISSUER` | none (required) |
-| `OCTO_MCP_RESOURCE` | `https://octo.tail498490.ts.net/mcp` |
+| `OCTO_MCP_RESOURCE` | none (required), e.g. `https://<funnel-host>/mcp` |
 | `OCTO_MCP_ALLOWED_SUBJECTS` | empty (nobody) |
 
 Runs as the LaunchAgent `com.octo.openclaw.octo-mcp` (plist in the octo repo, `config/macos/launchd/`). None of these
