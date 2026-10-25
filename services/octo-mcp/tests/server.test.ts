@@ -126,6 +126,15 @@ describe("mcp with a valid token", () => {
     expect(list.body.result.tools[0].annotations.readOnlyHint).toBe(true);
   });
 
+  it("treats /mcp/ like /mcp (Funnel path mounts)", async () => {
+    const res = await fetch(`${base}/mcp/`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: ACCEPT, authorization: `Bearer ${await token()}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    });
+    expect(res.status).toBe(200);
+  });
+
   it("answers ping", async () => {
     const res = await rpc("tools/call", await token(), { name: "ping", arguments: {} });
     expect(res.body.result.content[0].text).toBe("pong 2026-10-25T00:00:00.000Z");

@@ -5,7 +5,7 @@
  *   OCTO_MCP_PORT              listen port (default 18793)
  *   OCTO_MCP_ALLOWED_HOSTS     comma-separated Host header allowlist
  *   OCTO_MCP_AUTHKIT_ISSUER    WorkOS AuthKit issuer, e.g. https://example.authkit.app (required)
- *   OCTO_MCP_RESOURCE          public resource URL (default https://<funnel-host>:8443/mcp)
+ *   OCTO_MCP_RESOURCE          public resource URL (default https://<funnel-host>/mcp)
  *   OCTO_MCP_ALLOWED_SUBJECTS  comma-separated WorkOS user ids allowed in (empty = nobody)
  *
  * Without an issuer the server refuses to start: it never serves /mcp unauthenticated.
@@ -21,10 +21,10 @@ const list = (value: string | undefined) =>
     .filter(Boolean);
 const ALLOWED_HOSTS = list(
   process.env["OCTO_MCP_ALLOWED_HOSTS"] ??
-    `127.0.0.1:${PORT},localhost:${PORT},<funnel-host>:8443,<funnel-host>`,
+    `127.0.0.1:${PORT},localhost:${PORT},<funnel-host>`,
 );
 const ISSUER = (process.env["OCTO_MCP_AUTHKIT_ISSUER"] ?? "").replace(/\/+$/, "");
-const RESOURCE = process.env["OCTO_MCP_RESOURCE"] ?? "https://<funnel-host>:8443/mcp";
+const RESOURCE = process.env["OCTO_MCP_RESOURCE"] ?? "https://<funnel-host>/mcp";
 const SUBJECTS = list(process.env["OCTO_MCP_ALLOWED_SUBJECTS"]);
 
 function log(message: string): void {

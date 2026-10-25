@@ -6,8 +6,10 @@ MCP server that lets OctoDot (a ChatGPT Dot) reach OpenClaw.
 server has no access to OpenClaw.
 
 - Streamable HTTP, stateless (a fresh `McpServer` per request), JSON responses.
-- Listens on `127.0.0.1:18793`, path `/mcp`. Public URL: `https://<funnel-host>:8443/mcp` (Tailscale Funnel on
-  its own port, so no prefix stripping).
+- Listens on `127.0.0.1:18793`, path `/mcp`. Public URL: `https://<funnel-host>/mcp`. Tailscale Funnel on
+  :443 mounts `/mcp`, `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server` onto the
+  same paths here; everything else on :443 is the OpenClaw Gateway. ChatGPT doesn't connect to non-443 ports (it never
+  requested anything from the :8443 spike), so the server can't have its own Funnel port.
 - Rejects a `Host` header outside `OCTO_MCP_ALLOWED_HOSTS` with 421 (DNS rebinding guard), bodies over 1 MiB with 413,
   other paths with 404 and methods other than POST with 405.
 
@@ -27,7 +29,7 @@ WorkOS AuthKit is the authorization server; this service is only the resource se
 - Without `OCTO_MCP_AUTHKIT_ISSUER` (an `https://` origin) the service exits instead of starting.
 
 WorkOS dashboard: enable Client ID Metadata Document and Dynamic Client Registration (Connect → Configuration), add
-the resource indicator `https://<funnel-host>:8443/mcp` and set it as the default, and disable public sign-up.
+the resource indicator `https://<funnel-host>/mcp` and set it as the default, and disable public sign-up.
 
 ## Run
 
@@ -39,9 +41,9 @@ OCTO_MCP_AUTHKIT_ISSUER=https://<subdomain>.authkit.app OCTO_MCP_ALLOWED_SUBJECT
 | Env | Default |
 |---|---|
 | `OCTO_MCP_PORT` | `18793` |
-| `OCTO_MCP_ALLOWED_HOSTS` | `127.0.0.1:<port>,localhost:<port>,<funnel-host>:8443,<funnel-host>` |
+| `OCTO_MCP_ALLOWED_HOSTS` | `127.0.0.1:<port>,localhost:<port>,<funnel-host>` |
 | `OCTO_MCP_AUTHKIT_ISSUER` | none (required) |
-| `OCTO_MCP_RESOURCE` | `https://<funnel-host>:8443/mcp` |
+| `OCTO_MCP_RESOURCE` | `https://<funnel-host>/mcp` |
 | `OCTO_MCP_ALLOWED_SUBJECTS` | empty (nobody) |
 
 Runs as the LaunchAgent `com.octo.openclaw.octo-mcp` (plist in the octo repo, `config/macos/launchd/`). None of these
