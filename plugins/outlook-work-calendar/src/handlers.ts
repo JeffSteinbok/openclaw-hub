@@ -116,3 +116,30 @@ export async function fetchWorkCalendar(
   const events = extractEvents(data).map(e => formatEvent(e as Record<string, unknown>));
   return { start_date: startDate, end_date: addDays(endDate, -1), count: events.length, events };
 }
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** "2026-10-27T08:30:00-07:00" → "2026-10-27 08:30" in local time; other formats unchanged. */
+function localWhen(value: string): string {
+  if (!/[T ]\d{2}:\d{2}/.test(value) || !/(Z|[+-]\d{2}:?\d{2})$/.test(value)) return value.replace("T", " ").slice(0, 16);
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** What the model reads: one line per event. The full result stays in `details`. */
+export function calendarView(result: unknown): unknown {
+  const r = result as { calendar?: string; start_date?: string; end_date?: string; count?: number; events?: Array<Record<string, unknown>> };
+  if (!Array.isArray(r?.events)) return result;
+  const head = `${r.calendar ? `${r.calendar}: ` : ""}${r.count ?? r.events.length} events, ${r.start_date} to ${r.end_date}`;
+  const lines = r.events.map((e) => {
+    const start = localWhen(String(e.start ?? ""));
+    const end = localWhen(String(e.end ?? ""));
+    const span = end && end !== start ? `${start}–${end.startsWith(start.slice(0, 10)) ? end.slice(11) : end}` : start;
+    const title = String(e.summary ?? e.subject ?? "(no title)");
+    const where = e.location ? ` @ ${String(e.location)}` : "";
+    const busy = e.busy_type && String(e.busy_type).toLowerCase() !== "busy" ? ` (${String(e.busy_type)})` : "";
+    return `${span} ${title}${where}${busy}`;
+  });
+  return [head, ...lines].join("\n");
+}

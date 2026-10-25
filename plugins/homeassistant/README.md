@@ -64,6 +64,7 @@ Set credentials in `plugins.entries["homeassistant"].config`:
 - Primary interface for all home automation tasks.
 - Covers lights, locks, alarm, cameras, scenes, and more.
 - Camera names are hardcoded in `tools.py` — edit `CAMERAS` dict to match your setup.
+- `hass_state_list` shows the model one line per entity (`entity_id "Name": state (brightness, temperatures, media…)`) instead of full JSON; code and scripts still get the full entities ([SDK compact view](https://github.com/JeffSteinbok/carapace-plugin-sdk#compact-results-for-the-model-v32)).
 
 ## Development
 

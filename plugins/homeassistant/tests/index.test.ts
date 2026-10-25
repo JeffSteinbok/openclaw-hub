@@ -74,6 +74,16 @@ function resultText(result: unknown): unknown {
   return JSON.parse(text);
 }
 
+/** The full result (what code sees); content may be a compact view. */
+function resultDetails(result: unknown): unknown {
+  return (result as { details: unknown }).details;
+}
+
+/** What the model reads. */
+function modelText(result: unknown): string {
+  return (result as { content: Array<{ text: string }> }).content[0].text;
+}
+
 function mockHttp(body: string, statusCode = 200) {
   const mock = makeMockHttpRequest(body, statusCode);
   vi.spyOn(http, "request").mockImplementationOnce((_url, _opts, cb) => {
@@ -242,7 +252,7 @@ describe("hass_state_list", () => {
     const bedroom = { entity_id: "light.bedroom", state: "off", attributes: { friendly_name: "Bedroom" } };
     mockHttp(JSON.stringify([ENTITY_SUN, ENTITY_LIGHT, bedroom, ENTITY_PERSON]));
 
-    const data = resultText(await api.tools["hass_state_list"].execute("id", {})) as Record<string, unknown>;
+    const data = resultDetails(await api.tools["hass_state_list"].execute("id", {})) as Record<string, unknown>;
     expect(data.output).toBeUndefined();
     expect(data.total).toBe(4);
     expect(data.domains).toEqual([
@@ -257,7 +267,7 @@ describe("hass_state_list", () => {
     const { api } = await loadPlugin();
     mockHttp(JSON.stringify([ENTITY_SUN, ENTITY_LIGHT, ENTITY_PERSON]));
 
-    const data = resultText(await api.tools["hass_state_list"].execute("id", { domain: "light, person" })) as { output: Array<{ entity_id: string }>; count: number };
+    const data = resultDetails(await api.tools["hass_state_list"].execute("id", { domain: "light, person" })) as { output: Array<{ entity_id: string }>; count: number };
     expect(data.output.map((e) => e.entity_id)).toEqual(["light.living_room", "person.jeff"]);
   });
 
@@ -268,11 +278,11 @@ describe("hass_state_list", () => {
     const entities = JSON.stringify([ENTITY_LIGHT, bonusLight, bonusFan]);
 
     mockHttp(entities);
-    const all = resultText(await api.tools["hass_state_list"].execute("id", { search: "Bonus Room" })) as { output: Array<{ entity_id: string }> };
+    const all = resultDetails(await api.tools["hass_state_list"].execute("id", { search: "Bonus Room" })) as { output: Array<{ entity_id: string }> };
     expect(all.output.map((e) => e.entity_id)).toEqual(["light.bonus_room_lights", "fan.loft"]);
 
     mockHttp(entities);
-    const lights = resultText(await api.tools["hass_state_list"].execute("id", { domain: "light", search: "bonus room" })) as { output: Array<{ entity_id: string }> };
+    const lights = resultDetails(await api.tools["hass_state_list"].execute("id", { domain: "light", search: "bonus room" })) as { output: Array<{ entity_id: string }> };
     expect(lights.output.map((e) => e.entity_id)).toEqual(["light.bonus_room_lights"]);
   });
 
@@ -280,7 +290,7 @@ describe("hass_state_list", () => {
     const { api } = await loadPlugin();
     mockHttp(JSON.stringify([ENTITY_SUN, ENTITY_LIGHT, ENTITY_PERSON]));
 
-    const data = resultText(await api.tools["hass_state_list"].execute("id", { domain: "light" })) as { output: Array<{ entity_id: string }>; count: number };
+    const data = resultDetails(await api.tools["hass_state_list"].execute("id", { domain: "light" })) as { output: Array<{ entity_id: string }>; count: number };
     expect(data.count).toBe(1);
     expect(data.output[0].entity_id).toBe("light.living_room");
   });
@@ -295,12 +305,36 @@ describe("hass_state_list", () => {
     }));
     mockHttp(JSON.stringify(entities));
 
-    const data = resultText(await api.tools["hass_state_list"].execute("id", { domain: "light" })) as { output: Array<Record<string, unknown>> };
+    const data = resultDetails(await api.tools["hass_state_list"].execute("id", { domain: "light" })) as { output: Array<Record<string, unknown>> };
     // Compact mode: only entity_id, state, friendly_name
     const keys = Object.keys(data.output[0]);
     expect(keys).toContain("entity_id");
     expect(keys).toContain("state");
     expect(keys).not.toContain("last_changed");
+  });
+  it("shows the model one line per entity, with useful attributes; details keep everything", async () => {
+    const { api } = await loadPlugin();
+    const entities = [
+      { entity_id: "light.kitchen", state: "on", attributes: { friendly_name: "Kitchen", brightness: 128, supported_color_modes: ["xy"], effect_list: ["a", "b"] } },
+      { entity_id: "climate.home", state: "heat", attributes: { friendly_name: "Thermostat", current_temperature: 67.4, temperature: 66, hvac_modes: ["heat", "cool"] } },
+      { entity_id: "sensor.outside", state: "52.1", attributes: { friendly_name: "Outside", unit_of_measurement: "°F" } },
+    ];
+    mockHttp(JSON.stringify(entities));
+    const result = await api.tools["hass_state_list"].execute("id", { domain: "light,climate,sensor" });
+    expect(modelText(result).split("\n")).toEqual([
+      "3 entities",
+      'light.kitchen "Kitchen": on (brightness 50%)',
+      'climate.home "Thermostat": heat (current temperature 67.4, temperature 66)',
+      'sensor.outside "Outside": 52.1 °F',
+    ]);
+    const details = resultDetails(result) as { output: Array<{ attributes: Record<string, unknown> }> };
+    expect(details.output[0].attributes.supported_color_modes).toEqual(["xy"]);
+  });
+
+  it("leaves domain counts and errors as they are", async () => {
+    const { api } = await loadPlugin();
+    mockHttp(JSON.stringify([ENTITY_LIGHT]));
+    expect(JSON.parse(modelText(await api.tools["hass_state_list"].execute("id", {})))).toHaveProperty("domains");
   });
 });
 

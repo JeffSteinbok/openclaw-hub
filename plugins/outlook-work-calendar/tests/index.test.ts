@@ -27,7 +27,9 @@ function mockHttp(body: string, statusCode = 200) {
 
 interface ToolDef { name: string; execute: (id: string, params: Record<string,unknown>) => Promise<unknown> }
 function makeApi() { const tools: Record<string,ToolDef> = {}; return { pluginConfig:{}, registerTool(t:unknown){tools[(t as ToolDef).name]=t as ToolDef;}, tools }; }
-function resultText(r: unknown) { return JSON.parse((r as { content: Array<{text:string}> }).content[0].text); }
+// The full result (content is a compact view for the model).
+function resultText(r: unknown) { return (r as { details: unknown }).details as any; }
+function modelText(r: unknown) { return (r as { content: Array<{ text: string }> }).content[0].text; }
 async function loadPlugin() { const { createEntry } = await import("../src/index.js"); const entry = createEntry(); const api = makeApi(); entry.register(api); return { entry, api }; }
 
 const WORK_EVENTS_RESPONSE = JSON.stringify({
@@ -60,6 +62,15 @@ describe("outlook_work_calendar_fetch", () => {
     expect(data.count).toBe(1);
     expect(data.events[0].subject).toContain("1:1");
     expect(data.events[0].location).toBe("Teams");
+  });
+
+  it("shows the model one line per event", async () => {
+    process.env.OUTLOOK_WORK_CALENDAR_URL = "https://outlook.office365.com/owa/calendar/abc";
+    process.env.OUTLOOK_WORK_FOLDER_ID = "folder-123";
+    mockHttp(WORK_EVENTS_RESPONSE);
+    const { api } = await loadPlugin();
+    const text = modelText(await api.tools["outlook_work_calendar_fetch"].execute("id", { after: "2026-05-03", before: "2026-05-03" }));
+    expect(text.split("\n")[1]).toBe("2026-05-03 10:00–10:30 1:1 with Manager @ Teams");
   });
 
   it("queries an explicit date range with an inclusive end day", async () => {

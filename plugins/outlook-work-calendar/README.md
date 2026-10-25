@@ -8,6 +8,8 @@ Read upcoming events from a published Outlook work calendar without going throug
 |------|-------------|
 | [`outlook_work_calendar_fetch`](#tool-outlook_work_calendar_fetch) | Fetch upcoming events from the published Outlook work calendar |
 
+The model sees one line per event, in local time (`2026-05-03 10:00–10:30 1:1 with Manager @ Teams`, with free/tentative noted); code and scripts still get the full events ([SDK compact view](https://github.com/JeffSteinbok/carapace-plugin-sdk#compact-results-for-the-model-v32)).
+
 ## Configuration Schema
 
 | Field | Type | Required | Description |
