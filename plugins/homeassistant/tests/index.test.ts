@@ -64,7 +64,7 @@ function makeApi(config: Record<string, unknown> = {}) {
 async function loadPlugin(config: Record<string, unknown> = {}) {
   const { createEntry } = await import("../src/index.js");
   const entry = createEntry();
-  const api = makeApi({ ...config });
+  const api = makeApi({ server: "http://ha.example.test:8123", ...config });
   entry.register(api);
   return { entry, api };
 }
@@ -743,5 +743,15 @@ describe("HTTP error propagation", () => {
     const data = resultText(await api.tools["hass_state_get"].execute("id", { entity_id: "sun.sun" }));
     expect(data).toHaveProperty("error");
     expect((data as { error: string }).error).toContain("401");
+  });
+});
+
+describe("server configuration", () => {
+  it("fails clearly when no server is configured (no built-in address)", async () => {
+    const { createEntry } = await import("../src/index.js");
+    const api = makeApi({});
+    createEntry().register(api);
+    const data = resultText(await api.tools["hass_state_get"].execute("id", { entity_id: "sun.sun" })) as { error?: string };
+    expect(data.error).toContain("server is not configured");
   });
 });
