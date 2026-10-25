@@ -1,10 +1,10 @@
 /**
  * octo-gateway.ts — octo-mcp's connection to the OpenClaw Gateway.
  *
- * octo-mcp is its own paired operator device with only operator.read and
- * operator.write: it can chat with agents, but it can't change config, pair
- * devices or administer the Gateway. It never holds the shared Gateway token;
- * that is used once, by `pair`, to request the pairing.
+ * octo-mcp is its own paired operator device with operator.read and
+ * operator.write. That can't change config, pair devices, or use owner-only
+ * tools, but it does allow tools.invoke and send (see below). It never holds
+ * the shared Gateway token; that is used once, by `pair`, to request pairing.
  *
  * Identity and device token live in OCTO_MCP_DEVICE_DIR (mode 700/600):
  *   device.json      Ed25519 key pair and the device id derived from it

@@ -67,7 +67,7 @@ node dist/pair.js                               # stores the device token
 ```
 
 The identity (`device.json`, Ed25519) and device token (`token.json`) live in `OCTO_MCP_DEVICE_DIR`
-(default `~/.openclaw/secrets/octo-mcp`, mode 700/600). Until they exist, `ask_octo` isn't offered. To revoke,
+(default `~/.openclaw/secrets/octo-mcp`, mode 700/600). Until they exist, only `ping` is offered. To revoke,
 `openclaw devices remove <deviceId>` and delete the directory.
 
 Agent-backed tools send `chat.send` to session `agent:<agent>:mcp` with delivery off, wait with `agent.wait`, and read
