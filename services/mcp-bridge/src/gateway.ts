@@ -1,21 +1,20 @@
 /**
- * octo-gateway.ts — octo-mcp's connection to the OpenClaw Gateway.
+ * gateway.ts — the bridge's connection to the OpenClaw Gateway.
  *
- * octo-mcp is its own paired operator device with operator.read and
+ * The bridge is its own paired operator device with operator.read and
  * operator.write. That can't change config, pair devices, or use owner-only
- * tools, but it does allow tools.invoke and send (see below). It never holds
- * the shared Gateway token; that is used once, by `pair`, to request pairing.
+ * tools; it does allow chat.send to any agent, tools.invoke, and send. The
+ * bridge's code is what keeps it to the configured tools. It never holds the
+ * shared Gateway token; that is used once, by `pair`, to request pairing.
  *
- * Identity and device token live in OCTO_MCP_DEVICE_DIR (mode 700/600):
- *   device.json      Ed25519 key pair and the device id derived from it
- *   token.json       the device token the Gateway issued, with its scopes
- *   recipients.json  {"name": {"channel": "imessage"|"discord", "to": "<target>"}}:
- *                    the destinations send_message may use
+ * Private files in MCP_BRIDGE_DEVICE_DIR (mode 700/600):
+ *   device.json        Ed25519 key pair and the device id derived from it
+ *   token.json         the device token the Gateway issued, with its scopes
+ *   destinations.json  {"name": {"channel": "imessage"|"discord", "to": "<target>"}}
+ *                      (recipients.json is read if destinations.json is missing)
  *
  * operator.write is the narrowest scope that works for a device: the
- * session-only scopes need a verified user profile. It also allows tools.invoke
- * and send, so octo-mcp's own code is what limits it to chat.send to one agent
- * and send to the destinations file.
+ * session-only scopes need a verified user profile.
  */
 
 import crypto from "node:crypto";
@@ -106,8 +105,9 @@ export class DeviceStore {
   /** Allowlisted message destinations, by name. Missing file = nobody. */
   loadDestinations(): Record<string, Destination> {
     let data: Record<string, unknown>;
+    const file = ["destinations.json", "recipients.json"].map((f) => path.join(this.dir, f)).find((f) => fs.existsSync(f));
     try {
-      data = JSON.parse(fs.readFileSync(path.join(this.dir, "recipients.json"), "utf8"));
+      data = file ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
     } catch {
       return {};
     }
@@ -136,6 +136,8 @@ export interface GatewayOptions {
   store: DeviceStore;
   /** Shared Gateway token, only for the first (pairing) connection. */
   bootstrapToken?: string;
+  /** Shown in `openclaw devices list` when pairing. */
+  displayName?: string;
   log?: (message: string) => void;
   onConnectError?: (err: Error) => void;
 }
@@ -151,10 +153,10 @@ export function createGatewayClient(opts: GatewayOptions, onReady: () => void, o
     // Not "gateway-client": with mode "backend" on loopback plus the shared token,
     // the Gateway treats that as its own internal helper and skips device pairing
     // (shouldSkipLocalBackendSelfPairing). "cli" + "backend" gets ordinary
-    // pairing, so octo-mcp ends up with its own scoped device token.
+    // pairing, so the bridge ends up with its own scoped device token.
     clientName: "cli",
-    clientDisplayName: "octo-mcp",
-    clientVersion: "0.2.1",
+    clientDisplayName: opts.displayName ?? "mcp-bridge",
+    clientVersion: "0.3.0",
     mode: "backend",
     platform: "macos",
     role: ROLE,
@@ -189,20 +191,13 @@ export interface AskResult {
   text: string;
 }
 
-/**
- * One long-lived Gateway connection; ask() sends a question to an agent and
- * returns its reply.
- */
-export class OctoGateway {
+/** One long-lived Gateway connection for ask(), invoke() and send(). */
+export class OpenClawGateway {
   private client: GatewayClient | null = null;
   private ready: Promise<void> | null = null;
   private resolveReady: (() => void) | null = null;
 
-  constructor(
-    private readonly opts: GatewayOptions,
-    private readonly agentId: string,
-    private readonly sessionKey: string,
-  ) {}
+  constructor(private readonly opts: GatewayOptions) {}
 
   private connect(): Promise<void> {
     if (this.ready) return this.ready;
@@ -221,11 +216,16 @@ export class OctoGateway {
     return this.ready;
   }
 
-  async ask(question: string, timeoutMs = 90_000): Promise<AskResult> {
+  private async connected(): Promise<GatewayClient> {
+    await withTimeout(this.connect(), 15_000, "the OpenClaw Gateway didn't accept the connection");
+    return this.client!;
+  }
+
+  /** Send a prompt to `agent` (session agent:<agent>:mcp) and return its reply. */
+  async ask(agent: string, question: string, timeoutMs = 90_000): Promise<AskResult> {
     const deadline = AbortSignal.timeout(timeoutMs + 15_000);
-    await withTimeout(this.connect(), 15_000, "Octo's gateway didn't accept the connection");
-    const client = this.client!;
-    const scope = { sessionKey: this.sessionKey, agentId: this.agentId };
+    const client = await this.connected();
+    const scope = { sessionKey: `agent:${agent}:mcp`, agentId: agent };
     const sent = (await client.request("chat.send", {
       ...scope,
       message: asPlainText(question),
@@ -234,7 +234,7 @@ export class OctoGateway {
       idempotencyKey: crypto.randomUUID(),
     })) as { runId?: string };
     if (!sent?.runId) {
-      return { ok: false, text: "Octo didn't accept the question." };
+      return { ok: false, text: "OpenClaw didn't accept the question." };
     }
     const result = (await client.request(
       "agent.wait",
@@ -242,7 +242,7 @@ export class OctoGateway {
       { timeoutMs: timeoutMs + 10_000 },
     )) as { status?: string; error?: string };
     if (result?.status && result.status !== "ok") {
-      return { ok: false, text: `Octo's run ended with status ${result.status}${result.error ? `: ${result.error}` : ""}.` };
+      return { ok: false, text: `The agent's run ended with status ${result.status}${result.error ? `: ${result.error}` : ""}.` };
     }
     const reply = await recoverTerminalReply({
       runId: sent.runId,
@@ -252,15 +252,40 @@ export class OctoGateway {
       signal: deadline,
     });
     if (reply.outputText === undefined) {
-      return { ok: false, text: `Octo finished but its reply couldn't be read (${reply.unavailable ?? "unknown"}).` };
+      return { ok: false, text: `The agent finished but its reply couldn't be read (${reply.unavailable ?? "unknown"}).` };
     }
-    return { ok: true, text: reply.outputText || "(Octo had nothing to say.)" };
+    return { ok: true, text: reply.outputText || "(No reply.)" };
+  }
+
+  /**
+   * Call one OpenClaw tool directly (tools.invoke) under `agent`'s tool policy.
+   * Returns the tool's structured result (`details`), falling back to its text.
+   */
+  async invoke(agent: string, tool: string, args: Record<string, unknown>): Promise<unknown> {
+    const client = await this.connected();
+    const r = (await client.request("tools.invoke", {
+      name: tool,
+      agentId: agent,
+      args,
+      idempotencyKey: crypto.randomUUID(),
+    })) as { ok?: boolean; output?: { details?: unknown; content?: { text?: string }[] }; error?: { message?: string } };
+    if (!r?.ok) throw new Error(`${tool}: ${r?.error?.message ?? "failed"}`);
+    const details = r.output?.details;
+    if (details !== undefined && details !== null && !(typeof details === "object" && Object.keys(details).length === 0)) {
+      return details;
+    }
+    const text = r.output?.content?.[0]?.text ?? "";
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
   }
 
   /** Send a message directly through the Gateway (no agent involved). */
   async send(dest: Destination, message: string): Promise<AskResult> {
-    await withTimeout(this.connect(), 15_000, "Octo's gateway didn't accept the connection");
-    await this.client!.request("send", {
+    const client = await this.connected();
+    await client.request("send", {
       channel: dest.channel,
       to: dest.to,
       message,
@@ -277,7 +302,7 @@ export class OctoGateway {
 /**
  * Keep an outside assistant's text from being read as an OpenClaw command
  * ("/reset", "!…"). suppressCommandInterpretation would do this, but it's a
- * system-provenance field that needs operator.admin, which octo-mcp
+ * system-provenance field that needs operator.admin, which the bridge
  * deliberately doesn't have.
  */
 export function asPlainText(question: string): string {

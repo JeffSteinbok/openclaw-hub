@@ -1,0 +1,95 @@
+{
+  "name": "home",
+  "instructions": "This is a personal home assistant. You can check the house and the owner's calendars, change things in the house, and send messages to a few named people. It can't read email, browse the web, or reach anyone else. Prefer the read-only tools for questions.",
+  "agent": "external",
+  "timezone": "America/Los_Angeles",
+  "ignoreEntities": [
+    "light.status_led_*"
+  ],
+  "tools": [
+    {
+      "name": "house_status",
+      "title": "House status",
+      "kind": "read",
+      "description": "Current state of the house: lights on, open covers, thermostat, active media players. Read-only.",
+      "invoke": [
+        {
+          "tool": "hass_state_list",
+          "args": {
+            "domain": "light"
+          },
+          "label": "Lights"
+        },
+        {
+          "tool": "hass_state_list",
+          "args": {
+            "domain": "cover"
+          },
+          "label": "Covers"
+        },
+        {
+          "tool": "hass_state_list",
+          "args": {
+            "domain": "climate"
+          },
+          "label": "Thermostat"
+        },
+        {
+          "tool": "hass_state_list",
+          "args": {
+            "domain": "media_player"
+          },
+          "label": "Media"
+        }
+      ],
+      "condense": "home-assistant-status"
+    },
+    {
+      "name": "calendar",
+      "title": "Calendar",
+      "kind": "read",
+      "dateRange": true,
+      "description": "Events on the owner's calendars for a range or dates. Read-only.",
+      "invoke": [
+        {
+          "tool": "ics_calendar_fetch",
+          "args": {
+            "calendar_id": "personal"
+          },
+          "label": "Personal"
+        },
+        {
+          "tool": "ics_calendar_fetch",
+          "args": {
+            "calendar_id": "family"
+          },
+          "label": "Family"
+        }
+      ],
+      "condense": "calendar-events"
+    },
+    {
+      "name": "control_house",
+      "title": "Change something in the house",
+      "kind": "change",
+      "description": "Ask the house agent to change something: lights, TVs, fans, thermostat, covers. Every action is checked by its guard.",
+      "params": {
+        "request": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "The change, in plain English"
+        }
+      },
+      "ask": {
+        "prompt": "The owner asked, through an outside assistant, for this change in the house. Do it with the guarded Home Assistant actions only; if it isn't a change to the house, do nothing and say so.\n\nRequest: {request}"
+      }
+    },
+    {
+      "name": "send_message",
+      "title": "Send a message",
+      "kind": "change",
+      "send": true,
+      "description": "Send a message from the assistant to one of the configured destinations."
+    }
+  ]
+}
