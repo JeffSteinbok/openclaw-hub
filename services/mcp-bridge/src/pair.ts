@@ -1,5 +1,5 @@
 /**
- * pair.ts — one-time pairing of octo-mcp with the OpenClaw Gateway.
+ * pair.ts — one-time pairing of the bridge with the OpenClaw Gateway.
  *
  *   OPENCLAW_GATEWAY_TOKEN=… node dist/pair.js
  *
@@ -10,16 +10,18 @@
  * this again. On success the Gateway's device token is stored and the shared
  * token is never used again.
  *
- * Env: OCTO_MCP_DEVICE_DIR (default ~/.openclaw/secrets/octo-mcp),
- *      OCTO_MCP_GATEWAY_URL (default ws://127.0.0.1:18789).
+ * Env: MCP_BRIDGE_DEVICE_DIR (default ~/.openclaw/secrets/mcp-bridge),
+ *      MCP_BRIDGE_GATEWAY_URL (default ws://127.0.0.1:18789),
+ *      MCP_BRIDGE_DISPLAY_NAME (shown in `openclaw devices list`, default mcp-bridge).
  */
 
 import os from "node:os";
 import path from "node:path";
-import { DeviceStore, SCOPES, createGatewayClient } from "./octo-gateway.js";
+import { DeviceStore, SCOPES, createGatewayClient } from "./gateway.js";
 
-const dir = process.env["OCTO_MCP_DEVICE_DIR"] ?? path.join(os.homedir(), ".openclaw/secrets/octo-mcp");
-const url = process.env["OCTO_MCP_GATEWAY_URL"] ?? "ws://127.0.0.1:18789";
+const dir = process.env["MCP_BRIDGE_DEVICE_DIR"] ?? path.join(os.homedir(), ".openclaw/secrets/mcp-bridge");
+const url = process.env["MCP_BRIDGE_GATEWAY_URL"] ?? "ws://127.0.0.1:18789";
+const displayName = process.env["MCP_BRIDGE_DISPLAY_NAME"] ?? "mcp-bridge";
 const bootstrapToken = process.env["OPENCLAW_GATEWAY_TOKEN"];
 const store = new DeviceStore(dir);
 
@@ -40,6 +42,7 @@ const client = createGatewayClient(
     url,
     store,
     bootstrapToken,
+    displayName,
     log: (m) => console.error(m),
     onConnectError: (err) => {
       const details = (err as { details?: Record<string, unknown> }).details ?? {};

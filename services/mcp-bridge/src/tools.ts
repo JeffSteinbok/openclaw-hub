@@ -1,165 +1,179 @@
 /**
- * tools.ts — the tools octo-mcp offers to outside assistants (OctoDot in ChatGPT).
- *
- * The split follows what each tool can do, because ChatGPT asks the user to
- * confirm any tool that isn't marked read-only:
- *
- *   house_status, calendar   read-only. Fixed questions to the `external`
- *                            agent; no free text from the caller reaches it,
- *                            so a read can't be talked into a change.
- *   control_house            changes the house. The request goes to the
- *                            `external` agent, whose Home Assistant actions
- *                            pass through Hass Guard. ChatGPT confirms first.
- *   send_message             sends a message (iMessage or Discord). No AI
- *                            involved: octo-mcp calls the Gateway's `send`
- *                            directly, and the destination must be one of a
- *                            few names whose channel and target live in a
- *                            private file on the host. ChatGPT confirms first.
- *   ping                     reachability check.
+ * tools.ts — registers the configured tools (config.ts) on an MCP server.
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { CONDENSERS, type CallResult } from "./condense.js";
+import { DATE_RANGES, type BridgeConfig, type ParamSpec, type ToolSpec } from "./config.js";
 
-export interface OctoResult {
+export interface ToolResult {
   ok: boolean;
   text: string;
 }
 
-export interface OctoBackend {
-  /** Send a prompt to the `external` agent and return its reply. */
-  ask(prompt: string): Promise<OctoResult>;
-  /** Send a message to an allowlisted destination (by name). */
-  send(destination: string, message: string): Promise<OctoResult>;
-  /** Destination names send() accepts, with their channel (for the tool description). */
+/** What the tools need from OpenClaw. gateway.ts implements it. */
+export interface BridgeBackend {
+  /** Call an OpenClaw tool directly under `agent`'s tool policy; returns its structured output. */
+  invoke(agent: string, tool: string, args: Record<string, unknown>): Promise<unknown>;
+  /** Send a prompt to an agent and return its reply. */
+  ask(agent: string, prompt: string): Promise<ToolResult>;
+  /** Send a message to a named destination. */
+  send(destination: string, message: string): Promise<ToolResult>;
+  /** Destination names → channel ("imessage", "discord"), for the send tool's description. */
   destinations: Record<string, string>;
 }
 
-export const SERVER_INSTRUCTIONS =
-  "Octo is Jeff's personal home assistant. Through these tools you can check the house (lights, doors and garage, " +
-  "thermostat, TVs) and Jeff's calendars, change things in the house, and send messages (iMessage or Discord) to " +
-  "Jeff, a few family members, and a Discord channel. Octo can't read or send email, browse the web, or reach anyone else. Prefer house_status and calendar " +
-  "for questions; use control_house only when Jeff asks for a change.";
-
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const;
-const CHANGES_THINGS = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
-
-const CALENDAR_RANGES = ["today", "tomorrow", "this_week", "next_7_days"] as const;
+const CHANGES = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-export const HOUSE_STATUS_PROMPT =
-  "Read-only status check; don't change anything. Report briefly: which rooms have lights on, whether the garage door " +
-  "or any other cover is open, the thermostat's mode and setpoint, and any TVs that are on.";
-
-export function calendarPrompt(range: string): string {
-  return (
-    `Read-only calendar check; don't change anything. List the events on Jeff's calendars for ${range}: time, title, ` +
-    "and which calendar. Times in America/Los_Angeles."
-  );
+function zodFor(spec: ParamSpec) {
+  let schema: z.ZodTypeAny;
+  if (spec.type === "enum") schema = z.enum(spec.values as [string, ...string[]]);
+  else if (spec.type === "date") schema = z.string().regex(ISO_DATE, "YYYY-MM-DD");
+  else schema = z.string().min(1).max(spec.maxLength ?? 500);
+  if (spec.description) schema = schema.describe(spec.description);
+  return spec.optional ? schema.optional() : schema;
 }
 
-export function controlPrompt(request: string): string {
-  return (
-    "Jeff asked, through an outside assistant, for this change in the house. Do it with the guarded Home Assistant " +
-    "actions only; if it isn't a change to the house, do nothing and say so.\n\nRequest: " +
-    JSON.stringify(request)
-  );
+function today(timezone: string, now: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 
-function asContent(result: OctoResult) {
-  return { content: [{ type: "text" as const, text: result.text }], isError: !result.ok };
+function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
-async function guarded(run: () => Promise<OctoResult>) {
-  try {
-    return asContent(await run());
-  } catch (e) {
-    return asContent({ ok: false, text: `Couldn't reach Octo: ${e instanceof Error ? e.message : String(e)}` });
+/** Resolve `range` or `start`/`end` into an inclusive date span, or an error message. */
+export function resolveRange(
+  params: Record<string, unknown>,
+  timezone: string,
+  now: Date,
+): { after: string; before: string; label: string } | { error: string } {
+  const start = params["start"] as string | undefined;
+  const end = params["end"] as string | undefined;
+  if (start || end) {
+    if (!start || !end || start > end) return { error: "Give both start and end (YYYY-MM-DD), with start on or before end." };
+    return { after: start, before: end, label: `${start} through ${end}` };
+  }
+  const range = (params["range"] as (typeof DATE_RANGES)[number] | undefined) ?? "today";
+  const t = today(timezone, now);
+  switch (range) {
+    case "tomorrow":
+      return { after: addDays(t, 1), before: addDays(t, 1), label: "tomorrow" };
+    case "this_week": {
+      const weekday = new Date(`${t}T12:00:00Z`).getUTCDay(); // 0 = Sunday
+      return { after: t, before: addDays(t, weekday === 0 ? 0 : 7 - weekday), label: "the rest of this week" };
+    }
+    case "next_7_days":
+      return { after: t, before: addDays(t, 6), label: "the next 7 days" };
+    default:
+      return { after: t, before: t, label: "today" };
   }
 }
 
-export function registerTools(server: McpServer, now: () => Date, octo?: OctoBackend): void {
+/** Fill `{param}` placeholders; caller values are JSON-quoted so they read as data. */
+export function fillPrompt(template: string, params: Record<string, unknown>, specs: Record<string, ParamSpec>): string {
+  return template.replace(/\{([a-z][a-z0-9_]*)\}/g, (_m, key: string) => {
+    const value = params[key];
+    if (value === undefined) return "(not given)";
+    return specs[key]?.type === "string" ? JSON.stringify(String(value)) : String(value);
+  });
+}
+
+function text(result: ToolResult) {
+  return { content: [{ type: "text" as const, text: result.text }], isError: !result.ok };
+}
+
+async function guarded(run: () => Promise<ToolResult>) {
+  try {
+    return text(await run());
+  } catch (e) {
+    return text({ ok: false, text: `Couldn't reach OpenClaw: ${e instanceof Error ? e.message : String(e)}` });
+  }
+}
+
+function runTool(spec: ToolSpec, config: BridgeConfig, backend: BridgeBackend, now: () => Date) {
+  const timezone = config.timezone ?? "UTC";
+  return async (params: Record<string, unknown>) =>
+    guarded(async () => {
+      if (spec.send) {
+        return backend.send(String(params["to"]), String(params["message"]));
+      }
+      if (spec.ask) {
+        return backend.ask(spec.ask.agent ?? config.agent, fillPrompt(spec.ask.prompt, params, spec.params ?? {}));
+      }
+      let rangeArgs: Record<string, unknown> = {};
+      if (spec.dateRange) {
+        const range = resolveRange(params, timezone, now());
+        if ("error" in range) return { ok: false, text: range.error };
+        rangeArgs = { after: range.after, before: range.before };
+      }
+      const results: CallResult[] = [];
+      for (const call of spec.invoke ?? []) {
+        const args = { ...(call.args ?? {}), ...rangeArgs };
+        results.push({ tool: call.tool, label: call.label, args, output: await backend.invoke(config.agent, call.tool, args) });
+      }
+      const condense = spec.condense ? CONDENSERS[spec.condense] : undefined;
+      return {
+        ok: true,
+        text: condense
+          ? condense(results, { ignoreEntities: config.ignoreEntities ?? [] })
+          : JSON.stringify(results.map((r) => ({ tool: r.tool, label: r.label, output: r.output }))),
+      };
+    });
+}
+
+export function registerTools(server: McpServer, config: BridgeConfig, now: () => Date, backend?: BridgeBackend): void {
   server.registerTool(
     "ping",
     {
-      title: "Ping Octo",
-      description: "Check that the Octo MCP server is reachable. Returns pong and the server time.",
+      title: "Ping",
+      description: "Check that this MCP server is reachable. Returns pong and the server time.",
       annotations: READ_ONLY,
     },
     async () => ({ content: [{ type: "text", text: `pong ${now().toISOString()}` }] }),
   );
-  if (!octo) return;
+  if (!backend) return;
 
-  server.registerTool(
-    "house_status",
-    {
-      title: "House status",
-      description:
-        "Current state of Jeff's house: which lights are on, whether the garage door or other covers are open, the " +
-        "thermostat, and which TVs are on. Read-only.",
-      annotations: READ_ONLY,
-    },
-    async () => guarded(() => octo.ask(HOUSE_STATUS_PROMPT)),
-  );
-
-  server.registerTool(
-    "calendar",
-    {
-      title: "Jeff's calendar",
-      description:
-        "Events on Jeff's calendars (personal, family, travel and work) for a range: today, tomorrow, this_week, " +
-        "next_7_days, or a start/end date. Read-only.",
-      inputSchema: {
-        range: z.enum(CALENDAR_RANGES).optional().describe("A named range; defaults to today"),
+  for (const spec of config.tools) {
+    if (spec.condense && !CONDENSERS[spec.condense]) {
+      throw new Error(`mcp-bridge config: ${spec.name}: unknown condenser ${spec.condense}`);
+    }
+    let inputSchema: Record<string, z.ZodTypeAny> = Object.fromEntries(
+      Object.entries(spec.params ?? {}).map(([k, p]) => [k, zodFor(p)]),
+    );
+    let description = spec.description;
+    if (spec.dateRange) {
+      inputSchema = {
+        ...inputSchema,
+        range: z.enum(DATE_RANGES).optional().describe("A named range; defaults to today"),
         start: z.string().regex(ISO_DATE).optional().describe("Start date, YYYY-MM-DD (use with end)"),
         end: z.string().regex(ISO_DATE).optional().describe("End date, YYYY-MM-DD, inclusive"),
-      },
-      annotations: READ_ONLY,
-    },
-    async ({ range, start, end }) => {
-      let label: string = (range ?? "today").replace(/_/g, " ");
-      if (start || end) {
-        if (!start || !end || start > end) {
-          return asContent({ ok: false, text: "Give both start and end (YYYY-MM-DD), with start on or before end." });
-        }
-        label = `${start} through ${end}`;
-      }
-      return guarded(() => octo.ask(calendarPrompt(label)));
-    },
-  );
-
-  server.registerTool(
-    "control_house",
-    {
-      title: "Change something in the house",
-      description:
-        "Ask Octo to change something in Jeff's house: lights, TVs, fans, the thermostat, covers. Example: 'turn off " +
-        "the office light'. Every action is checked by Octo's Home Assistant guard; unusual ones wait for Jeff's " +
-        "approval. Returns what Octo did.",
-      inputSchema: { request: z.string().min(1).max(500).describe("The change, in plain English") },
-      annotations: CHANGES_THINGS,
-    },
-    async ({ request }) => guarded(() => octo.ask(controlPrompt(request))),
-  );
-
-  const names = Object.keys(octo.destinations);
-  if (names.length > 0) {
-    const label = (name: string) =>
-      `${name} (${octo.destinations[name] === "discord" ? "Discord" : "iMessage"})`;
+      };
+    }
+    if (spec.send) {
+      const names = Object.keys(backend.destinations);
+      if (names.length === 0) continue; // no destinations configured: don't offer the tool
+      const label = (n: string) => `${n} (${backend.destinations[n] === "discord" ? "Discord" : "iMessage"})`;
+      description = `${spec.description} Destinations: ${names.map(label).join(", ")}. Only these exist.`;
+      inputSchema = {
+        to: z.enum(names as [string, ...string[]]).describe("Where to send it"),
+        message: z.string().min(1).max(1000).describe("The message text, sent exactly as given"),
+      };
+    }
     server.registerTool(
-      "send_message",
+      spec.name,
       {
-        title: "Send a message",
-        description:
-          `Send a message from Octo to one of: ${names.map(label).join(", ")}. Only these destinations exist. ` +
-          "Write the message in full; it's sent exactly as given.",
-        inputSchema: {
-          to: z.enum(names as [string, ...string[]]).describe("Where to send it"),
-          message: z.string().min(1).max(1000).describe("The message text"),
-        },
-        annotations: CHANGES_THINGS,
+        title: spec.title ?? spec.name,
+        description,
+        ...(Object.keys(inputSchema).length ? { inputSchema } : {}),
+        annotations: spec.kind === "read" ? READ_ONLY : CHANGES,
       },
-      async ({ to, message }) => guarded(() => octo.send(to, message)),
+      runTool(spec, config, backend, now) as never,
     );
   }
 }

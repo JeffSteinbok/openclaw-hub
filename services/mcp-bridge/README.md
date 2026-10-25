@@ -1,101 +1,118 @@
-# octo-mcp
+# mcp-bridge
 
-MCP server that lets OctoDot (a ChatGPT Dot) reach OpenClaw.
+An OAuth-protected MCP server that offers a **curated, config-defined** set of OpenClaw capabilities to outside agents:
+a ChatGPT Dot, Claude, or anything else that speaks remote MCP with OAuth.
 
-## Tools
+It is not a mirror of OpenClaw's tools. You declare a handful of intent-level tools ("house status", "calendar",
+"change something", "send a message"), each tied to a risk tier, and the bridge does the rest: sign-in, condensing
+results so they don't flood the client's context, and talking to OpenClaw as its own paired device.
 
-Split by what they do, because ChatGPT asks the user to confirm any tool that isn't read-only:
-
-| Tool | Kind | What happens |
-|---|---|---|
-| `house_status` | read-only | A fixed question to OpenClaw's `external` agent: lights, covers, thermostat, TVs. No caller text reaches the agent |
-| `calendar` | read-only | A fixed question with a validated range (`today`, `tomorrow`, `this_week`, `next_7_days`, or `YYYY-MM-DD` start/end) |
-| `control_house` | changes things | The request (quoted as data) goes to the `external` agent; its Home Assistant actions pass through Hass Guard |
-| `send_message` | sends things | No AI involved: octo-mcp calls the Gateway's `send` for a named destination (iMessage or Discord) from a private allowlist |
-| `ping` | read-only | Reachability |
-
-The server's MCP `instructions` tell the client what Octo can and can't do. Everything but `ping` needs the service to
-be paired with the Gateway.
-
-## Access to OpenClaw
-
-octo-mcp is its own paired operator device (`cli`/`backend`, display name `octo-mcp`) with `operator.read` and
-`operator.write`, through [`@openclaw/gateway-client`](https://docs.openclaw.ai/gateway/clients). It never holds the
-shared Gateway token.
-
-- **What the token can't do:** change config, pair devices, or use owner-only tools (`cron`, `gateway`, `nodes`); and
-  slash commands that need admin (`suppressCommandInterpretation` is admin-only, so octo-mcp prefixes text that starts
-  with `/` or `!` instead).
-- **What it could do if octo-mcp itself were compromised:** `operator.write` also allows `tools.invoke` (tools an
-  agent's policy permits) and `send` to any target. octo-mcp's code only ever calls `chat.send` to one agent and `send`
-  to its allowlisted destinations, behind WorkOS sign-in.
-- **Why not narrower:** the session-only scopes (`operator.sessions.*`) need a verified user profile, which a paired
-  device doesn't have. Revisit if OpenClaw user profiles are set up.
-
-- Streamable HTTP, stateless (a fresh `McpServer` per request), JSON responses.
-- Listens on `127.0.0.1:18793`, path `/mcp`. Public URL: `https://<funnel-host>/mcp`. Tailscale Funnel on
-  :443 mounts `/mcp`, `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server` onto the
-  same paths here; everything else on :443 is the OpenClaw Gateway. ChatGPT doesn't connect to non-443 ports (it never
-  requested anything from the :8443 spike), so the server can't have its own Funnel port.
-- Rejects a `Host` header outside `OCTO_MCP_ALLOWED_HOSTS` with 421 (DNS rebinding guard), bodies over 1 MiB with 413,
-  other paths with 404 and methods other than POST with 405.
-
-## Auth
-
-WorkOS AuthKit is the authorization server; this service is only the resource server.
-
-- `GET /.well-known/oauth-protected-resource` and `/.well-known/oauth-protected-resource/mcp` (RFC 9728):
-  `resource`, `authorization_servers: [<issuer>]`, `bearer_methods_supported: ["header"]`.
-- `GET /.well-known/oauth-authorization-server`: AuthKit's metadata, proxied (WorkOS compatibility fallback).
-- Every `POST /mcp` needs `Authorization: Bearer <AuthKit access token>`, checked before the body is read:
-  signature against `<issuer>/oauth2/jwks`, `iss` = issuer, `aud` = `OCTO_MCP_RESOURCE`, `exp`, and `sub` in
-  `OCTO_MCP_ALLOWED_SUBJECTS`.
-  - Missing or invalid token: `401` with `WWW-Authenticate: Bearer resource_metadata="…", error="invalid_token", …`.
-  - Valid token, `sub` not allowed: `403` with `error="insufficient_scope"`. The log records the `sub`, which is how
-    you find your WorkOS user id the first time.
-- Without `OCTO_MCP_AUTHKIT_ISSUER` (an `https://` origin) the service exits instead of starting.
-
-WorkOS dashboard: enable Client ID Metadata Document and Dynamic Client Registration (Connect → Configuration), add
-the resource indicator `https://<funnel-host>/mcp` and set it as the default, and disable public sign-up.
-
-## Pairing with OpenClaw (once)
-
-```bash
-OPENCLAW_GATEWAY_TOKEN=… node dist/pair.js     # the shared token is used for this connection only, never stored
-openclaw devices approve <requestId>           # on the Gateway host, if it wasn't auto-approved
-node dist/pair.js                               # stores the device token
+```mermaid
+flowchart LR
+    C["Outside agent<br/>(ChatGPT, Claude, …)"] -->|"OAuth bearer token"| B["mcp-bridge<br/>/mcp"]
+    C -. sign-in .-> A["Your OAuth provider<br/>(WorkOS AuthKit, Auth0, Keycloak…)"]
+    B -->|"paired device<br/>operator.read + write"| G["OpenClaw Gateway"]
+    G --> T["tools, under a dedicated<br/>agent's policy"]
+    G --> AG["a dedicated agent<br/>(for requests that need judgment)"]
+    G --> S["send (iMessage, Discord)<br/>to named destinations"]
 ```
 
-The identity (`device.json`, Ed25519) and device token (`token.json`) live in `OCTO_MCP_DEVICE_DIR`
-(default `~/.openclaw/secrets/octo-mcp`, mode 700/600). Until they exist, only `ping` is offered. To revoke,
-`openclaw devices remove <deviceId>` and delete the directory.
+## What you can reuse
 
-Agent-backed tools send `chat.send` to session `agent:<agent>:mcp` with delivery off, wait with `agent.wait`, and read
-the reply with the client's `recoverTerminalReply`.
+| Part | What it gives you |
+|---|---|
+| **OAuth resource server** (`auth.ts`) | RFC 9728 protected resource metadata, the `401` + `WWW-Authenticate` challenge that starts ChatGPT's sign-in, JWT checks (signature via JWKS, `iss`, `aud` = your MCP URL, `exp`) and a `sub` allowlist. Works with any authorization server that issues JWT access tokens and honors resource indicators |
+| **Paired Gateway device** (`gateway.ts`, `pair.ts`) | Pairs once with OpenClaw as its own operator device (no admin), stores an Ed25519 identity and device token, then calls `chat.send` / `agent.wait`, `tools.invoke` and `send`. Uses the official `@openclaw/gateway-client` |
+| **Config-defined tools** (`config.ts`, `tools.ts`) | Tools as data: name, description, `read` or `change`, a few validated parameters, and one action: `invoke`, `ask` or `send` |
+| **Condensers** (`condense.ts`) | `home-assistant-status` (~90 KB of raw state → ~1 KB) and `calendar-events` (sorted one-line events across calendars) |
+| **Hardening** (`server.ts`, `index.ts`) | Stateless Streamable HTTP, fails closed without auth config, auth before the body is read, Host allowlist, POST only, 1 MiB body limit |
 
-Message destinations live in `recipients.json` in the same directory (mode 600), never in the repo:
+## Tool definitions
+
+`MCP_BRIDGE_TOOLS` points at a JSON file. See [`tools.example.json`](tools.example.json).
 
 ```json
-{ "jeff": { "channel": "imessage", "to": "+1…" }, "discord_general": { "channel": "discord", "to": "channel:<id>" } }
+{
+  "name": "home",
+  "instructions": "What this server is for, and what it can't do.",
+  "agent": "external",
+  "timezone": "America/Los_Angeles",
+  "ignoreEntities": ["light.status_led_*"],
+  "tools": [
+    { "name": "house_status", "kind": "read", "description": "…",
+      "invoke": [{ "tool": "hass_state_list", "args": { "domain": "light" }, "label": "Lights" }],
+      "condense": "home-assistant-status" },
+    { "name": "calendar", "kind": "read", "dateRange": true, "description": "…",
+      "invoke": [{ "tool": "ics_calendar_fetch", "args": { "calendar_id": "family" }, "label": "Family" }],
+      "condense": "calendar-events" },
+    { "name": "control_house", "kind": "change", "description": "…",
+      "params": { "request": { "type": "string", "maxLength": 500 } },
+      "ask": { "prompt": "…Request: {request}" } },
+    { "name": "send_message", "kind": "change", "send": true, "description": "…" }
+  ]
+}
 ```
 
-## Run
-
-```bash
-npm install && npm run build && npm test
-OCTO_MCP_AUTHKIT_ISSUER=https://<subdomain>.authkit.app OCTO_MCP_ALLOWED_SUBJECTS=user_… node dist/index.js
-```
-
-| Env | Default |
+| Field | Meaning |
 |---|---|
-| `OCTO_MCP_PORT` | `18793` |
-| `OCTO_MCP_DEVICE_DIR` | `~/.openclaw/secrets/octo-mcp` |
-| `OCTO_MCP_GATEWAY_URL` | `ws://127.0.0.1:18789` |
-| `OCTO_MCP_AGENT` | `external` (the agent behind the house and calendar tools) |
-| `OCTO_MCP_ALLOWED_HOSTS` | loopback plus the host of `OCTO_MCP_RESOURCE` |
-| `OCTO_MCP_AUTHKIT_ISSUER` | none (required) |
-| `OCTO_MCP_RESOURCE` | none (required), e.g. `https://<funnel-host>/mcp` |
-| `OCTO_MCP_ALLOWED_SUBJECTS` | empty (nobody) |
+| `kind` | `read` tools are annotated read-only, so clients like ChatGPT run them without asking. `change` tools aren't, so clients ask the user first |
+| `invoke` | Call these OpenClaw tools directly (`tools.invoke`) under `agent`'s tool policy. No model involved |
+| `condense` | Built-in condenser for the `invoke` results; without one, the raw outputs are returned |
+| `dateRange` | Adds `range` (`today`, `tomorrow`, `this_week`, `next_7_days`) or `start`/`end` dates, mapped onto every call's `after`/`before` |
+| `ask` | Send `prompt` to an agent (`agent`, or the tool's own) and return its reply. `{param}` placeholders are filled with validated values; strings are JSON-quoted so they read as data |
+| `send` | Send to a named destination from the private destinations file; no model involved |
+| `params` | `enum`, `date` (YYYY-MM-DD) or `string` (with `maxLength`). A `read` tool that asks an agent can't take free text |
 
-Runs as the LaunchAgent `com.octo.openclaw.octo-mcp` (plist in the octo repo, `config/macos/launchd/`). None of these
-values are secrets. Log: `~/Library/Logs/openclaw-octo-mcp.log`.
+## Setup
+
+1. **Build:** `npm ci && npm run build && npm test`.
+2. **Agent:** create a dedicated OpenClaw agent for outside assistants with only the tools you want reachable, and point
+   `agent` at it. `invoke` calls run under its tool policy, so plugin guards scoped to that agent still apply.
+3. **Pair once** (the shared Gateway token is used for this command only, never stored):
+   ```bash
+   OPENCLAW_GATEWAY_TOKEN=… node dist/pair.js
+   openclaw devices list   # mcp-bridge: role operator, scopes operator.read + operator.write
+   ```
+4. **Destinations** (optional), in `MCP_BRIDGE_DEVICE_DIR/destinations.json` (mode 600, never in a repo):
+   `{ "owner": { "channel": "imessage", "to": "+1…" }, "family": { "channel": "discord", "to": "channel:<id>" } }`
+5. **OAuth provider:** register the MCP URL as a resource (WorkOS calls it a resource indicator; set it as the default),
+   enable client registration (Client ID Metadata Documents and/or Dynamic Client Registration), and restrict sign-up.
+6. **Publish** the MCP URL over HTTPS on **port 443** (ChatGPT won't connect to other ports). With Tailscale Funnel,
+   mount `/mcp`, `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server` onto the bridge.
+7. **Run** with an env file holding the settings below, then add the server in your client with OAuth. The first
+   sign-in is refused with `403` and logs the user's `sub`; add it to `MCP_BRIDGE_ALLOWED_SUBJECTS`.
+
+| Env | Required | Description |
+|---|---|---|
+| `MCP_BRIDGE_TOOLS` | yes | Tool definitions JSON |
+| `MCP_BRIDGE_RESOURCE` | yes | Public MCP URL, e.g. `https://<host>/mcp`; must match the provider's resource indicator |
+| `MCP_BRIDGE_ISSUER` | yes | OAuth issuer, exactly as in tokens' `iss` |
+| `MCP_BRIDGE_JWKS_URL` | no | Signing keys; default is `jwks_uri` from the issuer's metadata |
+| `MCP_BRIDGE_ALLOWED_SUBJECTS` | no | Comma-separated `sub` values allowed in; empty means nobody |
+| `MCP_BRIDGE_DEVICE_DIR` | no | Device identity, token and destinations (default `~/.openclaw/secrets/mcp-bridge`) |
+| `MCP_BRIDGE_GATEWAY_URL` | no | Default `ws://127.0.0.1:18789` |
+| `MCP_BRIDGE_ALLOWED_HOSTS` | no | Host allowlist; default loopback plus the resource's host |
+| `MCP_BRIDGE_PORT` | no | Default 18793 |
+
+Keep hostnames, issuer subdomains and user IDs in the env file, not in a repo.
+
+## Security model
+
+- **The front door is the OAuth check.** Every `/mcp` request needs a valid token for this resource from an allowed
+  user, checked before the request body is read.
+- **Reads can't be talked into changes.** `read` tools only take enums and dates, never free text into an agent.
+- **Changes are confirmed by the client and checked by OpenClaw.** `change` tools are annotated as such; what an agent
+  may actually do is decided by its tool policy and any guard plugins.
+- **Sending bypasses models.** Only named destinations exist; the handles live in a private file.
+- **The bridge is trusted local software.** Its device has `operator.write`, which OpenClaw also uses for `chat.send` to
+  any agent, `tools.invoke`, and `send`. The bridge's code keeps itself to the configured tools; if the bridge process
+  itself were compromised, those would be reachable. OpenClaw has no per-device agent restriction today (named roles
+  do this for verified user profiles, not devices), and the session-only scopes need a verified user profile. Treat
+  the bridge like any other paired operator client.
+- **Commands are defused.** Agent prompts starting with `/` or `!` are prefixed so they aren't read as OpenClaw
+  commands (the flag that would suppress them needs admin scope).
+
+## Logs
+
+Requests are logged with path and user agent, refusals with the reason (a `403` includes the `sub`), sends with the
+destination name only.

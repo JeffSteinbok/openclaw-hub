@@ -1,7 +1,7 @@
 {
-  "name": "@openclaw/octo-mcp",
-  "version": "0.1.0",
-  "description": "MCP server that lets OctoDot (ChatGPT) reach OpenClaw. Spike: one ping tool, no auth (octo#441).",
+  "name": "@openclaw/mcp-bridge",
+  "version": "0.3.0",
+  "description": "OAuth-protected MCP server that offers a curated, config-defined set of OpenClaw capabilities to outside agents (ChatGPT, Claude, \u2026).",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

@@ -1,9 +1,10 @@
 /**
- * auth.ts — OAuth 2.1 resource-server checks for octo-mcp.
+ * auth.ts — OAuth 2.1 resource-server checks for the bridge.
  *
- * WorkOS AuthKit is the authorization server. ChatGPT discovers it through the
- * protected resource metadata (RFC 9728), signs the user in, and sends
- * `resource=<MCP URL>`, which AuthKit puts in the token's `aud`.
+ * Any OAuth 2.1 authorization server that signs JWT access tokens and honors
+ * resource indicators works (WorkOS AuthKit, Auth0, Keycloak, …). Clients such as
+ * ChatGPT discover it through the protected resource metadata (RFC 9728), sign
+ * the user in, and send `resource=<MCP URL>`, which ends up in the token's `aud`.
  *
  * Every /mcp request must carry an AuthKit access token that:
  *   - verifies against AuthKit's JWKS,
@@ -15,13 +16,13 @@
 import { createRemoteJWKSet, errors, jwtVerify, type JWTVerifyGetKey } from "jose";
 
 export interface AuthConfig {
-  /** AuthKit issuer, e.g. https://example.authkit.app (no trailing slash). */
+  /** Issuer, exactly as it appears in tokens' `iss`. */
   issuer: string;
   /** Canonical resource URL, e.g. https://<funnel-host>/mcp. */
   resource: string;
   /** WorkOS user ids (`sub`) allowed to use the server. Empty = nobody. */
   allowedSubjects: string[];
-  /** Key source; defaults to the issuer's JWKS. Tests pass a local set. */
+  /** Signing keys (create once, e.g. createRemoteJWKSet); defaults to <issuer>/oauth2/jwks (WorkOS). */
   keys?: JWTVerifyGetKey;
 }
 

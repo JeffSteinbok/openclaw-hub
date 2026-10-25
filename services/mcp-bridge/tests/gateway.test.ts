@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { DeviceStore, asPlainText, deviceIdFor, publicKeyRawBase64Url, signPayload } from "../src/octo-gateway.js";
+import { DeviceStore, asPlainText, deviceIdFor, publicKeyRawBase64Url, signPayload } from "../src/gateway.js";
 
 describe("device identity", () => {
   it("derives the device id as sha256 of the raw Ed25519 public key (OpenClaw's scheme)", () => {
@@ -28,7 +28,7 @@ describe("device identity", () => {
 
 describe("DeviceStore", () => {
   it("creates one identity, keeps the token private, and reports pairing", () => {
-    const dir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "octo-mcp-")), "device");
+    const dir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "mcp-bridge-")), "device");
     const store = new DeviceStore(dir);
     expect(store.isPaired()).toBe(false);
     const first = store.loadOrCreateIdentity();
@@ -47,7 +47,7 @@ describe("DeviceStore", () => {
     fs.writeFileSync(
       path.join(dir, "recipients.json"),
       JSON.stringify({
-        jeff: "+15555550100",
+        owner: "+15555550100",
         general: { channel: "discord", to: "channel:123" },
         sms: { channel: "sms", to: "+1555" },
         "Bad Name": "x",
@@ -55,7 +55,7 @@ describe("DeviceStore", () => {
       }),
     );
     expect(store.loadDestinations()).toEqual({
-      jeff: { channel: "imessage", to: "+15555550100" },
+      owner: { channel: "imessage", to: "+15555550100" },
       general: { channel: "discord", to: "channel:123" },
     });
   });

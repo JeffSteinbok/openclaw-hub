@@ -1,24 +1,24 @@
 /**
- * server.ts — HTTP server for the octo MCP endpoint.
+ * server.ts — HTTP server for the bridge's MCP endpoint.
  *
  * Streamable HTTP in stateless mode: every POST /mcp gets a fresh McpServer
- * and transport, so no session state lives in the process. ChatGPT reaches
- * it through Tailscale Funnel (https://<funnel-host>/mcp →
- * 127.0.0.1:18793).
+ * and transport, so no session state lives in the process.
  *
- * Every /mcp request needs a WorkOS AuthKit access token (see auth.ts). The
- * server publishes its protected resource metadata so ChatGPT can find
- * AuthKit; tokens are checked before the request body is read.
+ * Every /mcp request needs an OAuth access token from the configured
+ * authorization server (see auth.ts). The server publishes its protected
+ * resource metadata so clients can find it; tokens are checked before the
+ * request body is read.
  *
- * Tools are defined in tools.ts; all but `ping` need the service to be paired
- * with the Gateway (see octo-gateway.ts).
+ * Tools come from the bridge config (config.ts, tools.ts); all but `ping` need
+ * the service to be paired with the Gateway (gateway.ts).
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { authenticate, challenge, protectedResourceMetadata, type AuthConfig } from "./auth.js";
-import { SERVER_INSTRUCTIONS, registerTools, type OctoBackend } from "./tools.js";
+import type { BridgeConfig } from "./config.js";
+import { registerTools, type BridgeBackend } from "./tools.js";
 
 export const MCP_PATH = "/mcp";
 const PRM_PATHS = new Set(["/.well-known/oauth-protected-resource", `/.well-known/oauth-protected-resource${MCP_PATH}`]);
@@ -35,13 +35,18 @@ export interface ServerOptions {
   fetch?: typeof fetch;
   log?: (message: string) => void;
   now?: () => Date;
-  /** Octo behind the tools; omitted when octo-mcp isn't paired with the Gateway. */
-  octo?: OctoBackend;
+  /** The tools to offer. */
+  config: BridgeConfig;
+  /** OpenClaw behind the tools; omitted when the bridge isn't paired (only `ping` is offered). */
+  backend?: BridgeBackend;
 }
 
-export function buildMcpServer(now: () => Date = () => new Date(), octo?: OctoBackend): McpServer {
-  const server = new McpServer({ name: "octo", version: "0.3.0" }, { instructions: SERVER_INSTRUCTIONS });
-  registerTools(server, now, octo);
+export function buildMcpServer(config: BridgeConfig, now: () => Date = () => new Date(), backend?: BridgeBackend): McpServer {
+  const server = new McpServer(
+    { name: config.name, version: "0.3.0" },
+    config.instructions ? { instructions: config.instructions } : undefined,
+  );
+  registerTools(server, config, now, backend);
   return server;
 }
 
@@ -169,7 +174,7 @@ export function createMcpHttpServer(options: ServerOptions): Server {
       return;
     }
 
-    const server = buildMcpServer(options.now, options.octo);
+    const server = buildMcpServer(options.config, options.now, options.backend);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on("close", () => {
       void transport.close();
