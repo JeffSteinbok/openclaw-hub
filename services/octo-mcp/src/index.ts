@@ -7,10 +7,18 @@
  *   OCTO_MCP_AUTHKIT_ISSUER    WorkOS AuthKit issuer, e.g. https://example.authkit.app (required)
  *   OCTO_MCP_RESOURCE          public resource URL (default https://octo.tail498490.ts.net/mcp)
  *   OCTO_MCP_ALLOWED_SUBJECTS  comma-separated WorkOS user ids allowed in (empty = nobody)
+ *   OCTO_MCP_DEVICE_DIR        paired-device identity and token (default ~/.openclaw/secrets/octo-mcp)
+ *   OCTO_MCP_GATEWAY_URL       OpenClaw Gateway WebSocket (default ws://127.0.0.1:18789)
+ *   OCTO_MCP_AGENT             agent that answers ask_octo (default "external")
+ *
+ * ask_octo is offered only once the service is paired (see pair.ts).
  *
  * Without an issuer the server refuses to start: it never serves /mcp unauthenticated.
  */
 
+import os from "node:os";
+import path from "node:path";
+import { DeviceStore, OctoGateway } from "./octo-gateway.js";
 import { createMcpHttpServer } from "./server.js";
 
 const PORT = parseInt(process.env["OCTO_MCP_PORT"] ?? "18793", 10);
@@ -36,14 +44,28 @@ if (!/^https:\/\/[^/]+$/.test(ISSUER)) {
   process.exit(1);
 }
 
+const DEVICE_DIR = process.env["OCTO_MCP_DEVICE_DIR"] ?? path.join(os.homedir(), ".openclaw/secrets/octo-mcp");
+const GATEWAY_URL = process.env["OCTO_MCP_GATEWAY_URL"] ?? "ws://127.0.0.1:18789";
+const AGENT = process.env["OCTO_MCP_AGENT"] ?? "external";
+
+const store = new DeviceStore(DEVICE_DIR);
+let gateway: OctoGateway | null = null;
+if (store.isPaired()) {
+  gateway = new OctoGateway({ url: GATEWAY_URL, store, log }, AGENT, `agent:${AGENT}:mcp`);
+} else {
+  log(`not paired with the Gateway (${DEVICE_DIR}); ask_octo is disabled. Run dist/pair.js to pair.`);
+}
+
 const server = createMcpHttpServer({
   allowedHosts: ALLOWED_HOSTS,
   auth: { issuer: ISSUER, resource: RESOURCE, allowedSubjects: SUBJECTS },
   log,
+  ...(gateway ? { ask: (q: string) => gateway!.ask(q) } : {}),
 });
 server.listen(PORT, "127.0.0.1", () => {
   log(`listening on 127.0.0.1:${PORT}/mcp`);
   log(`resource ${RESOURCE}, issuer ${ISSUER}, ${SUBJECTS.length} allowed subject(s)`);
+  log(gateway ? `ask_octo → agent "${AGENT}" via ${GATEWAY_URL}` : "ask_octo disabled (not paired)");
   log(`allowed hosts: ${ALLOWED_HOSTS.join(", ")}`);
 });
 server.on("error", (e) => {
