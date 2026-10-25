@@ -252,15 +252,45 @@ export async function stateGet(config: HomeAssistantConfig, params: { entity_id:
   return { output: cleanEntity(res.output as HassEntity) };
 }
 
-export async function stateList(config: HomeAssistantConfig, params: { domain?: string }): Promise<unknown> {
+/** Entity counts per domain — what an unfiltered list returns instead of dumping every entity. */
+function summarizeDomains(data: HassEntity[]): unknown {
+  const counts = new Map<string, number>();
+  for (const e of data) {
+    const domain = e.entity_id?.split(".")[0];
+    if (domain) counts.set(domain, (counts.get(domain) ?? 0) + 1);
+  }
+  const domains = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([domain, count]) => ({ domain, count }));
+  return {
+    total: data.length,
+    domains,
+    hint: "No domain or search given, so only per-domain counts are returned. Call again with domain (e.g. \"light\" or \"light,fan\") and/or search (e.g. \"bonus room\").",
+  };
+}
+
+export async function stateList(config: HomeAssistantConfig, params: { domain?: string; search?: string }): Promise<unknown> {
   const { server, token } = config;
-  const domain = params.domain?.trim() ?? "";
+  const domains = (params.domain ?? "")
+    .split(",")
+    .map((d) => d.trim().toLowerCase().replace(/\.$/, ""))
+    .filter(Boolean);
+  const search = params.search?.trim().toLowerCase() ?? "";
   const res = await apiGet(server, token, "/api/states", 60_000);
   if ("error" in res) return res;
   let data = res.output as HassEntity[];
   if (!Array.isArray(data)) return res;
-  if (domain) data = data.filter((e) => e.entity_id?.startsWith(`${domain}.`));
-  const compact = !domain || data.length > 100;
+  if (domains.length === 0 && !search) return summarizeDomains(data);
+  if (domains.length > 0) data = data.filter((e) => domains.some((d) => e.entity_id?.startsWith(`${d}.`)));
+  if (search) {
+    // "bonus room" should match light.bonus_room_lights as well as the friendly name
+    const idNeedle = search.replace(/\s+/g, "_");
+    data = data.filter((e) => {
+      const name = String((e.attributes as Record<string, unknown> | undefined)?.friendly_name ?? "").toLowerCase();
+      return e.entity_id?.toLowerCase().includes(idNeedle) || name.includes(search);
+    });
+  }
+  const compact = domains.length === 0 || data.length > 100;
   const cleaned = data.map((e) => cleanEntity(e, compact));
   return { output: cleaned, count: cleaned.length };
 }
@@ -274,6 +304,12 @@ export async function serviceCall(config: HomeAssistantConfig, params: { domain:
   if (params.entity_id) body.entity_id = params.entity_id;
   const res = await apiPost(server, token, `/api/services/${domain}/${service}`, body);
   if ("error" in res) return res;
+  if (Array.isArray(res.output) && res.output.length === 0) {
+    return {
+      output: res.output,
+      warning: "No entity changed state. If you expected a change, don't report success: the entity_id may not exist (check with hass_state_get) or it was already in that state.",
+    };
+  }
   return { output: res.output };
 }
 

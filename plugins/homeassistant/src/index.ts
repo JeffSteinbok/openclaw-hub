@@ -49,7 +49,7 @@ export const createEntry = definePlugin({
     tool({
       name: "hass_state_get",
       label: "HA State Get",
-      description: "Get the current state of a Home Assistant entity.",
+      description: "Get the current state of one Home Assistant entity by its exact entity ID. If you don't know the ID, find it with hass_state_list using domain and search.",
       parameters: Type.Object({
         entity_id: Type.String({ description: "The entity ID to query (e.g. light.living_room, sensor.temperature)." }),
       }),
@@ -70,18 +70,30 @@ export const createEntry = definePlugin({
     tool({
       name: "hass_state_list",
       label: "HA State List",
-      description: "List Home Assistant entities, optionally filtered by domain.",
+      description:
+        "Find Home Assistant entities by type. Always pass domain (the entity type) and/or search — a home can have thousands of entities. " +
+        "With neither, this returns only entity counts per domain, not the entities. " +
+        "To control a device, look it up by its domain plus a room or name search (e.g. domain \"light\", search \"bonus room\"); " +
+        "for several types, pass them together (e.g. \"light,fan,switch\") instead of listing everything. " +
+        "Common domains: light, switch, fan, cover (blinds, garage doors), climate (thermostats), lock, media_player (speakers, TVs), " +
+        "scene, script, automation, sensor, binary_sensor (doors, motion, leaks), camera, person, device_tracker, " +
+        "alarm_control_panel, water_heater, vacuum, remote, button, select, number, input_boolean, update, weather, calendar, zone.",
       parameters: Type.Object({
-        domain: Type.Optional(Type.String({ description: "Optional domain to filter by (e.g. light, switch, sensor)." })),
+        domain: Type.Optional(Type.String({
+          description: "Entity domain(s) to return — the part of the entity ID before the dot. One (\"light\") or several comma-separated (\"light,fan,switch\").",
+        })),
+        search: Type.Optional(Type.String({
+          description: "Case-insensitive text matched against entity IDs and friendly names, e.g. \"bonus room\" or \"garage\". Combine with domain to find one room's devices.",
+        })),
       }),
-      async execute({ domain }, config) {
+      async execute({ domain, search }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
-          return await stateList(resolvedConfig, { domain });
+          return await stateList(resolvedConfig, { domain, search });
         } catch (e) {
           return { error: (e as Error).message };
         }
@@ -91,11 +103,14 @@ export const createEntry = definePlugin({
     tool({
       name: "hass_service_call",
       label: "HA Service Call",
-      description: "Call a Home Assistant service.",
+      description:
+        "Call a Home Assistant service, e.g. light.turn_off. Pass the entity as the top-level entity_id — there is no target or area parameter. " +
+        "If you don't know the entity ID, find it first with hass_state_list (domain + search); don't guess. " +
+        "The output lists entities whose state changed; an empty list comes with a warning and means nothing changed.",
       parameters: Type.Object({
-        domain: Type.String({ description: "Service domain (e.g. light, switch, scene, climate)." }),
+        domain: Type.String({ description: "Service domain (e.g. light, switch, fan, scene, climate)." }),
         service: Type.String({ description: "Service name (e.g. turn_on, turn_off, toggle)." }),
-        entity_id: Type.Optional(Type.String({ description: "Target entity ID (e.g. light.living_room)." })),
+        entity_id: Type.Optional(Type.String({ description: "Entity ID to act on (e.g. light.living_room), or several comma-separated. Top-level only, not inside data." })),
         data: Type.Optional(Type.Record(Type.String(), Type.Unknown(), {
           description: "Additional service data as key-value pairs (e.g. {\"brightness\": 128}).",
         })),
