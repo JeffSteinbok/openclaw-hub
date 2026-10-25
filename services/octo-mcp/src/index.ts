@@ -5,7 +5,7 @@
  *   OCTO_MCP_PORT              listen port (default 18793)
  *   OCTO_MCP_ALLOWED_HOSTS     comma-separated Host header allowlist
  *   OCTO_MCP_AUTHKIT_ISSUER    WorkOS AuthKit issuer, e.g. https://example.authkit.app (required)
- *   OCTO_MCP_RESOURCE          public resource URL (default https://octo.tail498490.ts.net:8443/mcp)
+ *   OCTO_MCP_RESOURCE          public resource URL (default https://octo.tail498490.ts.net/mcp)
  *   OCTO_MCP_ALLOWED_SUBJECTS  comma-separated WorkOS user ids allowed in (empty = nobody)
  *
  * Without an issuer the server refuses to start: it never serves /mcp unauthenticated.
@@ -21,10 +21,10 @@ const list = (value: string | undefined) =>
     .filter(Boolean);
 const ALLOWED_HOSTS = list(
   process.env["OCTO_MCP_ALLOWED_HOSTS"] ??
-    `127.0.0.1:${PORT},localhost:${PORT},octo.tail498490.ts.net:8443,octo.tail498490.ts.net`,
+    `127.0.0.1:${PORT},localhost:${PORT},octo.tail498490.ts.net`,
 );
 const ISSUER = (process.env["OCTO_MCP_AUTHKIT_ISSUER"] ?? "").replace(/\/+$/, "");
-const RESOURCE = process.env["OCTO_MCP_RESOURCE"] ?? "https://octo.tail498490.ts.net:8443/mcp";
+const RESOURCE = process.env["OCTO_MCP_RESOURCE"] ?? "https://octo.tail498490.ts.net/mcp";
 const SUBJECTS = list(process.env["OCTO_MCP_ALLOWED_SUBJECTS"]);
 
 function log(message: string): void {
