@@ -109,9 +109,13 @@ restricted.
 ### `ics_calendar_fetch`
 
 - `calendar_id` — configured calendar id to fetch
-- `days` — number of days ahead to fetch (default `7`)
+- `days` — number of days ahead to fetch (default `7`); ignored when `before` is given
+- `after` — first day to include, `YYYY-MM-DD` (default today)
+- `before` — last day to include, inclusive, `YYYY-MM-DD` (same as `after` for a single day)
 - `url` — optional one-off direct ICS URL override
 - `label` — optional display label when using `url`
+
+Times are local wall time (`YYYY-MM-DD HH:MM`; UTC times in the feed are converted); all-day events are a bare date.
 
 ## Notes
 

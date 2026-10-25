@@ -91,6 +91,56 @@ describe("ics_calendar_fetch", () => {
     expect(data.events[0].location).toBe("Zoom");
   });
 
+  it("limits to after/before (inclusive, local days)", async () => {
+    const { api } = await loadPlugin();
+    const ics = `BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:20261026T235900
+SUMMARY:Late on the 26th
+UID:a
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20261027T090000
+DTEND:20261027T100000
+SUMMARY:On the 27th
+UID:b
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20261028
+SUMMARY:All day on the 28th
+UID:c
+END:VEVENT
+END:VCALENDAR`;
+    mockHttp(ics);
+    const one = resultText(await api.tools["ics_calendar_fetch"].execute("id", { url: "http://example.com/c.ics", after: "2026-10-27", before: "2026-10-27" }));
+    expect(one).toMatchObject({ start_date: "2026-10-27", end_date: "2026-10-28", days: 1, count: 1 });
+    expect(one.events[0]).toMatchObject({ summary: "On the 27th", start: "2026-10-27 09:00", end: "2026-10-27 10:00" });
+    mockHttp(ics);
+    const two = resultText(await api.tools["ics_calendar_fetch"].execute("id", { url: "http://example.com/c.ics", after: "2026-10-27", before: "2026-10-28" }));
+    expect(two.events.map((e: { start: string }) => e.start)).toEqual(["2026-10-27 09:00", "2026-10-28"]);
+  });
+
+  it("converts UTC times to local wall time", async () => {
+    const { api } = await loadPlugin();
+    mockHttp(`BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART:20261027T160000Z
+SUMMARY:UTC
+UID:u
+END:VEVENT
+END:VCALENDAR`);
+    const data = resultText(await api.tools["ics_calendar_fetch"].execute("id", { url: "http://example.com/c.ics", after: "2026-10-26", before: "2026-10-28" }));
+    const local = new Date("2026-10-27T16:00:00Z");
+    const pad = (n: number) => String(n).padStart(2, "0");
+    expect(data.events[0].start).toBe(`${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())} ${pad(local.getHours())}:${pad(local.getMinutes())}`);
+  });
+
+  it("rejects bad dates", async () => {
+    const { api } = await loadPlugin();
+    expect(resultText(await api.tools["ics_calendar_fetch"].execute("id", { url: "http://example.com/c.ics", after: "tomorrow" })).error).toMatch(/YYYY-MM-DD/);
+    expect(resultText(await api.tools["ics_calendar_fetch"].execute("id", { url: "http://example.com/c.ics", after: "2026-10-28", before: "2026-10-27" })).error).toMatch(/on or after/);
+  });
+
   it("returns error when calendar_id not found in config", async () => {
     const { api } = await loadPlugin({ calendars: [] });
     const data = resultText(await api.tools["ics_calendar_fetch"].execute("id", { calendar_id: "personal" }));

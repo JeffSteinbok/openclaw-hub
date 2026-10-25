@@ -42,9 +42,11 @@ export const createEntry = definePlugin({
         calendar_id: Type.Optional(Type.String({ description: "Configured calendar id from plugin config" })),
         url: Type.Optional(Type.String({ description: "Direct ICS URL override for one-off fetches" })),
         label: Type.Optional(Type.String({ description: "Optional display label when using a direct URL override" })),
-        days: Type.Optional(Type.Integer({ description: "Number of days ahead to fetch (default 7)", default: 7 })),
+        days: Type.Optional(Type.Integer({ description: "Number of days ahead to fetch (default 7). Ignored when before is given.", default: 7 })),
+        after: Type.Optional(Type.String({ description: "First day to include (ISO date, e.g. 2026-03-01). Defaults to today." })),
+        before: Type.Optional(Type.String({ description: "Last day to include, inclusive (ISO date). Pass the same value as `after` to query a single day." })),
       }),
-      async execute({ calendar_id, url, label, days }, config, ctx) {
+      async execute({ calendar_id, url, label, days, after, before }, config, ctx) {
         try {
           // An ad-hoc url is checked as the pseudo-calendar "_url" (it takes
           // precedence over calendar_id in the handler, so check it first).
@@ -56,7 +58,7 @@ export const createEntry = definePlugin({
           const pluginConfig: IcsCalendarConfig = {
             calendars: config.calendars ?? [],
           };
-          return await fetchCalendarEvents({ calendar_id, url, label, days }, pluginConfig);
+          return await fetchCalendarEvents({ calendar_id, url, label, days, after, before }, pluginConfig);
         } catch (e) {
           return { error: (e as Error).message };
         }

@@ -83,21 +83,28 @@ describe("condensers", () => {
           },
         },
       ],
-      { ignoreEntities: ["light.led_*"] },
+      { ignoreEntities: ["light.led_*"], timezone: "UTC" },
     );
     expect(text).toBe("Lights on: A");
   });
 
   it("calendar-events sorts across calendars and handles empty", () => {
     const cal = CONDENSERS["calendar-events"];
-    expect(cal([], { ignoreEntities: [] })).toBe("No events.");
+    expect(cal([], { ignoreEntities: [], timezone: "UTC" })).toBe("No events.");
     const text = cal(
       [
-        { tool: "a", label: "Work", args: {}, output: { events: [{ subject: "Standup", start: "2026-10-26T09:00:00" }] } },
-        { tool: "b", label: "Family", args: {}, output: { events: [{ summary: "Breakfast", start: "2026-10-26T08:00:00", location: "Home" }] } },
+        { tool: "a", label: "Work", args: {}, output: { events: [{ subject: "Standup", start: "2026-10-26T09:00:00-07:00" }] } },
+        { tool: "b", label: "Family", args: {}, output: { events: [{ summary: "Breakfast", start: "2026-10-26 08:00", location: "Home" }] } },
+        { tool: "c", label: "Trips", args: {}, output: { events: [{ summary: "Flight", start: "2026-10-26T15:30:00Z" }, { summary: "Away", start: "2026-10-26" }] } },
       ],
-      { ignoreEntities: [] },
+      { ignoreEntities: [], timezone: "America/Los_Angeles" },
     );
-    expect(text.split("\n")).toEqual(["2026-10-26T08:00:00 — Breakfast [Family] @ Home", "2026-10-26T09:00:00 — Standup [Work]"]);
+    // Offsets and Z are converted to the timezone; naive times are taken as local.
+    expect(text.split("\n")).toEqual([
+      "2026-10-26 (all day) — Away [Trips]",
+      "2026-10-26 08:00 — Breakfast [Family] @ Home",
+      "2026-10-26 08:30 — Flight [Trips]",
+      "2026-10-26 09:00 — Standup [Work]",
+    ]);
   });
 });
