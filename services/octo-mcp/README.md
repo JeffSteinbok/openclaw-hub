@@ -2,8 +2,10 @@
 
 MCP server that lets OctoDot (a ChatGPT Dot) reach OpenClaw.
 
-**Status:** OAuth in place, one read-only `ping` tool (octo#441). The `ask_octo` tool comes in octo#442; until then the
-server has no access to OpenClaw.
+**Tools:** `ping`, and `ask_octo`, which sends a question to OpenClaw's dedicated `external` agent and returns its
+reply (octo#442). For that, octo-mcp is paired with the Gateway as its own operator device with only `operator.read`
+and `operator.write`, through [`@openclaw/gateway-client`](https://docs.openclaw.ai/gateway/clients): it can chat with
+agents but can't change config, pair devices or administer the Gateway. It never holds the shared Gateway token.
 
 - Streamable HTTP, stateless (a fresh `McpServer` per request), JSON responses.
 - Listens on `127.0.0.1:18793`, path `/mcp`. Public URL: `https://<funnel-host>/mcp`. Tailscale Funnel on
@@ -31,6 +33,21 @@ WorkOS AuthKit is the authorization server; this service is only the resource se
 WorkOS dashboard: enable Client ID Metadata Document and Dynamic Client Registration (Connect → Configuration), add
 the resource indicator `https://<funnel-host>/mcp` and set it as the default, and disable public sign-up.
 
+## Pairing with OpenClaw (once)
+
+```bash
+OPENCLAW_GATEWAY_TOKEN=… node dist/pair.js     # the shared token is used for this connection only, never stored
+openclaw devices approve <requestId>           # on the Gateway host, if it wasn't auto-approved
+node dist/pair.js                               # stores the device token
+```
+
+The identity (`device.json`, Ed25519) and device token (`token.json`) live in `OCTO_MCP_DEVICE_DIR`
+(default `~/.openclaw/secrets/octo-mcp`, mode 700/600). Until they exist, `ask_octo` isn't offered. To revoke,
+`openclaw devices remove <deviceId>` and delete the directory.
+
+`ask_octo` sends `chat.send` to session `agent:<agent>:mcp` with delivery off and slash-command interpretation
+suppressed, waits with `agent.wait`, and reads the reply with the client's `recoverTerminalReply`.
+
 ## Run
 
 ```bash
@@ -41,6 +58,9 @@ OCTO_MCP_AUTHKIT_ISSUER=https://<subdomain>.authkit.app OCTO_MCP_ALLOWED_SUBJECT
 | Env | Default |
 |---|---|
 | `OCTO_MCP_PORT` | `18793` |
+| `OCTO_MCP_DEVICE_DIR` | `~/.openclaw/secrets/octo-mcp` |
+| `OCTO_MCP_GATEWAY_URL` | `ws://127.0.0.1:18789` |
+| `OCTO_MCP_AGENT` | `external` |
 | `OCTO_MCP_ALLOWED_HOSTS` | `127.0.0.1:<port>,localhost:<port>,<funnel-host>` |
 | `OCTO_MCP_AUTHKIT_ISSUER` | none (required) |
 | `OCTO_MCP_RESOURCE` | `https://<funnel-host>/mcp` |

@@ -141,6 +141,56 @@ describe("mcp with a valid token", () => {
   });
 });
 
+describe("ask_octo", () => {
+  async function serverWith(ask?: (q: string) => Promise<{ ok: boolean; text: string }>) {
+    const s = createMcpHttpServer({ allowedHosts: [], auth, ...(ask ? { ask } : {}) });
+    await new Promise<void>((resolve) => s.listen(0, "127.0.0.1", resolve));
+    const url = `http://127.0.0.1:${(s.address() as AddressInfo).port}/mcp`;
+    const call = async (method: string, params: unknown = {}) => {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: ACCEPT, authorization: `Bearer ${await token()}` },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      });
+      return res.json();
+    };
+    return { s, call };
+  }
+
+  it("is not offered when the service isn't paired", async () => {
+    const { s, call } = await serverWith();
+    const list = await call("tools/list");
+    expect(list.result.tools.map((t: { name: string }) => t.name)).toEqual(["ping"]);
+    s.close();
+  });
+
+  it("relays the question and Octo's reply", async () => {
+    const asked: string[] = [];
+    const { s, call } = await serverWith(async (q) => {
+      asked.push(q);
+      return { ok: true, text: "Kitchen and office lights are on." };
+    });
+    const list = await call("tools/list");
+    const tool = list.result.tools.find((t: { name: string }) => t.name === "ask_octo");
+    expect(tool.annotations.readOnlyHint).toBe(false);
+    const res = await call("tools/call", { name: "ask_octo", arguments: { question: "which lights are on?" } });
+    expect(asked).toEqual(["which lights are on?"]);
+    expect(res.result.content[0].text).toBe("Kitchen and office lights are on.");
+    expect(res.result.isError).toBe(false);
+    s.close();
+  });
+
+  it("reports failures as tool errors", async () => {
+    const { s, call } = await serverWith(async () => {
+      throw new Error("gateway down");
+    });
+    const res = await call("tools/call", { name: "ask_octo", arguments: { question: "hi" } });
+    expect(res.result.isError).toBe(true);
+    expect(res.result.content[0].text).toContain("gateway down");
+    s.close();
+  });
+});
+
 describe("http hygiene", () => {
   it("404s other paths and 405s other methods", async () => {
     expect((await fetch(`${base}/`, { method: "POST" })).status).toBe(404);
