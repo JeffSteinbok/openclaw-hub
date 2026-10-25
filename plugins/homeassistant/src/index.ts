@@ -108,7 +108,8 @@ export const createEntry = definePlugin({
       description:
         "Call a Home Assistant service, e.g. light.turn_off. Pass the entity as the top-level entity_id — there is no target or area parameter. " +
         "If you don't know the entity ID, find it first with hass_state_list (domain + search); don't guess. " +
-        "The output lists entities whose state changed; an empty list comes with a warning and means nothing changed.",
+        "The output lists entities whose state changed. If Home Assistant's reply lists none, the entities are re-read: `states` shows each one's current state and whether it updated during the call. " +
+        "Without a `warning` the call worked. With one, tell the user the current state and don't claim the call changed it.",
       parameters: Type.Object({
         domain: Type.String({ description: "Service domain (e.g. light, switch, fan, scene, climate)." }),
         service: Type.String({ description: "Service name (e.g. turn_on, turn_off, toggle)." }),

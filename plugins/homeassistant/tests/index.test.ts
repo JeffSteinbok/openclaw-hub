@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import http from "node:http";
 import { EventEmitter } from "node:events";
+import { recheck } from "../src/handlers.js";
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -374,16 +375,44 @@ describe("hass_service_call", () => {
     expect(capturedUrl).toContain("/api/services/light/turn_on");
   });
 
-  it("warns when no entity changed state", async () => {
-    const { api } = await loadPlugin();
-    mockHttp(JSON.stringify([]));
-    const data = resultText(await api.tools["hass_service_call"].execute("id", {
-      domain: "fan",
-      service: "turn_on",
-      entity_id: "fan.does_not_exist",
-    })) as Record<string, unknown>;
-    expect(data.output).toEqual([]);
-    expect(data.warning).toEqual(expect.stringContaining("No entity changed state"));
+  describe("empty reply re-check", () => {
+    beforeEach(() => {
+      recheck.delayMs = 0;
+    });
+    const call = async (api: Awaited<ReturnType<typeof loadPlugin>>["api"], entity_id: string) =>
+      resultText(await api.tools["hass_service_call"].execute("id", { domain: "light", service: "turn_on", entity_id })) as Record<string, unknown>;
+
+    it("confirms an entity that updated after the reply", async () => {
+      const { api } = await loadPlugin();
+      const now = new Date().toISOString();
+      mockHttpSequence([
+        { body: JSON.stringify([]) },
+        { body: JSON.stringify({ entity_id: "light.patio_lights", state: "on", last_updated: now }) },
+      ]);
+      const data = await call(api, "light.patio_lights");
+      expect(data.warning).toBeUndefined();
+      expect(data.states).toEqual([{ entity_id: "light.patio_lights", state: "on", updated: true }]);
+    });
+
+    it("warns when the entity has not updated since the call", async () => {
+      const { api } = await loadPlugin();
+      mockHttpSequence([
+        { body: JSON.stringify([]) },
+        { body: JSON.stringify({ entity_id: "light.patio_lights", state: "on", last_updated: "2026-01-01T00:00:00+00:00" }) },
+      ]);
+      const data = await call(api, "light.patio_lights");
+      expect(data.warning).toEqual(expect.stringContaining("no update since the call: light.patio_lights is on"));
+    });
+
+    it("warns when the entity does not exist", async () => {
+      const { api } = await loadPlugin();
+      mockHttpSequence([
+        { body: JSON.stringify([]) },
+        { body: "Entity not found.", statusCode: 404 },
+      ]);
+      const data = await call(api, "light.does_not_exist");
+      expect(data.warning).toEqual(expect.stringContaining("not found: light.does_not_exist"));
+    });
   });
 
   it("has no warning when an entity changed", async () => {
