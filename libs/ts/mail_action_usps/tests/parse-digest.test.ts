@@ -49,6 +49,20 @@ function writeHtml(content: string): string {
 }
 
 describe("parseDigestHtml", () => {
+  it("handles the 2026 digest layout with tagged counts and inline ads", () => {
+    const path = writeHtml(`
+      <p>Hi , Jeff ! You have <span id="total-mailpieces">3</span> mailpiece(s) and
+      <span>1</span> inbound package(s) arriving soon.</p>
+      <img id="mailpiece-image-src-id" src="cid:1032817890-051.jpg" alt="Mailpiece Image">
+      <img id="mailpiece-image-src-id" src="cid:1032890661-051.jpg" alt="Mailpiece Image">
+      <img src="cid:mailer-1202180234.jpg" id="campaign-representative-image-src-id">
+      <img id="campaign-ridealong-image-src-id" src="cid:content-1202180234.jpg">`);
+    const result = parseDigestHtml(path);
+    expect(result.mail_count).toBe(3);
+    expect(result.package_count).toBe(1);
+    expect(result.image_cids).toEqual(["1032817890-051.jpg", "1032890661-051.jpg"]);
+  });
+
   it("extracts mail count", () => {
     const path = writeHtml(SAMPLE_HTML);
     const result = parseDigestHtml(path);

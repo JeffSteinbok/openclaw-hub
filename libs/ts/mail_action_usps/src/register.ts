@@ -22,6 +22,7 @@ function buildHandoffPrompt(
     date: result.date,
     mail_count: result.mail_count,
     images_analyzed: result.images_analyzed,
+    vision_failures: result.vision_failures ?? [],
     importance_breakdown: result.importance_breakdown ?? {},
     items: result.structured_items ?? [],
     notification_plan: result.notification_plan ?? [],
@@ -43,6 +44,13 @@ function buildHandoffPrompt(
       `The USPS system already handled direct notification routing, but durable mail memory ` +
       `has not been written yet. Store durable memory in the ${memoryAgent} workspace and ` +
       `handle any non-notification follow-up that still matters.`;
+  }
+
+  const failures = (result.vision_failures as unknown[] | undefined)?.length ?? 0;
+  if (failures > 0) {
+    memoryInstruction +=
+      ` ${failures} scan image(s) could not be read by vision (see vision_failures); ` +
+      "mention that to Jeff rather than treating them as routine mail.";
   }
 
   return (
@@ -105,6 +113,18 @@ export async function processUspsDigestAction(
     ];
   }
 
+  if (result.incomplete) {
+    // Nothing was persisted or marked processed; tell Jeff and skip the handoff.
+    const warning =
+      `USPS digest ${result.date} could not be analyzed: ${result.reason}. ` +
+      "Nothing was recorded; re-run the digest once the scan images are available.";
+    return [
+      { kind: "log", payload: { message: `warn: ${warning}` } },
+      { kind: "message", payload: { message: `⚠️ ${warning}` } },
+    ];
+  }
+
+  const failures = (result.vision_failures as unknown[] | undefined)?.length ?? 0;
   const handoffPrompt = buildHandoffPrompt(
     result,
     params.memory_agent as string,
@@ -113,7 +133,8 @@ export async function processUspsDigestAction(
   const summary =
     `USPS digest ${result.date} analyzed: ` +
     `${result.images_analyzed ?? 0} image(s), ` +
-    `${JSON.stringify(result.importance_breakdown ?? {})}`;
+    `${JSON.stringify(result.importance_breakdown ?? {})}` +
+    (failures > 0 ? `, ${failures} vision failure(s)` : "");
 
   return [
     { kind: "log", payload: { message: summary } },

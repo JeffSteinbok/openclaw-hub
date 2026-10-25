@@ -84,6 +84,26 @@ export function parseAuthResults(raw: string | null | undefined): AuthResults | 
   return { dkim, spf, dmarc, raw: text };
 }
 
+/** Fastmail's MX hosts stamp their verdicts with this authserv-id. */
+const TRUSTED_AUTHSERV_ID = /(^|\.)messagingengine\.com$/i;
+
+/**
+ * Keep only the Authentication-Results headers Fastmail added itself.
+ *
+ * Receiving servers prepend their headers, so Fastmail's come first. Anything
+ * after the first foreign one was added upstream or by the sender, and a
+ * forged "dmarc=pass" there must not count.
+ */
+export function trustedAuthResults(headers: string[] | null | undefined): string | undefined {
+  const trusted: string[] = [];
+  for (const header of headers ?? []) {
+    const authservId = header.split(";", 1)[0].trim().split(/\s+/)[0] ?? "";
+    if (!TRUSTED_AUTHSERV_ID.test(authservId)) break;
+    trusted.push(header.trim());
+  }
+  return trusted.length ? trusted.join(";\n") : undefined;
+}
+
 // ── Envelope conversion ──────────────────────────────────────
 
 export function emailToEnvelope(
@@ -102,7 +122,8 @@ export function emailToEnvelope(
   const rawSubject = (email["subject"] as string) ?? "(no subject)";
 
   // JMAP returns header pseudo-properties with the key matching the property name
-  const authHeader = email["header:Authentication-Results:asText"] as string | undefined;
+  const authHeaders = email["header:Authentication-Results:asText:all"] as string[] | undefined;
+  const authHeader = trustedAuthResults(authHeaders);
   const authResults = parseAuthResults(authHeader);
 
   // Collect to/cc as formatted address strings for reply-all support
