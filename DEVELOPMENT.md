@@ -32,6 +32,7 @@ npm run test --workspace libs/ts/mail_action_usps
 plugins/              OpenClaw plugins (TypeScript)
 libs/ts/              Shared TypeScript libraries
 services/             Long-running services (e.g. fastmail-sse)
+mcp/                  MCP servers and their CLIs (e.g. mapkit / applemaps, Swift; build with swift build)
 scripts/              Build and export tooling
 ```
 
