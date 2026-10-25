@@ -2,10 +2,35 @@
 
 MCP server that lets OctoDot (a ChatGPT Dot) reach OpenClaw.
 
-**Tools:** `ping`, and `ask_octo`, which sends a question to OpenClaw's dedicated `external` agent and returns its
-reply (octo#442). For that, octo-mcp is paired with the Gateway as its own operator device with only `operator.read`
-and `operator.write`, through [`@openclaw/gateway-client`](https://docs.openclaw.ai/gateway/clients): it can chat with
-agents but can't change config, pair devices or administer the Gateway. It never holds the shared Gateway token.
+## Tools
+
+Split by what they do, because ChatGPT asks the user to confirm any tool that isn't read-only:
+
+| Tool | Kind | What happens |
+|---|---|---|
+| `house_status` | read-only | A fixed question to OpenClaw's `external` agent: lights, covers, thermostat, TVs. No caller text reaches the agent |
+| `calendar` | read-only | A fixed question with a validated range (`today`, `tomorrow`, `this_week`, `next_7_days`, or `YYYY-MM-DD` start/end) |
+| `control_house` | changes things | The request (quoted as data) goes to the `external` agent; its Home Assistant actions pass through Hass Guard |
+| `send_message` | sends things | No AI involved: octo-mcp calls the Gateway's `send` for a named destination (iMessage or Discord) from a private allowlist |
+| `ping` | read-only | Reachability |
+
+The server's MCP `instructions` tell the client what Octo can and can't do. Everything but `ping` needs the service to
+be paired with the Gateway.
+
+## Access to OpenClaw
+
+octo-mcp is its own paired operator device (`cli`/`backend`, display name `octo-mcp`) with `operator.read` and
+`operator.write`, through [`@openclaw/gateway-client`](https://docs.openclaw.ai/gateway/clients). It never holds the
+shared Gateway token.
+
+- **What the token can't do:** change config, pair devices, or use owner-only tools (`cron`, `gateway`, `nodes`); and
+  slash commands that need admin (`suppressCommandInterpretation` is admin-only, so octo-mcp prefixes text that starts
+  with `/` or `!` instead).
+- **What it could do if octo-mcp itself were compromised:** `operator.write` also allows `tools.invoke` (tools an
+  agent's policy permits) and `send` to any target. octo-mcp's code only ever calls `chat.send` to one agent and `send`
+  to its allowlisted destinations, behind WorkOS sign-in.
+- **Why not narrower:** the session-only scopes (`operator.sessions.*`) need a verified user profile, which a paired
+  device doesn't have. Revisit if OpenClaw user profiles are set up.
 
 - Streamable HTTP, stateless (a fresh `McpServer` per request), JSON responses.
 - Listens on `127.0.0.1:18793`, path `/mcp`. Public URL: `https://octo.tail498490.ts.net/mcp`. Tailscale Funnel on
@@ -42,11 +67,17 @@ node dist/pair.js                               # stores the device token
 ```
 
 The identity (`device.json`, Ed25519) and device token (`token.json`) live in `OCTO_MCP_DEVICE_DIR`
-(default `~/.openclaw/secrets/octo-mcp`, mode 700/600). Until they exist, `ask_octo` isn't offered. To revoke,
+(default `~/.openclaw/secrets/octo-mcp`, mode 700/600). Until they exist, only `ping` is offered. To revoke,
 `openclaw devices remove <deviceId>` and delete the directory.
 
-`ask_octo` sends `chat.send` to session `agent:<agent>:mcp` with delivery off and slash-command interpretation
-suppressed, waits with `agent.wait`, and reads the reply with the client's `recoverTerminalReply`.
+Agent-backed tools send `chat.send` to session `agent:<agent>:mcp` with delivery off, wait with `agent.wait`, and read
+the reply with the client's `recoverTerminalReply`.
+
+Message destinations live in `recipients.json` in the same directory (mode 600), never in the repo:
+
+```json
+{ "jeff": { "channel": "imessage", "to": "+1…" }, "discord_general": { "channel": "discord", "to": "channel:<id>" } }
+```
 
 ## Run
 
@@ -60,7 +91,7 @@ OCTO_MCP_AUTHKIT_ISSUER=https://<subdomain>.authkit.app OCTO_MCP_ALLOWED_SUBJECT
 | `OCTO_MCP_PORT` | `18793` |
 | `OCTO_MCP_DEVICE_DIR` | `~/.openclaw/secrets/octo-mcp` |
 | `OCTO_MCP_GATEWAY_URL` | `ws://127.0.0.1:18789` |
-| `OCTO_MCP_AGENT` | `external` |
+| `OCTO_MCP_AGENT` | `external` (the agent behind the house and calendar tools) |
 | `OCTO_MCP_ALLOWED_HOSTS` | `127.0.0.1:<port>,localhost:<port>,octo.tail498490.ts.net` |
 | `OCTO_MCP_AUTHKIT_ISSUER` | none (required) |
 | `OCTO_MCP_RESOURCE` | `https://octo.tail498490.ts.net/mcp` |
