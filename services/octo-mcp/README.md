@@ -92,9 +92,9 @@ OCTO_MCP_AUTHKIT_ISSUER=https://<subdomain>.authkit.app OCTO_MCP_ALLOWED_SUBJECT
 | `OCTO_MCP_DEVICE_DIR` | `~/.openclaw/secrets/octo-mcp` |
 | `OCTO_MCP_GATEWAY_URL` | `ws://127.0.0.1:18789` |
 | `OCTO_MCP_AGENT` | `external` (the agent behind the house and calendar tools) |
-| `OCTO_MCP_ALLOWED_HOSTS` | `127.0.0.1:<port>,localhost:<port>,<funnel-host>` |
+| `OCTO_MCP_ALLOWED_HOSTS` | loopback plus the host of `OCTO_MCP_RESOURCE` |
 | `OCTO_MCP_AUTHKIT_ISSUER` | none (required) |
-| `OCTO_MCP_RESOURCE` | `https://<funnel-host>/mcp` |
+| `OCTO_MCP_RESOURCE` | none (required), e.g. `https://<funnel-host>/mcp` |
 | `OCTO_MCP_ALLOWED_SUBJECTS` | empty (nobody) |
 
 Runs as the LaunchAgent `com.octo.openclaw.octo-mcp` (plist in the octo repo, `config/macos/launchd/`). None of these

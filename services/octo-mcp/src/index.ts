@@ -3,9 +3,9 @@
  *
  * Env:
  *   OCTO_MCP_PORT              listen port (default 18793)
- *   OCTO_MCP_ALLOWED_HOSTS     comma-separated Host header allowlist
+ *   OCTO_MCP_ALLOWED_HOSTS     comma-separated Host header allowlist (default: loopback + the resource's host)
  *   OCTO_MCP_AUTHKIT_ISSUER    WorkOS AuthKit issuer, e.g. https://example.authkit.app (required)
- *   OCTO_MCP_RESOURCE          public resource URL (default https://<funnel-host>/mcp)
+ *   OCTO_MCP_RESOURCE          public resource URL, e.g. https://<funnel-host>/mcp (required)
  *   OCTO_MCP_ALLOWED_SUBJECTS  comma-separated WorkOS user ids allowed in (empty = nobody)
  *   OCTO_MCP_DEVICE_DIR        paired-device identity and token (default ~/.openclaw/secrets/octo-mcp)
  *   OCTO_MCP_GATEWAY_URL       OpenClaw Gateway WebSocket (default ws://127.0.0.1:18789)
@@ -28,18 +28,23 @@ const list = (value: string | undefined) =>
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-const ALLOWED_HOSTS = list(
-  process.env["OCTO_MCP_ALLOWED_HOSTS"] ??
-    `127.0.0.1:${PORT},localhost:${PORT},<funnel-host>`,
-);
+
 const ISSUER = (process.env["OCTO_MCP_AUTHKIT_ISSUER"] ?? "").replace(/\/+$/, "");
-const RESOURCE = process.env["OCTO_MCP_RESOURCE"] ?? "https://<funnel-host>/mcp";
+const RESOURCE = process.env["OCTO_MCP_RESOURCE"] ?? "";
+const RESOURCE_HOST = URL.canParse(RESOURCE) ? new URL(RESOURCE).host : "";
+const ALLOWED_HOSTS = list(
+  process.env["OCTO_MCP_ALLOWED_HOSTS"] ?? `127.0.0.1:${PORT},localhost:${PORT},${RESOURCE_HOST}`,
+);
 const SUBJECTS = list(process.env["OCTO_MCP_ALLOWED_SUBJECTS"]);
 
 function log(message: string): void {
   console.log(`[octo-mcp] ${new Date().toISOString()} ${message}`);
 }
 
+if (!/^https:\/\/[^/]+\/.*$/.test(RESOURCE)) {
+  log("OCTO_MCP_RESOURCE must be set to the public MCP URL (https://…/mcp); refusing to start");
+  process.exit(1);
+}
 if (!/^https:\/\/[^/]+$/.test(ISSUER)) {
   log("OCTO_MCP_AUTHKIT_ISSUER must be set to the AuthKit origin (https://…); refusing to start without auth");
   process.exit(1);
