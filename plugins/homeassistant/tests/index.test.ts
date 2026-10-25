@@ -237,13 +237,43 @@ describe("hass_state_get", () => {
 // ---------------------------------------------------------------------------
 
 describe("hass_state_list", () => {
-  it("returns all entities without domain filter", async () => {
+  it("returns per-domain counts, not entities, without domain or search", async () => {
+    const { api } = await loadPlugin();
+    const bedroom = { entity_id: "light.bedroom", state: "off", attributes: { friendly_name: "Bedroom" } };
+    mockHttp(JSON.stringify([ENTITY_SUN, ENTITY_LIGHT, bedroom, ENTITY_PERSON]));
+
+    const data = resultText(await api.tools["hass_state_list"].execute("id", {})) as Record<string, unknown>;
+    expect(data.output).toBeUndefined();
+    expect(data.total).toBe(4);
+    expect(data.domains).toEqual([
+      { domain: "light", count: 2 },
+      { domain: "person", count: 1 },
+      { domain: "sun", count: 1 },
+    ]);
+    expect(data.hint).toEqual(expect.stringContaining("domain"));
+  });
+
+  it("filters by several comma-separated domains", async () => {
     const { api } = await loadPlugin();
     mockHttp(JSON.stringify([ENTITY_SUN, ENTITY_LIGHT, ENTITY_PERSON]));
 
-    const data = resultText(await api.tools["hass_state_list"].execute("id", {})) as { output: unknown[]; count: number };
-    expect(data.count).toBe(3);
-    expect(Array.isArray(data.output)).toBe(true);
+    const data = resultText(await api.tools["hass_state_list"].execute("id", { domain: "light, person" })) as { output: Array<{ entity_id: string }>; count: number };
+    expect(data.output.map((e) => e.entity_id)).toEqual(["light.living_room", "person.jeff"]);
+  });
+
+  it("searches friendly names and entity IDs, with or without a domain", async () => {
+    const { api } = await loadPlugin();
+    const bonusLight = { entity_id: "light.bonus_room_lights", state: "on", attributes: { friendly_name: "Ceiling" } };
+    const bonusFan = { entity_id: "fan.loft", state: "off", attributes: { friendly_name: "Bonus Room Fan" } };
+    const entities = JSON.stringify([ENTITY_LIGHT, bonusLight, bonusFan]);
+
+    mockHttp(entities);
+    const all = resultText(await api.tools["hass_state_list"].execute("id", { search: "Bonus Room" })) as { output: Array<{ entity_id: string }> };
+    expect(all.output.map((e) => e.entity_id)).toEqual(["light.bonus_room_lights", "fan.loft"]);
+
+    mockHttp(entities);
+    const lights = resultText(await api.tools["hass_state_list"].execute("id", { domain: "light", search: "bonus room" })) as { output: Array<{ entity_id: string }> };
+    expect(lights.output.map((e) => e.entity_id)).toEqual(["light.bonus_room_lights"]);
   });
 
   it("filters by domain", async () => {
@@ -308,6 +338,29 @@ describe("hass_service_call", () => {
       entity_id: "light.living_room",
     });
     expect(capturedUrl).toContain("/api/services/light/turn_on");
+  });
+
+  it("warns when no entity changed state", async () => {
+    const { api } = await loadPlugin();
+    mockHttp(JSON.stringify([]));
+    const data = resultText(await api.tools["hass_service_call"].execute("id", {
+      domain: "fan",
+      service: "turn_on",
+      entity_id: "fan.does_not_exist",
+    })) as Record<string, unknown>;
+    expect(data.output).toEqual([]);
+    expect(data.warning).toEqual(expect.stringContaining("No entity changed state"));
+  });
+
+  it("has no warning when an entity changed", async () => {
+    const { api } = await loadPlugin();
+    mockHttp(JSON.stringify([ENTITY_LIGHT]));
+    const data = resultText(await api.tools["hass_service_call"].execute("id", {
+      domain: "light",
+      service: "turn_on",
+      entity_id: "light.living_room",
+    })) as Record<string, unknown>;
+    expect(data.warning).toBeUndefined();
   });
 });
 

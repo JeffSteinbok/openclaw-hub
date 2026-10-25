@@ -7,8 +7,8 @@ Use Home Assistant as the control plane for the house. This plugin lets the agen
 | Tool | Description |
 |------|-------------|
 | `hass_state_get` | Get the current state of a Home Assistant entity |
-| `hass_state_list` | List Home Assistant entities, optionally filtered by domain |
-| `hass_service_call` | Call a Home Assistant service |
+| `hass_state_list` | Find entities by domain (one or comma-separated) and/or name search; with neither, returns per-domain counts only |
+| `hass_service_call` | Call a Home Assistant service; warns when no entity changed state |
 | `hass_lovelace_get` | Read a Lovelace dashboard config or a single view |
 | `hass_lovelace_set` | Write a Lovelace dashboard config |
 | `hass_automation_list` | List automations with config id, alias, and state |
