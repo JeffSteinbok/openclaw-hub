@@ -121,7 +121,7 @@ function runTool(spec: ToolSpec, config: BridgeConfig, backend: BridgeBackend, n
       return {
         ok: true,
         text: condense
-          ? condense(results, { ignoreEntities: config.ignoreEntities ?? [] })
+          ? condense(results, { ignoreEntities: config.ignoreEntities ?? [], timezone })
           : JSON.stringify(results.map((r) => ({ tool: r.tool, label: r.label, output: r.output }))),
       };
     });

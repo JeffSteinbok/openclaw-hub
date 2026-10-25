@@ -14,7 +14,13 @@ export interface CallResult {
   output: unknown;
 }
 
-type Condenser = (results: CallResult[], opts: { ignoreEntities: string[] }) => string;
+export interface CondenseOptions {
+  ignoreEntities: string[];
+  /** IANA zone that times are shown in. */
+  timezone: string;
+}
+
+type Condenser = (results: CallResult[], opts: CondenseOptions) => string;
 
 interface HaEntity {
   entity_id: string;
@@ -72,17 +78,45 @@ interface CalendarEvent {
   is_all_day?: boolean;
 }
 
-/** Calendar fetch results → one sorted line per event: start, title, calendar. */
-const calendarEvents: Condenser = (results) => {
+/**
+ * An event time as "YYYY-MM-DD HH:MM" in `timezone`. Times with a zone or
+ * offset are converted; times without one are taken as already local; a bare
+ * date is an all-day event.
+ */
+export function localTime(value: string, timezone: string): { key: string; text: string } {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return { key: value, text: `${value} (all day)` };
+  if (/(Z|[+-]\d{2}:?\d{2})$/.test(value) && !Number.isNaN(Date.parse(value))) {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      })
+        .formatToParts(new Date(value))
+        .map((p) => [p.type, p.value]),
+    );
+    const text = `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+    return { key: text, text };
+  }
+  const text = value.replace("T", " ").slice(0, 16);
+  return { key: text, text };
+}
+
+/** Calendar fetch results → one sorted line per event: local start, title, calendar. */
+const calendarEvents: Condenser = (results, { timezone }) => {
   const rows: { start: string; line: string }[] = [];
   for (const r of results) {
     const events = ((r.output as { events?: CalendarEvent[] })?.events ?? []) as CalendarEvent[];
     for (const e of events) {
       const title = e.summary ?? e.subject ?? "(no title)";
-      const when = e.is_all_day ? `${(e.start ?? "").slice(0, 10)} (all day)` : (e.start ?? "");
+      const when = localTime(e.is_all_day ? (e.start ?? "").slice(0, 10) : (e.start ?? ""), timezone);
       rows.push({
-        start: e.start ?? "",
-        line: `${when} — ${title}${r.label ? ` [${r.label}]` : ""}${e.location ? ` @ ${e.location}` : ""}`,
+        start: when.key,
+        line: `${when.text} — ${title}${r.label ? ` [${r.label}]` : ""}${e.location ? ` @ ${e.location}` : ""}`,
       });
     }
   }

@@ -72,16 +72,22 @@ export function httpGet(url: string, ms = 30_000): Promise<string> {
 // ICS parsing helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * DTSTART/DTEND value → Date. `...Z` is UTC; other date-times (floating or
+ * TZID, which isn't resolved) are taken as the host's local time; a bare date
+ * is local midnight.
+ */
 function parseDt(s: string): Date | null {
   s = s.trim();
   if (s.includes(":")) s = s.split(":").pop()!;
-  s = s.replace(/Z$/, "");
-  if (/^\d{8}T\d{6}$/.test(s)) {
-    return new Date(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(9, 11)}:${s.slice(11, 13)}:${s.slice(13, 15)}`);
-  }
-  if (/^\d{8}$/.test(s)) return new Date(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`);
-  return null;
+  const m = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z?))?$/.exec(s);
+  if (!m) return null;
+  const [, y, mo, d, h = "00", mi = "00", sec = "00", utc] = m;
+  return new Date(`${y}-${mo}-${d}T${h}:${mi}:${sec}${utc ? "Z" : ""}`);
 }
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const localDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 function unescape(s: string): string {
   return s.replace(/\\n/g, "\n").replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\\\/g, "\\");
@@ -123,7 +129,8 @@ function parseEvents(ics: string, startDt: Date, endDt: Date): Array<Record<stri
 function fmtDt(s: string): string {
   const dt = parseDt(s);
   if (!dt) return s;
-  return s.includes("T") ? dt.toISOString().slice(0, 16).replace("T", " ") : dt.toISOString().slice(0, 10);
+  // Local wall time, like the inputs (UTC times are converted).
+  return s.includes("T") ? `${localDate(dt)} ${pad(dt.getHours())}:${pad(dt.getMinutes())}` : localDate(dt);
 }
 
 export function resolveUrl(url: string): string {
@@ -135,13 +142,24 @@ export function resolveUrl(url: string): string {
 // ---------------------------------------------------------------------------
 
 export async function fetchCalendarEvents(
-  params: { calendar_id?: string; url?: string; label?: string; days?: number },
+  params: { calendar_id?: string; url?: string; label?: string; days?: number; after?: string; before?: string },
   config: IcsCalendarConfig,
 ): Promise<CalendarFetchResult | CalendarError> {
-  const days = Number(params.days ?? 7);
-  const startDt = new Date();
+  const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+  for (const key of ["after", "before"] as const) {
+    if (params[key] !== undefined && !isoDate.test(params[key]!)) return { error: `${key} must be a date (YYYY-MM-DD)` };
+  }
+  // Local midnight of the first day; the end is exclusive.
+  const startDt = params.after ? new Date(`${params.after}T00:00:00`) : new Date();
   startDt.setHours(0, 0, 0, 0);
-  const endDt = new Date(startDt.getTime() + days * 86400000);
+  let days = Number(params.days ?? 7);
+  if (params.before) {
+    const last = new Date(`${params.before}T00:00:00`);
+    if (last < startDt) return { error: "before must be on or after after" };
+    days = Math.round((last.getTime() - startDt.getTime()) / 86400000) + 1;
+  }
+  const endDt = new Date(startDt);
+  endDt.setDate(endDt.getDate() + days);
 
   let icsUrl: string | undefined;
   let label: string = "Calendar";
@@ -176,8 +194,8 @@ export async function fetchCalendarEvents(
   return {
     calendar: label,
     days,
-    start_date: startDt.toISOString().slice(0, 10),
-    end_date: endDt.toISOString().slice(0, 10),
+    start_date: localDate(startDt),
+    end_date: localDate(endDt),
     count: formatted.length,
     events: formatted,
   };
