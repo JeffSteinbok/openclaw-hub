@@ -14,6 +14,8 @@ npm run build
 
 Builds shared libraries first (in dependency order), then all plugins.
 
+`package-lock.json` must list the native binaries for every platform (TypeScript 7, rollup, esbuild ship one optional package per OS/CPU). If a build fails with "Unable to resolve @typescript/typescript-…" or "Cannot find module @rollup/rollup-…", the lockfile was regenerated on one platform and lost the others; restore the missing entries rather than installing the binary with `--no-save`, which re-resolves the whole tree.
+
 ## Testing
 
 ```bash
