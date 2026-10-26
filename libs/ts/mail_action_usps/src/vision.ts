@@ -10,23 +10,13 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
-  readFileSync,
   unlinkSync,
 } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { basename, dirname, join } from "node:path";
+import { basename, join } from "node:path";
 import { homedir } from "node:os";
 
-// Load the analysis prompt from the sibling markdown file
-const PROMPT_PATH = join(dirname(new URL(import.meta.url).pathname), "analyze_prompt.md");
-let ANALYSIS_PROMPT = "";
-try {
-  if (existsSync(PROMPT_PATH)) {
-    ANALYSIS_PROMPT = readFileSync(PROMPT_PATH, "utf-8");
-  }
-} catch {
-  // Prompt file not found — not critical
-}
+import { ANALYSIS_PROMPT } from "./analysis-prompt.js";
 
 function buildAgentPrompt(stagingName: string): string {
   return (
