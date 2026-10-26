@@ -50,7 +50,7 @@ agent gets back a small `{ file }` response that works with the `message` tool.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `node` | string | Yes | — | Node id, name, or IP (e.g. `"Windows Node (JEFFOFFICE3)"`) |
+| `node` | string | Yes | — | Node id, name, or IP (e.g. `"Windows Node (OFFICE-PC)"`) |
 | `screenIndex` | number | No | 0 | Which monitor to capture |
 | `quality` | number | No | 90 | JPEG quality 1–100 (ignored for PNG) |
 | `format` | string | No | `"png"` | `"png"` or `"jpeg"` |
@@ -59,12 +59,12 @@ agent gets back a small `{ file }` response that works with the `message` tool.
 
 ```json
 {
-  "file": "/tmp/openclaw/screenshots/windowsnodejeffoffice3_20260602_a1b2c3d4.png",
+  "file": "/tmp/openclaw/screenshots/windowsnodeoffice-pc_20260602_a1b2c3d4.png",
   "width": 1920,
   "height": 1080,
   "format": "png",
   "size_bytes": 1234567,
-  "node": "Windows Node (JEFFOFFICE3)"
+  "node": "Windows Node (OFFICE-PC)"
 }
 ```
 

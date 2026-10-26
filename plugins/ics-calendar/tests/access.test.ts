@@ -17,17 +17,17 @@ async function loadTool(config: Record<string, unknown>) {
 // The full result (content is a compact view for the model).
 const text = (r: unknown) => (r as { details: unknown }).details as Record<string, unknown>;
 
-const accessGroups = { nicole: { type: "message.senders", members: { imessage: ["+14255550199"] } } };
+const accessGroups = { bob: { type: "message.senders", members: { imessage: ["+14255550199"] } } };
 const CONFIG = {
   calendars: [
     { id: "family", label: "Family", url: "http://example.com/family.ics" },
-    { id: "nicole", label: "Nicole", url: "http://example.com/nicole.ics" },
+    { id: "bob", label: "Bob", url: "http://example.com/bob.ics" },
     { id: "tripit", label: "TripIt", url: "http://example.com/tripit.ics" },
   ],
   access: {
     calendars: {
       family: { read: ["*"] },
-      nicole: { read: [{ agent: "main" }, { sender: "nicole" }] },
+      bob: { read: [{ agent: "main" }, { sender: "bob" }] },
       _url: { read: [{ agent: "main" }] },
     },
   },
@@ -62,8 +62,8 @@ describe("ics_calendar_fetch access control", () => {
   it("denies a restricted calendar to other agents and senderless turns", async () => {
     const get = vi.spyOn(https, "get");
     const { tool } = await loadTool(CONFIG);
-    const data = text(await tool({ agentId: "family" }).execute("id", { calendar_id: "nicole" }));
-    expect(data).toEqual({ error: 'Access denied: agent "family" (no sender) may not read calendar "nicole"' });
+    const data = text(await tool({ agentId: "family" }).execute("id", { calendar_id: "bob" }));
+    expect(data).toEqual({ error: 'Access denied: agent "family" (no sender) may not read calendar "bob"' });
     expect(get).not.toHaveBeenCalled();
   });
 
@@ -71,7 +71,7 @@ describe("ics_calendar_fetch access control", () => {
     mockIcs();
     const { tool } = await loadTool(CONFIG);
     const ctx = { agentId: "family", messageChannel: "imessage", requesterSenderId: "+1 425 555 0199", config: { accessGroups } };
-    expect(text(await tool(ctx).execute("id", { calendar_id: "nicole" })).calendar).toBe("Nicole");
+    expect(text(await tool(ctx).execute("id", { calendar_id: "bob" })).calendar).toBe("Bob");
   });
 
   it("default-denies configured calendars missing from the ACL", async () => {
@@ -90,6 +90,6 @@ describe("ics_calendar_fetch access control", () => {
   it("allows everything without an access block", async () => {
     mockIcs();
     const { tool } = await loadTool({ calendars: CONFIG.calendars });
-    expect(text(await tool({ agentId: "family" }).execute("id", { calendar_id: "nicole" })).calendar).toBe("Nicole");
+    expect(text(await tool({ agentId: "family" }).execute("id", { calendar_id: "bob" })).calendar).toBe("Bob");
   });
 });

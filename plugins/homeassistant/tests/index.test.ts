@@ -149,9 +149,9 @@ const ENTITY_LIGHT = {
 };
 
 const ENTITY_PERSON = {
-  entity_id: "person.jeff",
+  entity_id: "person.alice",
   state: "home",
-  attributes: { friendly_name: "Jeff" },
+  attributes: { friendly_name: "Alice" },
   context: { id: "ctx-3" },
 };
 
@@ -269,7 +269,7 @@ describe("hass_state_list", () => {
     mockHttp(JSON.stringify([ENTITY_SUN, ENTITY_LIGHT, ENTITY_PERSON]));
 
     const data = resultDetails(await api.tools["hass_state_list"].execute("id", { domain: "light, person" })) as { output: Array<{ entity_id: string }>; count: number };
-    expect(data.output.map((e) => e.entity_id)).toEqual(["light.living_room", "person.jeff"]);
+    expect(data.output.map((e) => e.entity_id)).toEqual(["light.living_room", "person.alice"]);
   });
 
   it("searches friendly names and entity IDs, with or without a domain", async () => {
@@ -674,9 +674,9 @@ describe("hass_person_find", () => {
     const { api } = await loadPlugin();
     mockHttp(JSON.stringify([ENTITY_SUN, ENTITY_LIGHT, ENTITY_PERSON]));
 
-    const data = resultText(await api.tools["hass_person_find"].execute("id", { name: "jeff" })) as { output: Array<{ entity_id: string }>; count: number };
+    const data = resultText(await api.tools["hass_person_find"].execute("id", { name: "alice" })) as { output: Array<{ entity_id: string }>; count: number };
     expect(data.count).toBe(1);
-    expect(data.output[0].entity_id).toBe("person.jeff");
+    expect(data.output[0].entity_id).toBe("person.alice");
   });
 
   it("returns empty when name not found", async () => {
