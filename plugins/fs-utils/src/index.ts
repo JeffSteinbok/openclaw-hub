@@ -3,12 +3,16 @@
  *
  * Provides `fs_list`, `fs_copy`, and `fs_move` tools that operate strictly
  * within the calling agent's workspace directory. All paths are relative to
- * `ctx.workspaceDir` (injected by the OpenClaw plugin SDK at call time) and
- * are validated to prevent path traversal outside the workspace boundary.
+ * `ctx.workspaceDir` (from OpenClaw's trusted tool context, forwarded by the
+ * carapace SDK per call) and are validated to prevent path traversal outside
+ * the workspace boundary.
  *
  * No absolute paths are accepted from callers — all inputs are workspace-relative.
+ * There is deliberately no fallback (config, env var, cwd): without a
+ * per-agent workspace the tools refuse to run.
  */
 
+import { definePlugin, type ToolCallContext } from "carapace-plugin-sdk";
 import { Type } from "@sinclair/typebox";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -27,34 +31,45 @@ function resolveAndValidate(base: string, target: string): string {
 }
 
 /**
- * Extracts the workspace directory from the tool execution context.
- * `ctx.workspaceDir` is set by the OpenClaw plugin SDK to the agent's
- * workspace root (e.g. `~/.openclaw/agents/<id>/workspace`).
- * Throws if workspaceDir is not available, which should never happen in
- * a properly configured agent — but surfaces a clear error if it does.
+ * Returns the calling agent's workspace directory from the tool call context.
+ * Throws if it is missing (standalone CLI, older hosts) rather than guessing.
  */
-function getWorkspaceDir(ctx: any): string {
-  const dir = ctx?.workspaceDir;
-  if (!dir) throw new Error(`fs-utils: workspaceDir not available in tool context for agent "${ctx?.agentId ?? "unknown"}".`);
-  return dir;
+function getWorkspaceDir(ctx: ToolCallContext): string {
+  const dir = ctx.workspaceDir;
+  if (!dir) throw new Error(`fs-utils: workspaceDir not available in tool context for agent "${ctx.agentId ?? "unknown"}".`);
+  return path.resolve(dir);
 }
 
-/**
- * Wraps a plain value in the tool-result shape OpenClaw expects
- * (`content` for the model, `details` for code mode). Returning the bare
- * object fails the bridge's schema check with "details.result.content:
- * expected array, received undefined".
- */
-function jsonResult(value: unknown) {
-  return { content: [{ type: "text", text: JSON.stringify(value) }], details: value };
+/** Fails if `dst` exists, unless the caller explicitly opted into overwriting. */
+async function guardOverwrite(dst: string, destination: string, overwrite: boolean): Promise<void> {
+  if (overwrite) return;
+  try {
+    await fs.access(dst);
+  } catch (e: any) {
+    if (e.code === "ENOENT") return;
+    throw e;
+  }
+  throw new Error(`Destination "${destination}" already exists. Set overwrite: true to replace it.`);
 }
 
-export function register(api: any) {
-  // -------------------------------------------------------------------------
-  // fs_list — directory listing
-  // -------------------------------------------------------------------------
-  api.registerTool((ctx: any) => {
-    return {
+const transferParams = Type.Object({
+  source: Type.String({ description: "Workspace-relative source path." }),
+  destination: Type.String({ description: "Workspace-relative destination path." }),
+  overwrite: Type.Optional(Type.Boolean({ description: "Overwrite destination if it exists (default: false)." })),
+});
+
+export const createEntry = definePlugin({
+  id: "fs-utils",
+  name: "File System Utilities",
+  description: "Copy, move, and list files within the agent workspace.",
+
+  configSchema: Type.Object({}),
+
+  tools: (tool) => [
+    // -----------------------------------------------------------------------
+    // fs_list — directory listing
+    // -----------------------------------------------------------------------
+    tool({
       name: "fs_list",
       label: "List Files",
       description: "List files and directories at a path within the workspace.",
@@ -62,11 +77,7 @@ export function register(api: any) {
         path: Type.String({ description: "Workspace-relative path to list. Use '.' for root." }),
         recursive: Type.Optional(Type.Boolean({ description: "List recursively (default: false)." })),
       }),
-      async execute(...execArgs: any[]) {
-        // SDK may pass params as first or second argument depending on call convention
-        const params = typeof execArgs[0] === 'object' && execArgs[0] !== null && 'path' in execArgs[0] ? execArgs[0] : execArgs[1];
-        const relPath: string = params?.path;
-        const recursive: boolean = params?.recursive ?? false;
+      async execute({ path: relPath, recursive = false }, _config, ctx) {
         const workspaceDir = getWorkspaceDir(ctx);
         const target = resolveAndValidate(workspaceDir, relPath);
 
@@ -87,86 +98,48 @@ export function register(api: any) {
 
         const entries = await listDir(target);
         // Return workspaceDir so callers can construct absolute paths if needed
-        return jsonResult({ path: relPath, workspaceDir, entries });
+        return { path: relPath, workspaceDir, entries };
       },
-    };
-  });
+    }),
 
-  // -------------------------------------------------------------------------
-  // fs_copy — copy a file within the workspace
-  // -------------------------------------------------------------------------
-  api.registerTool((ctx: any) => {
-    return {
+    // -----------------------------------------------------------------------
+    // fs_copy — copy a file within the workspace
+    // -----------------------------------------------------------------------
+    tool({
       name: "fs_copy",
       label: "Copy File",
       description: "Copy a file from source to destination within the workspace.",
-      parameters: Type.Object({
-        source: Type.String({ description: "Workspace-relative source path." }),
-        destination: Type.String({ description: "Workspace-relative destination path." }),
-        overwrite: Type.Optional(Type.Boolean({ description: "Overwrite destination if it exists (default: false)." })),
-      }),
-      async execute(...execArgs: any[]) {
-        const params = typeof execArgs[0] === 'object' && execArgs[0] !== null && 'source' in execArgs[0] ? execArgs[0] : execArgs[1];
-        const source: string = params?.source;
-        const destination: string = params?.destination;
-        const overwrite: boolean = params?.overwrite ?? false;
+      parameters: transferParams,
+      async execute({ source, destination, overwrite = false }, _config, ctx) {
         const workspaceDir = getWorkspaceDir(ctx);
         const src = resolveAndValidate(workspaceDir, source);
         const dst = resolveAndValidate(workspaceDir, destination);
-
-        // Guard against accidental overwrites unless caller explicitly opts in
-        if (!overwrite) {
-          try {
-            await fs.access(dst);
-            throw new Error(`Destination "${destination}" already exists. Set overwrite: true to replace it.`);
-          } catch (e: any) {
-            if (e.code !== "ENOENT") throw e;
-          }
-        }
+        await guardOverwrite(dst, destination, overwrite);
 
         await fs.mkdir(path.dirname(dst), { recursive: true }); // create parent dirs if needed
         await fs.copyFile(src, dst);
-        return jsonResult({ ok: true, source, destination });
+        return { ok: true, source, destination };
       },
-    };
-  });
+    }),
 
-  // -------------------------------------------------------------------------
-  // fs_move — move or rename a file within the workspace
-  // -------------------------------------------------------------------------
-  api.registerTool((ctx: any) => {
-    return {
+    // -----------------------------------------------------------------------
+    // fs_move — move or rename a file within the workspace
+    // -----------------------------------------------------------------------
+    tool({
       name: "fs_move",
       label: "Move File",
       description: "Move or rename a file within the workspace.",
-      parameters: Type.Object({
-        source: Type.String({ description: "Workspace-relative source path." }),
-        destination: Type.String({ description: "Workspace-relative destination path." }),
-        overwrite: Type.Optional(Type.Boolean({ description: "Overwrite destination if it exists (default: false)." })),
-      }),
-      async execute(...execArgs: any[]) {
-        const params = typeof execArgs[0] === 'object' && execArgs[0] !== null && 'source' in execArgs[0] ? execArgs[0] : execArgs[1];
-        const source: string = params?.source;
-        const destination: string = params?.destination;
-        const overwrite: boolean = params?.overwrite ?? false;
+      parameters: transferParams,
+      async execute({ source, destination, overwrite = false }, _config, ctx) {
         const workspaceDir = getWorkspaceDir(ctx);
         const src = resolveAndValidate(workspaceDir, source);
         const dst = resolveAndValidate(workspaceDir, destination);
-
-        // Guard against accidental overwrites unless caller explicitly opts in
-        if (!overwrite) {
-          try {
-            await fs.access(dst);
-            throw new Error(`Destination "${destination}" already exists. Set overwrite: true to replace it.`);
-          } catch (e: any) {
-            if (e.code !== "ENOENT") throw e;
-          }
-        }
+        await guardOverwrite(dst, destination, overwrite);
 
         await fs.mkdir(path.dirname(dst), { recursive: true }); // create parent dirs if needed
         await fs.rename(src, dst); // atomic on same filesystem; cross-device will throw
-        return jsonResult({ ok: true, source, destination });
+        return { ok: true, source, destination };
       },
-    };
-  });
-}
+    }),
+  ],
+});

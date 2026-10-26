@@ -3,22 +3,23 @@
   "version": "1.0.0",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "fs-utils": "./dist/bin/fs-utils.js"
+  },
   "files": [
     "dist",
     "openclaw.plugin.json",
     "README.md"
   ],
   "scripts": {
-    "build": "tsup",
-    "test": "vitest run",
-    "plugin:build": "npm run build && openclaw plugins build --entry ./dist/index.js",
-    "plugin:validate": "npm run build && openclaw plugins validate --entry ./dist/index.js"
+    "build": "tsup && carapace-generate-cli --entry ./dist/index.js --out ./dist/bin",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.6.4",
     "tsup": "^8.3.0",
     "typescript": "^7",
-    "vitest": "^4.1.10",
+    "vitest": "^5.0.3",
     "@sinclair/typebox": "^0.34.52"
   },
   "openclaw": {
@@ -35,6 +36,6 @@
     }
   },
   "dependencies": {
-    "carapace-plugin-sdk": "^3.0.1"
+    "carapace-plugin-sdk": "^3.3.0"
   }
 }
