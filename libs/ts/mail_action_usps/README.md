@@ -82,11 +82,20 @@ Create `~/.openclaw/agents/<workspace_agent>/workspace/usps-mail/config.json` to
 ```json
 {
   "routing": {
-    "jeff": { "channel": "discord", "target": "<channel-id>" },
-    "default": { "channel": "discord", "target": "<channel-id>" }
+    "alice": { "channel": "discord", "target": "<channel-id>", "addressee_patterns": ["alice"], "summary": true },
+    "bob": { "channel": "discord", "target": "<channel-id>", "addressee_patterns": ["bob", "acme studio"] },
+    "default": { "channel": "discord", "target": "<channel-id>", "summary": true }
   }
 }
 ```
+
+| Field | Purpose |
+|------|---------|
+| `channel`, `target` | Where this route's notifications are sent |
+| `addressee_patterns` | Case-insensitive substrings of the addressee that select this route |
+| `summary` | Append a count of the day's routine and junk pieces |
+
+Routes are checked in order and the first match wins, so put the route that should receive joint mail ("Alice & Bob") first. Addressees that match no route go to `default`.
 
 ---
 

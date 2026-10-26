@@ -265,7 +265,7 @@ Use `usps_rules` with a `test_mailpiece` to verify a rule fires the way you expe
 ```json
 {
   "sender": "unknown",
-  "addressee": "Jeff Steinbok",
+  "addressee": "Alice Example",
   "description": "plain white window envelope, no visible sender name, PO Box 44921",
   "mail_class": "First-Class Mail",
   "address_method": "window",

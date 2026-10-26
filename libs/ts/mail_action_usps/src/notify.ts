@@ -11,7 +11,16 @@ import { execFileSync } from "node:child_process";
 
 import { getConfigFile } from "./paths.js";
 
-const NICOLE_PATTERNS = new Set(["nicole", "eastside improv"]);
+export interface RouteConfig {
+  channel?: string;
+  target?: string;
+  /** Case-insensitive substrings of the addressee that select this route. */
+  addressee_patterns?: string[];
+  /** Append a household-wide routine/junk count to this route's notification. */
+  summary?: boolean;
+}
+
+export type RoutingConfig = Record<string, RouteConfig>;
 
 /**
  * Load plugin config (routing, etc.).
@@ -31,21 +40,27 @@ export function loadConfig(
 
 /**
  * Determine routing key from addressee name.
+ *
+ * Routes are checked in config order and the first route with a matching
+ * `addressee_patterns` entry wins, so list the route that should receive
+ * joint mail first. Unmatched addressees fall back to `default`.
  */
-export function classifyRecipient(addressee: string | null | undefined): string {
+export function classifyRecipient(
+  addressee: string | null | undefined,
+  routing: RoutingConfig = {},
+): string {
   const low = (addressee ?? "").toLowerCase();
 
-  for (const pat of NICOLE_PATTERNS) {
-    if (low.includes(pat)) {
-      // Joint mail ("Jeffrey & Nicole") → jeff
-      if (low.includes("jeff") || low.includes("jeffrey")) {
-        return "jeff";
+  for (const [key, route] of Object.entries(routing)) {
+    if (key === "default") continue;
+    for (const pat of route.addressee_patterns ?? []) {
+      if (pat && low.includes(pat.toLowerCase())) {
+        return key;
       }
-      return "nicole";
     }
   }
 
-  return "jeff";
+  return "default";
 }
 
 /**
@@ -107,10 +122,7 @@ export function buildNotificationPlan(
     );
   }
   const config = opts.config ?? loadConfig(opts.workspaceAgent);
-  let routing = config.routing as Record<
-    string,
-    { channel?: string; target?: string }
-  > | undefined;
+  let routing = config.routing as RoutingConfig | undefined;
   const defaultChannel = "discord";
 
   if (!routing || Object.keys(routing).length === 0) {
@@ -125,7 +137,7 @@ export function buildNotificationPlan(
   // Bucket items by recipient
   const buckets: Record<string, Array<Record<string, unknown>>> = {};
   for (const item of items) {
-    const key = classifyRecipient(item.addressee as string);
+    const key = classifyRecipient(item.addressee as string, routing);
     if (!buckets[key]) buckets[key] = [];
     buckets[key].push(item);
   }
@@ -156,8 +168,8 @@ export function buildNotificationPlan(
       lines.push(line);
     }
 
-    // Junk/routine summary for Jeff only
-    if (key !== "nicole" && otherItems.length > 0) {
+    // Household routine/junk summary for routes that opt in
+    if (dest.summary && otherItems.length > 0) {
       const junk = otherItems.filter((it) =>
         ["junk", "ad"].includes(it.importance as string),
       ).length;

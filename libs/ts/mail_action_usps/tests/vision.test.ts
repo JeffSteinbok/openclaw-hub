@@ -6,7 +6,7 @@ describe("validateAnalysis", () => {
   it("all fields present", () => {
     const analysis = {
       sender: "ACME",
-      addressee: "Jeff",
+      addressee: "Alice",
       description: "Invoice",
       type: "scan",
       importance: "high",
@@ -15,7 +15,7 @@ describe("validateAnalysis", () => {
     };
     const result = validateAnalysis(analysis);
     expect(result.sender).toBe("ACME");
-    expect(result.addressee).toBe("Jeff");
+    expect(result.addressee).toBe("Alice");
     expect(result.importance).toBe("high");
   });
 

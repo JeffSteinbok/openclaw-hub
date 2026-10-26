@@ -5,84 +5,98 @@ import {
   buildNotificationPlan,
 } from "../src/notify.js";
 
-describe("classifyRecipient", () => {
-  it("jeff", () => expect(classifyRecipient("Jeff Steinbok")).toBe("jeff"));
-  it("jeffrey", () => expect(classifyRecipient("Jeffrey Steinbok")).toBe("jeff"));
-  it("nicole", () => expect(classifyRecipient("Nicole Smith")).toBe("nicole"));
-  it("eastside improv", () => expect(classifyRecipient("Eastside Improv")).toBe("nicole"));
-  it("joint jeffrey and nicole", () => expect(classifyRecipient("Jeffrey & Nicole Steinbok")).toBe("jeff"));
-  it("joint jeff and nicole", () => expect(classifyRecipient("Jeff & Nicole")).toBe("jeff"));
-  it("default unknown", () => expect(classifyRecipient("Current Resident")).toBe("jeff"));
-  it("empty", () => expect(classifyRecipient("")).toBe("jeff"));
-  it("null", () => expect(classifyRecipient(null)).toBe("jeff"));
-  it("case insensitive", () => expect(classifyRecipient("NICOLE JONES")).toBe("nicole"));
-});
-
-function makeConfig() {
+function makeRouting() {
   return {
-    routing: {
-      jeff: { channel: "discord", target: "jeff-target" },
-      nicole: { channel: "discord", target: "nicole-target" },
-      default: { channel: "discord", target: "default-target" },
-    },
+    alice: { channel: "discord", target: "alice-target", addressee_patterns: ["alice"], summary: true },
+    bob: { channel: "discord", target: "bob-target", addressee_patterns: ["bob", "acme studio"] },
+    default: { channel: "discord", target: "default-target", summary: true },
   };
 }
+
+function makeConfig() {
+  return { routing: makeRouting() };
+}
+
+describe("classifyRecipient", () => {
+  const routing = makeRouting();
+  it("matches a pattern", () => expect(classifyRecipient("Alice Example", routing)).toBe("alice"));
+  it("matches any pattern for a route", () => expect(classifyRecipient("Acme Studio LLC", routing)).toBe("bob"));
+  it("joint mail goes to the first matching route", () => expect(classifyRecipient("Alice & Bob Example", routing)).toBe("alice"));
+  it("route order decides joint mail", () => {
+    const { alice, bob, default: def } = routing;
+    expect(classifyRecipient("Alice & Bob Example", { bob, alice, default: def })).toBe("bob");
+  });
+  it("unknown falls back to default", () => expect(classifyRecipient("Current Resident", routing)).toBe("default"));
+  it("empty", () => expect(classifyRecipient("", routing)).toBe("default"));
+  it("null", () => expect(classifyRecipient(null, routing)).toBe("default"));
+  it("no routing", () => expect(classifyRecipient("Alice Example")).toBe("default"));
+  it("case insensitive", () => expect(classifyRecipient("BOB JONES", routing)).toBe("bob"));
+  it("ignores patterns on default", () => {
+    expect(classifyRecipient("Alice", { default: { addressee_patterns: ["alice"] } })).toBe("default");
+  });
+});
 
 describe("buildNotificationPlan", () => {
   it("important items notified", () => {
     const items = [
-      { sender: "IRS", addressee: "Jeff", importance: "urgent", description: "Tax notice" },
-      { sender: "ACME", addressee: "Jeff", importance: "junk" },
+      { sender: "IRS", addressee: "Alice", importance: "urgent", description: "Tax notice" },
+      { sender: "ACME", addressee: "Alice", importance: "junk" },
     ];
     const plan = buildNotificationPlan("2024-01-15", items, { config: makeConfig() });
     expect(plan).toHaveLength(1);
-    expect(plan[0].recipient).toBe("jeff");
+    expect(plan[0].recipient).toBe("alice");
     expect(plan[0].message).toContain("IRS");
     expect(plan[0].items).toHaveLength(1);
   });
 
   it("no important items → no plan", () => {
     const items = [
-      { sender: "ACME", addressee: "Jeff", importance: "junk" },
-      { sender: "Flyer", addressee: "Jeff", importance: "ad" },
+      { sender: "ACME", addressee: "Alice", importance: "junk" },
+      { sender: "Flyer", addressee: "Alice", importance: "ad" },
     ];
     const plan = buildNotificationPlan("2024-01-15", items, { config: makeConfig() });
     expect(plan).toHaveLength(0);
   });
 
-  it("nicole routing", () => {
+  it("pattern routing", () => {
     const items = [
-      { sender: "Bank", addressee: "Nicole Smith", importance: "high", description: "Statement" },
+      { sender: "Bank", addressee: "Bob Smith", importance: "high", description: "Statement" },
     ];
     const plan = buildNotificationPlan("2024-01-15", items, { config: makeConfig() });
     expect(plan).toHaveLength(1);
-    expect(plan[0].recipient).toBe("nicole");
-    expect(plan[0].target).toBe("nicole-target");
+    expect(plan[0].recipient).toBe("bob");
+    expect(plan[0].target).toBe("bob-target");
   });
 
-  it("junk summary for jeff", () => {
+  it("summary for routes that opt in", () => {
     const items = [
-      { sender: "IRS", addressee: "Jeff", importance: "urgent" },
-      { sender: "Junk Co", addressee: "Jeff", importance: "junk" },
-      { sender: "Ad Co", addressee: "Jeff", importance: "ad" },
-      { sender: "Routine", addressee: "Jeff", importance: "medium" },
+      { sender: "IRS", addressee: "Alice", importance: "urgent" },
+      { sender: "Junk Co", addressee: "Alice", importance: "junk" },
+      { sender: "Ad Co", addressee: "Alice", importance: "ad" },
+      { sender: "Routine", addressee: "Alice", importance: "medium" },
     ];
     const plan = buildNotificationPlan("2024-01-15", items, { config: makeConfig() });
-    const jeffPlan = plan.find((p) => p.recipient === "jeff")!;
-    expect(jeffPlan.message).toContain("Also:");
-    expect(jeffPlan.message).toContain("junk");
+    const alicePlan = plan.find((p) => p.recipient === "alice")!;
+    expect(alicePlan.message).toContain("Also:");
+    expect(alicePlan.message).toContain("junk");
   });
 
-  it("no junk summary for nicole", () => {
+  it("no summary for routes that do not opt in", () => {
     const items = [
-      { sender: "Bank", addressee: "Nicole", importance: "high" },
-      { sender: "Junk", addressee: "Nicole", importance: "junk" },
+      { sender: "Bank", addressee: "Bob", importance: "high" },
+      { sender: "Junk", addressee: "Bob", importance: "junk" },
     ];
     const plan = buildNotificationPlan("2024-01-15", items, { config: makeConfig() });
-    const nicolePlans = plan.filter((p) => p.recipient === "nicole");
-    if (nicolePlans.length > 0) {
-      expect(nicolePlans[0].message).not.toContain("Also:");
-    }
+    const bobPlan = plan.find((p) => p.recipient === "bob")!;
+    expect(bobPlan.message).not.toContain("Also:");
+  });
+
+  it("unmatched addressee uses default route", () => {
+    const items = [{ sender: "IRS", addressee: "Current Resident", importance: "high" }];
+    const plan = buildNotificationPlan("2024-01-15", items, { config: makeConfig() });
+    expect(plan).toHaveLength(1);
+    expect(plan[0].recipient).toBe("default");
+    expect(plan[0].target).toBe("default-target");
   });
 
   it("requires config or agent", () => {
@@ -91,11 +105,11 @@ describe("buildNotificationPlan", () => {
 
   it("multiple recipients", () => {
     const items = [
-      { sender: "IRS", addressee: "Jeff", importance: "urgent" },
-      { sender: "Bank", addressee: "Nicole", importance: "high" },
+      { sender: "IRS", addressee: "Alice", importance: "urgent" },
+      { sender: "Bank", addressee: "Bob", importance: "high" },
     ];
     const plan = buildNotificationPlan("2024-01-15", items, { config: makeConfig() });
     const recipients = new Set(plan.map((p) => p.recipient));
-    expect(recipients).toEqual(new Set(["jeff", "nicole"]));
+    expect(recipients).toEqual(new Set(["alice", "bob"]));
   });
 });
