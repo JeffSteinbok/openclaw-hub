@@ -479,6 +479,7 @@ export interface MeetingArgs {
   cc?: string[];
   subject: string;
   start: string;
+  end?: string;
   duration?: string;
   location?: string;
   description?: string;
@@ -494,8 +495,18 @@ export async function cmdMeeting(cfg: FastmailConfig, args: MeetingArgs): Promis
     );
   }
 
-  const mins = durationToMinutes(args.duration ?? "1h");
-  const endDt = new Date(startDt.getTime() + mins * 60_000);
+  let endDt: Date;
+  if (args.end) {
+    // An explicit end wins over duration
+    endDt = new Date(args.end);
+    if (isNaN(endDt.getTime())) {
+      throw new Error(`Invalid end datetime: '${args.end}' (use ISO format, e.g. 2026-03-15T15:30)`);
+    }
+    if (endDt <= startDt) throw new Error(`End '${args.end}' must be after start '${args.start}'`);
+  } else {
+    const mins = durationToMinutes(args.duration ?? "1h");
+    endDt = new Date(startDt.getTime() + mins * 60_000);
+  }
   const tz = args.timezone ?? "America/Los_Angeles";
   const domain = cfg.fromEmail.includes("@") ? cfg.fromEmail.split("@")[1] : "localhost";
   const uid = `${randomUUID()}@${domain}`;
