@@ -12,6 +12,7 @@
 | `analyze.ts` | Main orchestration pipeline for a single digest folder |
 | `parse-digest.ts` | Parse the USPS HTML digest into structured mail metadata |
 | `vision.ts` | Ask an OpenClaw agent to analyze each mailpiece image |
+| `analysis-prompt.ts` | Vision rubric: fields, importance levels, credit-card/handwritten/former-resident detection |
 | `rules.ts` | User-managed importance rules stored in the workspace agent |
 | `notify.ts` | Build and deliver recipient-specific notifications |
 | `memory.ts` | Persist analysis history, workflow state, and monthly mail memory |

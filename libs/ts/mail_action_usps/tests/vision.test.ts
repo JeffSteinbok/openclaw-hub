@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import { validateAnalysis } from "../src/vision.js";
+import { ANALYSIS_PROMPT } from "../src/analysis-prompt.js";
 
 describe("validateAnalysis", () => {
   it("all fields present", () => {
@@ -62,5 +63,14 @@ describe("validateAnalysis", () => {
       "address_method",
     ]);
     expect(keys).toEqual(expected);
+  });
+});
+
+describe("ANALYSIS_PROMPT", () => {
+  it("ships the classification rubric", () => {
+    expect(ANALYSIS_PROMPT).toContain("**importance**");
+    for (const level of ["urgent", "high", "medium", "low", "junk"]) {
+      expect(ANALYSIS_PROMPT).toContain(`\`${level}\``);
+    }
   });
 });
