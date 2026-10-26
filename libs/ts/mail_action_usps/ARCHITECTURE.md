@@ -97,10 +97,14 @@ This is usually the **mail agent** workspace, because the mail pipeline owns ong
 Then it invokes:
 
 ```
-openclaw agent --agent <vision_agent> --json --message ...
+openclaw agent --agent <vision_agent> --session-key agent:<vision_agent>:usps-vision-<date> --json --message ...
 ```
 
+All scans from one digest share that session, so they stay out of the agent's main session and its context doesn't grow with every mailpiece.
+
 The vision agent returns structured JSON for each mailpiece, and the staging image is deleted immediately afterward.
+
+The vision agent needs `read` with Code Mode off (`agents.entries.<vision_agent>.tools.codeMode: false`). In Code Mode, `read` on an image returns a JSON value inside the script sandbox rather than an image the model can see, and each scan times out.
 
 ### `memory_agent`
 

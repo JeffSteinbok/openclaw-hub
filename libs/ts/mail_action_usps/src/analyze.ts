@@ -163,12 +163,13 @@ export async function processDigest(
       };
     }
   } else {
-    // Auto mode
+    // Auto mode: one vision session per digest, separate from the agent's main session
+    const visionSession = `agent:${visionAgent}:usps-vision-${dateStr}`;
     for (const img of scanImages) {
       process.stderr.write(`  Analyzing ${img}...\n`);
       let info: Record<string, unknown>;
       try {
-        const raw = analyzeViaAgent(join(folder, img), visionAgent!);
+        const raw = analyzeViaAgent(join(folder, img), visionAgent!, visionSession);
         info = { ...validateAnalysis(raw as unknown as Record<string, unknown>) };
       } catch (e) {
         info = { ...validateAnalysis({}) };
