@@ -2,13 +2,19 @@ import { describe, expect, it } from "vitest";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { register } from "./index.js";
+import { createEntry } from "./index.js";
 
-/** Collects the tool definitions register() emits, for a given context. */
-function collectTools(ctx: unknown) {
+/**
+ * Collects the tools register() emits, instantiated with the given OpenClaw
+ * tool context. Each tool exposes OpenClaw's `execute(toolCallId, params)`.
+ */
+function collectTools(ctx?: unknown) {
   const tools: any[] = [];
-  register({ registerTool: (factory: (c: unknown) => unknown) => tools.push(factory(ctx)) });
-  return tools;
+  createEntry().register({
+    pluginConfig: {},
+    registerTool: (factory: any) => tools.push(ctx === undefined ? factory : factory(ctx)),
+  } as any);
+  return tools.map((t) => ({ ...t, execute: (params: unknown) => t.execute("call-1", params) }));
 }
 
 async function tmpWorkspace(): Promise<string> {
@@ -24,6 +30,21 @@ describe("fs-utils", () => {
   it("fails clearly when workspaceDir is missing", async () => {
     const [list] = collectTools({ agentId: "main" });
     await expect(list.execute({ path: "." })).rejects.toThrow(/workspaceDir not available/);
+  });
+
+  it("fails clearly with no tool context (standalone CLI)", async () => {
+    const [list] = collectTools();
+    await expect(list.execute({ path: "." })).rejects.toThrow(/workspaceDir not available/);
+  });
+
+  it("scopes each call to the calling agent's workspace", async () => {
+    const a = await tmpWorkspace();
+    const b = await tmpWorkspace();
+    await fs.writeFile(path.join(a, "only-a.txt"), "a");
+    const [listB] = collectTools({ agentId: "b", workspaceDir: b });
+    const res = (await listB.execute({ path: "." })) as { details: { entries: string[] } };
+    expect(res.details.entries).toEqual([]);
+    await expect(listB.execute({ path: path.relative(b, a) })).rejects.toThrow(/outside the workspace boundary/);
   });
 
   it("refuses paths that escape the workspace", async () => {

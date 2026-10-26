@@ -33,5 +33,3 @@ tsup.config.js
 
 # Generated plugin manifests (rebuilt by carapace-generate-cli)
 openclaw.plugin.json
-# fs-utils registers tools directly (no carapace SDK), so its manifest is hand-written
-!plugins/fs-utils/openclaw.plugin.json

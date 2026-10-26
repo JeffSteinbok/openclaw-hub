@@ -1,11 +1,30 @@
-import { createRequire } from "node:module";
-import { register } from "./index.js";
+/**
+ * OpenClaw plugin adapter.
+ *
+ * Uses synchronous createRequire (not await import) to avoid top-level await,
+ * which the OpenClaw plugin loader does not support.
+ *
+ * openclaw is an optional peer dependency — falls back to raw entry if not installed.
+ */
 
-const req = createRequire(import.meta.url);
-const sdk = req("openclaw/plugin-sdk/plugin-entry");
-export default sdk.definePluginEntry({
-  id: "fs-utils",
-  name: "File System Utilities",
-  description: "Copy, move, and list files within the agent workspace.",
-  register,
-});
+import { createRequire } from "node:module";
+import { createEntry } from "./index.js";
+
+const require = createRequire(import.meta.url);
+
+let pluginEntry: unknown;
+
+try {
+  const sdk = require("openclaw/plugin-sdk/plugin-entry") as {
+    definePluginEntry?: (e: unknown) => unknown;
+  };
+  if (typeof sdk.definePluginEntry !== "function") {
+    throw new Error("OpenClaw SDK loaded but did not export `definePluginEntry`. Upgrade the `openclaw` package.");
+  }
+  pluginEntry = sdk.definePluginEntry(createEntry());
+} catch {
+  // Peer dep not installed — fall back to raw entry (works without SDK)
+  pluginEntry = createEntry();
+}
+
+export default pluginEntry;
