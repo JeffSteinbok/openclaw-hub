@@ -602,6 +602,115 @@ export async function speakerVolumeSet(config: HomeAssistantConfig, params: { en
   return { output: res.output };
 }
 
+// ---------------------------------------------------------------------------
+// Notify (restricted to configured targets)
+// ---------------------------------------------------------------------------
+
+export interface NotifyTarget {
+  /** The notify service name after `notify.`, e.g. mobile_app_alex_iphone or a notify group. */
+  service: string;
+  description?: string;
+}
+
+export const NOTIFY_INTERRUPTION_LEVELS = ["passive", "active", "time-sensitive"] as const;
+export const DEFAULT_NOTIFY_URL_SCHEMES = ["hassonic"];
+export const NOTIFY_TITLE_MAX = 100;
+export const NOTIFY_MESSAGE_MAX = 1000;
+
+const NOTIFY_SERVICE_RE = /^[a-z0-9_]+$/;
+
+/**
+ * Parse `notifyTargets` from plugin config. The CLI passes config from env vars as
+ * strings, so a JSON string is accepted too.
+ */
+export function parseNotifyTargets(raw: unknown): Record<string, NotifyTarget> {
+  let value = raw;
+  if (typeof value === "string") {
+    if (!value.trim()) return {};
+    try { value = JSON.parse(value); } catch { throw new Error("notifyTargets is not valid JSON."); }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const targets: Record<string, NotifyTarget> = {};
+  for (const [name, t] of Object.entries(value as Record<string, unknown>)) {
+    const service = (t as { service?: unknown } | null)?.service;
+    if (typeof service !== "string" || !service.trim()) continue;
+    const description = (t as { description?: unknown }).description;
+    targets[name] = { service: service.trim(), ...(typeof description === "string" ? { description } : {}) };
+  }
+  return targets;
+}
+
+/** Parse `notifyUrlSchemes`: an array, or a comma-separated string from the CLI. Defaults to hassonic. */
+export function parseNotifyUrlSchemes(raw: unknown): string[] {
+  const list = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",") : [];
+  const schemes = list.map((s) => String(s).trim().toLowerCase().replace(/:\/*$/, "")).filter(Boolean);
+  return schemes.length ? schemes : DEFAULT_NOTIFY_URL_SCHEMES;
+}
+
+/** Strip the server URL, host, and token from an error so the agent never sees them. */
+function redactServer(message: string, config: HomeAssistantConfig): string {
+  const secrets = [config.server, config.token];
+  try {
+    const u = new URL(config.server);
+    secrets.push(u.host, u.hostname);
+  } catch { /* not a URL; the raw value is still redacted */ }
+  let out = message;
+  for (const s of secrets.filter((s) => s && s.length > 2).sort((a, b) => b.length - a.length)) {
+    out = out.split(s).join("<home-assistant>");
+  }
+  return out;
+}
+
+export async function notify(
+  config: HomeAssistantConfig,
+  params: { target: string; message: string; title?: string; url?: string; interruptionLevel?: string },
+  options: { targets: Record<string, NotifyTarget>; urlSchemes: string[] },
+): Promise<unknown> {
+  const names = Object.keys(options.targets);
+  if (names.length === 0) {
+    return { error: "No notify targets are configured. Add `notifyTargets` to the Home Assistant plugin config." };
+  }
+  // Exact key match only: no free-form service names.
+  const targetName = params.target ?? "";
+  const target = Object.prototype.hasOwnProperty.call(options.targets, targetName) ? options.targets[targetName] : undefined;
+  if (!target) return { error: `Unknown notify target "${targetName}". Allowed targets: ${names.join(", ")}.` };
+  if (!NOTIFY_SERVICE_RE.test(target.service)) {
+    return { error: `Notify target "${targetName}" has an invalid service in config; use the name after "notify." (e.g. mobile_app_alex_iphone).` };
+  }
+
+  const message = params.message?.trim() ?? "";
+  if (!message) return { error: "message is required" };
+  if (message.length > NOTIFY_MESSAGE_MAX) return { error: `message is too long (${message.length} chars; max ${NOTIFY_MESSAGE_MAX})` };
+  const title = params.title?.trim() || undefined;
+  if (title && title.length > NOTIFY_TITLE_MAX) return { error: `title is too long (${title.length} chars; max ${NOTIFY_TITLE_MAX})` };
+
+  const level = params.interruptionLevel?.trim() || undefined;
+  if (level && !(NOTIFY_INTERRUPTION_LEVELS as readonly string[]).includes(level)) {
+    return { error: `interruptionLevel must be one of: ${NOTIFY_INTERRUPTION_LEVELS.join(", ")}` };
+  }
+
+  const url = params.url?.trim() || undefined;
+  if (url) {
+    let scheme = "";
+    try { scheme = new URL(url).protocol.replace(/:$/, "").toLowerCase(); } catch { /* reported below */ }
+    if (!scheme) return { error: "url is not a valid URL" };
+    if (!options.urlSchemes.includes(scheme)) {
+      return { error: `url scheme "${scheme}:" is not allowed. Allowed schemes: ${options.urlSchemes.map((s) => `${s}:`).join(", ")}` };
+    }
+  }
+
+  const data: Record<string, unknown> = {};
+  if (url) data.url = url;
+  if (level) data.push = { "interruption-level": level };
+  const body: Record<string, unknown> = { message };
+  if (title) body.title = title;
+  if (Object.keys(data).length) body.data = data;
+
+  const res = await apiPost(config.server, config.token, `/api/services/notify/${target.service}`, body, 15_000);
+  if ("error" in res) return { error: `Notification to "${targetName}" failed: ${redactServer(res.error, config)}` };
+  return { ok: true, target: targetName };
+}
+
 export async function logbook(config: HomeAssistantConfig, params: {
   entity_id?: string; hours?: number; start_time?: string; end_time?: string; keyword?: string; limit?: number;
 }): Promise<unknown> {

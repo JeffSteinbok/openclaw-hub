@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-26
+
+### Added
+- **homeassistant: `hass_notify`** — sends a phone notification through a Home Assistant `notify.*` service, but only to targets listed in the new `notifyTargets` config. Supports `title`, a tap-to-open `url` (`hassonic://` by default; set `notifyUrlSchemes` to change), and `interruptionLevel` (`passive`, `active`, `time-sensitive`; `critical` is refused). Lets a restricted agent notify people without being given `hass_service_call`. (#113)
+
 ## 2026-05-09
 
 ### Added
