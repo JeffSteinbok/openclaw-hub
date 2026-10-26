@@ -31,7 +31,15 @@ export function validate(raw: unknown, allowedAgents: Set<string>): DecideParams
   }
 
   const t = typeof p.timeoutMs === "number" && p.timeoutMs > 0 ? Math.min(p.timeoutMs, MAX_TIMEOUT_MS) : 15_000;
-  return { agentId, purpose, rubricVersion, request, timeoutMs: t };
+  // The host's contract check only accepts plain JSON objects with data
+  // properties. Gateway params don't pass it as-is, so copy them.
+  let plain: DecideParams["request"];
+  try {
+    plain = JSON.parse(JSON.stringify(request));
+  } catch {
+    return "request must be JSON";
+  }
+  return { agentId, purpose, rubricVersion, request: plain, timeoutMs: t };
 }
 
 /** What the caller gets back: answers when ok, otherwise why not. Never throws. */
