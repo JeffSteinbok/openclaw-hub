@@ -32,6 +32,16 @@ describe("validate", () => {
   });
 });
 
+it("hands the host a plain-JSON copy of the request", () => {
+  const state = {};
+  Object.defineProperty(state, "text", { get: () => "hi", enumerable: true });
+  const v = validate({ ...good, request: { state, questions: good.request.questions } }, agents);
+  if (typeof v === "string") throw new Error(v);
+  const d = Object.getOwnPropertyDescriptor(v.request.state, "text");
+  expect(d && "value" in d).toBe(true);
+  expect(Object.getPrototypeOf(v.request.state)).toBe(Object.prototype);
+});
+
 describe("shape", () => {
   it("passes answers through when ok", () => {
     const answers = { label: { type: "choice", choice: "a", probabilities: { a: 0.9, b: 0.1 } } };

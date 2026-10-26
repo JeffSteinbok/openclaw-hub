@@ -25,6 +25,8 @@ export default {
             purpose: checked.purpose,
             rubricVersion: checked.rubricVersion,
             timeoutMs: checked.timeoutMs,
+            // Required by the host; a Gateway call has no run signal of its own.
+            signal: AbortSignal.timeout(checked.timeoutMs + 1_000),
           });
           respond(true, shape(outcome));
         } catch (e) {
