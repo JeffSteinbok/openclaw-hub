@@ -52,10 +52,14 @@ export interface AnalysisResult {
 
 /**
  * Analyze a single mailpiece scan via openclaw agent vision.
+ *
+ * Pass `sessionKey` to keep scans out of the agent's main session, whose
+ * context would otherwise grow with every mailpiece.
  */
 export function analyzeViaAgent(
   imagePath: string,
   visionAgent: string,
+  sessionKey?: string,
 ): AnalysisResult {
   const agentMediaDir = getAgentMediaDir(visionAgent);
   mkdirSync(agentMediaDir, { recursive: true });
@@ -74,6 +78,7 @@ export function analyzeViaAgent(
         "agent",
         "--agent",
         visionAgent,
+        ...(sessionKey ? ["--session-key", sessionKey] : []),
         "--json",
         "--timeout",
         "90",
