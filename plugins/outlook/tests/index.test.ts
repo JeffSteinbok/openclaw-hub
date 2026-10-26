@@ -50,7 +50,7 @@ const EVENTS = JSON.stringify({
     start: { dateTime: "2026-05-03T17:00:00Z", timeZone: "UTC" },
     end: { dateTime: "2026-05-03T17:30:00Z", timeZone: "UTC" },
     location: { displayName: "Zoom" },
-    organizer: { emailAddress: { name: "Jeff", address: "jeff@test.com" } },
+    organizer: { emailAddress: { name: "Alice", address: "alice@example.com" } },
     attendees: [], responseStatus: { response: "accepted" }, showAs: "busy",
     body: { contentType: "html", content: "<div>Agenda item</div>" },
   }],
@@ -178,12 +178,12 @@ describe("outlook_send", () => {
     mockHttpsSeq([TOKEN, 200], [JSON.stringify({ id: "draft-1" }), 201], ["", 202]);
     const { api } = await loadPlugin();
     const data = resultText(await api.tools["outlook_send"].execute("id", {
-      to: "octo@steinbok.net",
+      to: "assistant@example.com",
       subject: "Test",
       body: "Hello",
     })) as Record<string, unknown>;
     expect(data.ok).toBe(true);
-    expect(data.message).toContain("octo@steinbok.net");
+    expect(data.message).toContain("assistant@example.com");
   });
 });
 
@@ -277,7 +277,7 @@ describe("outlook_meeting", () => {
     mockHttpsSeq([TOKEN, 200], [CREATED, 201]);
     const { api } = await loadPlugin();
     const data = resultText(await api.tools["outlook_meeting"].execute("id", {
-      to: "jeff@steinbok.net",
+      to: "alice@example.com",
       subject: "Team Sync",
       start: "2026-08-01T10:00",
       duration: "30m",

@@ -16,10 +16,10 @@ async function loadTool(config: Record<string, unknown>) {
 const text = (r: unknown) => (r as { details: unknown }).details as Record<string, unknown>;
 
 const accessGroups = {
-  jeff: { type: "message.senders", members: { discord: ["111111111111111111"] } },
-  nicole: { type: "message.senders", members: { imessage: ["+14255550199"] } },
+  alice: { type: "message.senders", members: { discord: ["111111111111111111"] } },
+  bob: { type: "message.senders", members: { imessage: ["+14255550199"] } },
 };
-const ACCESS = { calendars: { work: { read: [{ agent: "main" }, { sender: "jeff" }, { sender: "nicole" }] } } };
+const ACCESS = { calendars: { work: { read: [{ agent: "main" }, { sender: "alice" }, { sender: "bob" }] } } };
 
 describe("outlook_work_calendar_fetch access control", () => {
   it("denies other agents on senderless turns without calling EWS", async () => {

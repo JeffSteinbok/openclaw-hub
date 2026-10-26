@@ -64,7 +64,7 @@ export const createEntry = definePlugin({
       parameters: Type.Object({
         node: Type.String({
           description:
-            'Node id, name, or IP of the paired node (e.g. "Windows Node (JEFFOFFICE3)")',
+            'Node id, name, or IP of the paired node (e.g. "Windows Node (OFFICE-PC)")',
         }),
         screenIndex: Type.Optional(
           Type.Number({

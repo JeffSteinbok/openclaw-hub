@@ -59,15 +59,15 @@ describe("screenshotCapture", () => {
     mockInvokeSuccess({ base64: TINY_PNG_BASE64, width: 1, height: 1 });
 
     const result = await screenshotCapture(config, {
-      node: "Windows Node (JEFFOFFICE3)",
+      node: "Windows Node (OFFICE-PC)",
     });
 
     expect(result).not.toHaveProperty("error");
     const r = result as { file: string; size_bytes: number; format: string; node: string };
-    expect(r.file).toMatch(/windowsnodejeffoffice3_\d+_[0-9a-f]{8}\.png$/);
+    expect(r.file).toMatch(/windowsnodeoffice-pc_\d+_[0-9a-f]{8}\.png$/);
     expect(r.size_bytes).toBeGreaterThan(0);
     expect(r.format).toBe("png");
-    expect(r.node).toBe("Windows Node (JEFFOFFICE3)");
+    expect(r.node).toBe("Windows Node (OFFICE-PC)");
     expect(fs.existsSync(r.file)).toBe(true);
   });
 
@@ -167,7 +167,7 @@ describe("screenshotCapture", () => {
 
     const cfgWithAuth: ScreenshotConfig = {
       ...config,
-      gatewayUrl: "ws://192.168.1.18:18789",
+      gatewayUrl: "ws://192.0.2.10:18789",
       gatewayToken: "secret123",
     };
 
@@ -175,7 +175,7 @@ describe("screenshotCapture", () => {
 
     const args = mockExecFile.mock.calls[0][1] as string[];
     expect(args).toContain("--url");
-    expect(args).toContain("ws://192.168.1.18:18789");
+    expect(args).toContain("ws://192.0.2.10:18789");
     expect(args).toContain("--token");
     expect(args).toContain("secret123");
   });

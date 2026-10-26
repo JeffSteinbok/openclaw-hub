@@ -29,7 +29,7 @@ Use Home Assistant as the control plane for the house. This plugin lets the agen
 
 ```json
 {
-  "server": "http://192.168.1.123:8123",
+  "server": "http://homeassistant.local:8123",
   "token": "your_long_lived_access_token"
 }
 ```
@@ -50,7 +50,7 @@ Set credentials in `plugins.entries["homeassistant"].config`:
       "homeassistant": {
         "enabled": true,
         "config": {
-          "server": "http://192.168.1.123:8123",
+          "server": "http://homeassistant.local:8123",
           "token": "your_long_lived_access_token"
         }
       }
