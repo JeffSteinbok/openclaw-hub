@@ -191,6 +191,7 @@ describe("plugin entry", () => {
       "hass_logbook",
       "hass_lovelace_get",
       "hass_lovelace_set",
+      "hass_notify",
       "hass_person_find",
       "hass_script_get",
       "hass_script_list",
@@ -757,6 +758,151 @@ describe("hass_speaker_volume_set", () => {
       volume_level: 0.7,
     });
     expect(capturedUrl).toContain("/api/services/media_player/volume_set");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hass_notify
+// ---------------------------------------------------------------------------
+
+describe("hass_notify", () => {
+  const NOTIFY_CONFIG = {
+    token: "secret-token",
+    notifyTargets: {
+      alex: { service: "mobile_app_alex_iphone", description: "Alex's iPhone" },
+      family: { service: "family_phones" },
+    },
+  };
+
+  function noHttp() {
+    return vi.spyOn(http, "request").mockImplementation(() => {
+      throw new Error("Unexpected HTTP request");
+    });
+  }
+
+  it("sends to an allowed target with title, url, and interruption level in data", async () => {
+    const { api } = await loadPlugin(NOTIFY_CONFIG);
+    let seen: { url: string; method: string; body: string } | undefined;
+    mockHttpSequence([{ body: "[]", inspect: (r) => { seen = r; } }]);
+
+    const data = resultText(await api.tools["hass_notify"].execute("id", {
+      target: "alex",
+      message: "Dinner is ready",
+      title: "Kitchen",
+      url: "hassonic://assistant",
+      interruptionLevel: "time-sensitive",
+    }));
+    expect(data).toEqual({ ok: true, target: "alex" });
+    expect(seen?.method).toBe("POST");
+    expect(seen?.url).toBe("http://ha.example.test:8123/api/services/notify/mobile_app_alex_iphone");
+    expect(JSON.parse(seen!.body)).toEqual({
+      message: "Dinner is ready",
+      title: "Kitchen",
+      data: { url: "hassonic://assistant", push: { "interruption-level": "time-sensitive" } },
+    });
+  });
+
+  it("sends only the message when no optional fields are given", async () => {
+    const { api } = await loadPlugin(NOTIFY_CONFIG);
+    let body = "";
+    mockHttpSequence([{ body: "[]", inspect: (r) => { body = r.body; } }]);
+
+    const data = resultText(await api.tools["hass_notify"].execute("id", { target: "family", message: "Hi" }));
+    expect(data).toEqual({ ok: true, target: "family" });
+    expect(JSON.parse(body)).toEqual({ message: "Hi" });
+  });
+
+  it("rejects an unknown target without calling Home Assistant", async () => {
+    const { api } = await loadPlugin(NOTIFY_CONFIG);
+    const spy = noHttp();
+    const data = resultText(await api.tools["hass_notify"].execute("id", { target: "mobile_app_alex_iphone", message: "Hi" })) as { error: string };
+    expect(data.error).toContain("Unknown notify target");
+    expect(data.error).toContain("alex, family");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("does not treat inherited object keys as targets", async () => {
+    const { api } = await loadPlugin(NOTIFY_CONFIG);
+    const spy = noHttp();
+    const data = resultText(await api.tools["hass_notify"].execute("id", { target: "constructor", message: "Hi" })) as { error: string };
+    expect(data.error).toContain("Unknown notify target");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("refuses when no targets are configured", async () => {
+    const { api } = await loadPlugin();
+    const spy = noHttp();
+    const data = resultText(await api.tools["hass_notify"].execute("id", { target: "alex", message: "Hi" })) as { error: string };
+    expect(data.error).toContain("No notify targets are configured");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("accepts notifyTargets as a JSON string (CLI env config)", async () => {
+    const { api } = await loadPlugin({ notifyTargets: JSON.stringify(NOTIFY_CONFIG.notifyTargets) });
+    mockHttpSequence([{ body: "[]" }]);
+    const data = resultText(await api.tools["hass_notify"].execute("id", { target: "alex", message: "Hi" }));
+    expect(data).toEqual({ ok: true, target: "alex" });
+  });
+
+  it("rejects critical and other unknown interruption levels", async () => {
+    const { api } = await loadPlugin(NOTIFY_CONFIG);
+    const spy = noHttp();
+    for (const interruptionLevel of ["critical", "loud"]) {
+      const data = resultText(await api.tools["hass_notify"].execute("id", { target: "alex", message: "Hi", interruptionLevel })) as { error: string };
+      expect(data.error).toContain("interruptionLevel must be one of: passive, active, time-sensitive");
+    }
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("rejects URL schemes that are not allowed", async () => {
+    const { api } = await loadPlugin(NOTIFY_CONFIG);
+    const spy = noHttp();
+    for (const url of ["https://example.com", "javascript:alert(1)", "not a url"]) {
+      const data = resultText(await api.tools["hass_notify"].execute("id", { target: "alex", message: "Hi", url })) as { error: string };
+      expect(data.error).toMatch(/not allowed|not a valid URL/);
+    }
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("accepts schemes from notifyUrlSchemes instead of the default", async () => {
+    const { api } = await loadPlugin({ ...NOTIFY_CONFIG, notifyUrlSchemes: ["https"] });
+    mockHttpSequence([{ body: "[]" }]);
+    const ok = resultText(await api.tools["hass_notify"].execute("id", { target: "alex", message: "Hi", url: "https://example.com" }));
+    expect(ok).toEqual({ ok: true, target: "alex" });
+    const data = resultText(await api.tools["hass_notify"].execute("id", { target: "alex", message: "Hi", url: "hassonic://x" })) as { error: string };
+    expect(data.error).toContain("not allowed");
+  });
+
+  it("rejects an empty message and over-long title or message", async () => {
+    const { api } = await loadPlugin(NOTIFY_CONFIG);
+    const spy = noHttp();
+    const run = async (params: Record<string, unknown>) =>
+      (resultText(await api.tools["hass_notify"].execute("id", { target: "alex", ...params })) as { error: string }).error;
+    expect(await run({ message: "  " })).toContain("message is required");
+    expect(await run({ message: "x".repeat(1001) })).toContain("message is too long");
+    expect(await run({ message: "Hi", title: "x".repeat(101) })).toContain("title is too long");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("reports an HTTP error from Home Assistant without the token or server", async () => {
+    const { api } = await loadPlugin(NOTIFY_CONFIG);
+    mockHttp("Service not found", 400);
+    const data = resultText(await api.tools["hass_notify"].execute("id", { target: "alex", message: "Hi" })) as { error: string };
+    expect(data.error).toContain('Notification to "alex" failed: HTTP 400');
+    expect(data.error).not.toContain("secret-token");
+    expect(data.error).not.toContain("ha.example.test");
+  });
+
+  it("redacts the server host from network errors", async () => {
+    const { api } = await loadPlugin(NOTIFY_CONFIG);
+    const { req } = makeMockHttpRequest("");
+    vi.spyOn(http, "request").mockImplementationOnce(() => {
+      setTimeout(() => req.emit("error", new Error("getaddrinfo ENOTFOUND ha.example.test")), 0);
+      return req as unknown as ReturnType<typeof http.request>;
+    });
+    const data = resultText(await api.tools["hass_notify"].execute("id", { target: "alex", message: "Hi" })) as { error: string };
+    expect(data.error).toContain("ENOTFOUND <home-assistant>");
+    expect(data.error).not.toContain("ha.example.test");
   });
 });
 

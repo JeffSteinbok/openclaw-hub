@@ -12,6 +12,8 @@ import {
   configList, configGet, configSet,
   speakerVolumeGet, speakerVolumeSet, logbook, cameraList,
   cameraSnapshotHandler, cameraCollageHandler,
+  notify, parseNotifyTargets, parseNotifyUrlSchemes,
+  NOTIFY_INTERRUPTION_LEVELS, NOTIFY_MESSAGE_MAX, NOTIFY_TITLE_MAX,
 } from "./handlers.js";
 
 const CAPTURE_DIR = "/tmp/openclaw/camera_captures";
@@ -43,6 +45,21 @@ export const createEntry = definePlugin({
     ),
     token: Type.Optional(
       Type.String({ description: "Home Assistant long-lived access token" }),
+    ),
+    notifyTargets: Type.Optional(
+      Type.Record(
+        Type.String(),
+        Type.Object({
+          service: Type.String({ description: "Notify service name after `notify.` (e.g. mobile_app_alex_iphone or a notify group)." }),
+          description: Type.Optional(Type.String({ description: "Who or what this target reaches (shown to the agent)." })),
+        }),
+        { description: "Targets hass_notify may send to, keyed by the friendly name the agent uses. With none, hass_notify refuses." },
+      ),
+    ),
+    notifyUrlSchemes: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "URL schemes hass_notify accepts for its tap-to-open url (default: [\"hassonic\"]).",
+      }),
     ),
   }),
 
@@ -130,6 +147,45 @@ export const createEntry = definePlugin({
             service: String(service ?? ""),
             entity_id,
             data,
+          });
+        } catch (e) {
+          return { error: (e as Error).message };
+        }
+      },
+    }),
+
+    tool({
+      name: "hass_notify",
+      label: "HA Notify",
+      description:
+        "Send a phone notification to one of the configured notify targets (a person or group) through Home Assistant. " +
+        "target must be one of the configured names; nothing else can be notified.",
+      parameters: Type.Object({
+        target: Type.String({ description: "Configured notify target name (e.g. alex, family)." }),
+        message: Type.String({ description: `Notification body (max ${NOTIFY_MESSAGE_MAX} characters).` }),
+        title: Type.Optional(Type.String({ description: `Notification title (max ${NOTIFY_TITLE_MAX} characters).` })),
+        url: Type.Optional(Type.String({ description: "Link to open when the notification is tapped (e.g. hassonic://...). Only allowed schemes are accepted." })),
+        interruptionLevel: Type.Optional(Type.Union(
+          NOTIFY_INTERRUPTION_LEVELS.map((level) => Type.Literal(level)),
+          { description: "iOS interruption level: passive, active (default), or time-sensitive." },
+        )),
+      }),
+      async execute({ target, message, title, url, interruptionLevel }, config) {
+        try {
+          const resolvedConfig: HomeAssistantConfig = {
+            server: requireServer(config.server),
+            token: config.token ?? "",
+            captureDir: CAPTURE_DIR,
+          };
+          return await notify(resolvedConfig, {
+            target: String(target ?? ""),
+            message: String(message ?? ""),
+            title: title === undefined ? undefined : String(title),
+            url: url === undefined ? undefined : String(url),
+            interruptionLevel: interruptionLevel === undefined ? undefined : String(interruptionLevel),
+          }, {
+            targets: parseNotifyTargets(config.notifyTargets),
+            urlSchemes: parseNotifyUrlSchemes(config.notifyUrlSchemes),
           });
         } catch (e) {
           return { error: (e as Error).message };
