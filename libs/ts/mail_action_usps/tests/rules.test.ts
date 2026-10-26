@@ -133,10 +133,10 @@ describe("applyRules", () => {
   });
 
   it("multiple conditions AND", () => {
-    const rules = [{ sender_contains: "acme", addressee_contains: "jeff", importance: "urgent" }];
-    const matchResult = applyRules({ sender: "ACME Corp", addressee: "Jeff Smith" }, rules);
+    const rules = [{ sender_contains: "acme", addressee_contains: "alice", importance: "urgent" }];
+    const matchResult = applyRules({ sender: "ACME Corp", addressee: "Alice Smith" }, rules);
     expect(matchResult.importance).toBe("urgent");
-    const partialResult = applyRules({ sender: "ACME Corp", addressee: "Nicole Smith" }, rules);
+    const partialResult = applyRules({ sender: "ACME Corp", addressee: "Bob Smith" }, rules);
     expect(partialResult.importance).not.toBe("urgent");
   });
 
@@ -269,7 +269,7 @@ describe("listRules", () => {
     saveRules(
       [
         { sender_contains: "acme", importance: "junk", _comment: "Block ACME" },
-        { addressee_equals: "jeff", importance: "high" },
+        { addressee_equals: "alice", importance: "high" },
       ],
       "2.0",
       { rulesPath },

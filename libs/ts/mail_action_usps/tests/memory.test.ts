@@ -156,12 +156,12 @@ describe("writeMemoryForDate", () => {
     const { mocks } = patchPaths(td);
     try {
       const items = [
-        { sender: "ACME", addressee: "Jeff", importance: "high", description: "Invoice" },
+        { sender: "ACME", addressee: "Alice", importance: "high", description: "Invoice" },
       ];
       const result = writeMemoryForDate("2024-01-15", items, "test");
       const content = readFileSync(result, "utf-8");
       expect(content).toContain("ACME");
-      expect(content).toContain("Jeff");
+      expect(content).toContain("Alice");
       expect(content).toContain("2024-01-15");
     } finally {
       cleanupMocks(mocks);
@@ -172,7 +172,7 @@ describe("writeMemoryForDate", () => {
     const td = mkdtempSync(join(tmpdir(), "usps-mem-"));
     const { ltmDir, mocks } = patchPaths(td);
     try {
-      const items = [{ sender: "ACME", addressee: "Jeff", importance: "high" }];
+      const items = [{ sender: "ACME", addressee: "Alice", importance: "high" }];
       writeMemoryForDate("2024-01-15", items, "test");
       writeMemoryForDate("2024-01-15", items, "test");
       const content = readFileSync(join(ltmDir, "mail_memory_2024-01.md"), "utf-8");
@@ -259,11 +259,11 @@ describe("getStats", () => {
     try {
       const data = {
         "2024-01-15": {
-          "img001.jpg": { sender: "ACME", addressee: "Jeff", importance: "high" },
-          "img002.jpg": { sender: "ACME", addressee: "Nicole", importance: "junk" },
+          "img001.jpg": { sender: "ACME", addressee: "Alice", importance: "high" },
+          "img002.jpg": { sender: "ACME", addressee: "Bob", importance: "junk" },
         },
         "2024-01-16": {
-          "img003.jpg": { sender: "IRS", addressee: "Jeff", importance: "urgent" },
+          "img003.jpg": { sender: "IRS", addressee: "Alice", importance: "urgent" },
         },
       };
       saveAnalysis(data, "test");
@@ -273,7 +273,7 @@ describe("getStats", () => {
       expect(stats.by_importance.high).toBe(1);
       expect(stats.by_importance.junk).toBe(1);
       expect(stats.top_senders.ACME).toBe(2);
-      expect(stats.top_addressees.Jeff).toBe(2);
+      expect(stats.top_addressees.Alice).toBe(2);
     } finally {
       cleanupMocks(mocks);
     }
