@@ -39,6 +39,16 @@ function getWorkspaceDir(ctx: any): string {
   return dir;
 }
 
+/**
+ * Wraps a plain value in the tool-result shape OpenClaw expects
+ * (`content` for the model, `details` for code mode). Returning the bare
+ * object fails the bridge's schema check with "details.result.content:
+ * expected array, received undefined".
+ */
+function jsonResult(value: unknown) {
+  return { content: [{ type: "text", text: JSON.stringify(value) }], details: value };
+}
+
 export function register(api: any) {
   // -------------------------------------------------------------------------
   // fs_list — directory listing
@@ -77,7 +87,7 @@ export function register(api: any) {
 
         const entries = await listDir(target);
         // Return workspaceDir so callers can construct absolute paths if needed
-        return { path: relPath, workspaceDir, entries };
+        return jsonResult({ path: relPath, workspaceDir, entries });
       },
     };
   });
@@ -116,7 +126,7 @@ export function register(api: any) {
 
         await fs.mkdir(path.dirname(dst), { recursive: true }); // create parent dirs if needed
         await fs.copyFile(src, dst);
-        return { ok: true, source, destination };
+        return jsonResult({ ok: true, source, destination });
       },
     };
   });
@@ -155,7 +165,7 @@ export function register(api: any) {
 
         await fs.mkdir(path.dirname(dst), { recursive: true }); // create parent dirs if needed
         await fs.rename(src, dst); // atomic on same filesystem; cross-device will throw
-        return { ok: true, source, destination };
+        return jsonResult({ ok: true, source, destination });
       },
     };
   });

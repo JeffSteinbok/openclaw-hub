@@ -722,7 +722,8 @@ export async function cameraCollageHandler(config: HomeAssistantConfig, params: 
     await execFileAsync("ffmpeg", args, { timeout: 30_000 });
   } catch (e: unknown) {
     const err = e as { stderr?: string; message?: string };
-    return { error: "ffmpeg error", detail: (err.stderr ?? err.message ?? String(e)).slice(-500) };
+    // stderr is "" when ffmpeg never started (e.g. ENOENT), so fall through to the message
+    return { error: "ffmpeg error", detail: (err.stderr || err.message || String(e)).slice(-500) };
   }
 
   const sizeKb = Math.round(fs.statSync(outPath).size / 1024);
