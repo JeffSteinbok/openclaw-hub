@@ -692,37 +692,53 @@ export async function cameraCollageHandler(config: HomeAssistantConfig, params: 
   const cols = Math.ceil(Math.sqrt(n));
   const scaleW = 640, scaleH = 360;
 
-  const filterParts: string[] = [];
-  for (let i = 0; i < n; i++) {
-    const [camName] = snapshots[i];
-    let f = `[${i}:v]scale=${scaleW}:${scaleH}:force_original_aspect_ratio=decrease,pad=${scaleW}:${scaleH}:(ow-iw)/2:(oh-ih)/2`;
-    if (drawLabel) {
-      f += `,drawtext=text='${camName}':fontsize=18:fontcolor=white:x=10:y=h-th-10:box=1:boxcolor=black@0.5:boxborderw=4`;
+  const buildFilter = (withLabels: boolean): string => {
+    const filterParts: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const [camName] = snapshots[i];
+      let f = `[${i}:v]scale=${scaleW}:${scaleH}:force_original_aspect_ratio=decrease,pad=${scaleW}:${scaleH}:(ow-iw)/2:(oh-ih)/2`;
+      if (withLabels) {
+        f += `,drawtext=text='${camName}':fontsize=18:fontcolor=white:x=10:y=h-th-10:box=1:boxcolor=black@0.5:boxborderw=4`;
+      }
+      f += `[v${i}]`;
+      filterParts.push(f);
     }
-    f += `[v${i}]`;
-    filterParts.push(f);
-  }
 
-  const layout = Array.from({ length: n }, (_, i) => {
-    const row = Math.floor(i / cols), col = i % cols;
-    return `${col > 0 ? col * scaleW : 0}_${row > 0 ? row * scaleH : 0}`;
-  }).join("|");
+    const layout = Array.from({ length: n }, (_, i) => {
+      const row = Math.floor(i / cols), col = i % cols;
+      return `${col > 0 ? col * scaleW : 0}_${row > 0 ? row * scaleH : 0}`;
+    }).join("|");
 
-  filterParts.push(`${Array.from({ length: n }, (_, i) => `[v${i}]`).join("")}xstack=inputs=${n}:layout=${layout}[out]`);
+    filterParts.push(`${Array.from({ length: n }, (_, i) => `[v${i}]`).join("")}xstack=inputs=${n}:layout=${layout}[out]`);
+    return filterParts.join(";");
+  };
 
   const ts = new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);
   fs.mkdirSync(captureDir, { recursive: true });
   const outPath = path.join(captureDir, `collage_${ts}.jpg`);
 
-  const args = ["-y"];
-  for (const [, file] of snapshots) args.push("-i", file);
-  args.push("-filter_complex", filterParts.join(";"), "-map", "[out]", "-frames:v", "1", "-update", "1", "-q:v", "3", outPath);
+  const runFfmpeg = (withLabels: boolean) => {
+    const args = ["-y"];
+    for (const [, file] of snapshots) args.push("-i", file);
+    args.push("-filter_complex", buildFilter(withLabels), "-map", "[out]", "-frames:v", "1", "-update", "1", "-q:v", "3", outPath);
+    return execFileAsync("ffmpeg", args, { timeout: 30_000 });
+  };
 
+  let labeled = drawLabel;
   try {
-    await execFileAsync("ffmpeg", args, { timeout: 30_000 });
+    try {
+      await runFfmpeg(labeled);
+    } catch (e: unknown) {
+      // Homebrew's ffmpeg is built without freetype, so it has no drawtext filter.
+      // A collage without camera names beats no collage.
+      if (!labeled || !String((e as { stderr?: string }).stderr ?? "").includes("drawtext")) throw e;
+      labeled = false;
+      await runFfmpeg(false);
+    }
   } catch (e: unknown) {
     const err = e as { stderr?: string; message?: string };
-    return { error: "ffmpeg error", detail: (err.stderr ?? err.message ?? String(e)).slice(-500) };
+    // stderr is "" when ffmpeg never started (e.g. ENOENT), so fall through to the message
+    return { error: "ffmpeg error", detail: (err.stderr || err.message || String(e)).slice(-500) };
   }
 
   const sizeKb = Math.round(fs.statSync(outPath).size / 1024);
@@ -730,6 +746,7 @@ export async function cameraCollageHandler(config: HomeAssistantConfig, params: 
     file: outPath,
     cameras: snapshots.map(([n]) => n),
     size_kb: sizeKb,
+    ...(drawLabel && !labeled ? { note: "labels skipped: this ffmpeg has no drawtext filter" } : {}),
     ...(failed.length ? { failed } : {}),
   };
 }

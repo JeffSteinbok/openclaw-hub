@@ -37,8 +37,9 @@ describe("fs-utils", () => {
     await fs.writeFile(path.join(ws, "a.txt"), "a");
     await fs.mkdir(path.join(ws, "sub"));
     const [list] = collectTools({ workspaceDir: ws });
-    const res = (await list.execute({ path: "." })) as { entries: string[] };
-    expect(res.entries.sort()).toEqual(["a.txt", "sub/"]);
+    const res = (await list.execute({ path: "." })) as { content: unknown[]; details: { entries: string[] } };
+    expect(res.content).toEqual([{ type: "text", text: expect.stringContaining('"entries"') }]);
+    expect(res.details.entries.sort()).toEqual(["a.txt", "sub/"]);
   });
 
   it("copies a file and refuses to clobber without overwrite", async () => {
