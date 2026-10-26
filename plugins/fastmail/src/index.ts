@@ -193,6 +193,11 @@ export const createEntry = definePlugin({
         cc: Type.Optional(
           Type.Array(Type.String(), { description: "CC recipient email address(es)" }),
         ),
+        end: Type.Optional(
+          Type.String({
+            description: "End datetime in ISO format (e.g. 2026-03-15T15:30). Overrides duration.",
+          }),
+        ),
         duration: Type.Optional(
           Type.String({ description: "Duration: '1h', '30m', '1.5h' (default: 1h)" }),
         ),
@@ -205,7 +210,7 @@ export const createEntry = definePlugin({
           Type.String({ description: "Signature block for the invite email" }),
         ),
       }),
-      async execute({ to, cc, subject, start, duration, location, description, timezone, signature }, config) {
+      async execute({ to, cc, subject, start, end, duration, location, description, timezone, signature }, config) {
         try {
           const resolvedConfig = resolveConfig({
             ...config,
@@ -216,6 +221,7 @@ export const createEntry = definePlugin({
             cc,
             subject,
             start,
+            end,
             duration,
             location,
             description,

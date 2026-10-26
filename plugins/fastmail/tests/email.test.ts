@@ -160,6 +160,39 @@ describe("cmdMeeting()", () => {
     expect(output).toContain("UID:");
   });
 
+  it("uses an explicit end instead of the 1h default", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      text: () => Promise.resolve(""),
+      headers: new Map([["etag", '"abc"']]),
+    });
+
+    const { cmdMeeting } = await import("../src/email.js");
+    await cmdMeeting(makeCfg(), {
+      to: "attendee@example.com",
+      subject: "Long Review",
+      start: "2026-03-20T10:00:00",
+      end: "2026-03-20T11:30:00",
+      timezone: "America/Los_Angeles",
+    });
+
+    const body = String(mockFetch.mock.calls.at(-1)?.[1]?.body ?? "");
+    expect(body).toContain("DTEND;TZID=America/Los_Angeles:20260320T113000");
+  });
+
+  it("rejects an end before the start", async () => {
+    const { cmdMeeting } = await import("../src/email.js");
+    await expect(
+      cmdMeeting(makeCfg(), {
+        to: "a@example.com",
+        subject: "Test",
+        start: "2026-03-20T10:00:00",
+        end: "2026-03-20T09:00:00",
+      }),
+    ).rejects.toThrow("must be after start");
+  });
+
   it("errors when CalDAV not configured", async () => {
     const { cmdMeeting } = await import("../src/email.js");
     await expect(

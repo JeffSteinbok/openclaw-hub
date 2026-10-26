@@ -119,6 +119,7 @@ Send email and manage calendar events in Fastmail via JMAP and CalDAV.
 | `subject` | string | Yes | Meeting title |
 | `start` | string | Yes | Start time (ISO 8601) |
 | `cc` | array | No | Additional attendees |
+| `end` | string | No | End datetime (ISO). Overrides `duration` |
 | `duration` | string | No | Duration (e.g. "1h", "30m") |
 | `location` | string | No | Meeting location |
 | `description` | string | No | Meeting description |
