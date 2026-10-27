@@ -776,10 +776,75 @@ export async function cameraSnapshotHandler(config: HomeAssistantConfig, params:
   return { error: `Snapshot failed for camera '${name}'` };
 }
 
-export async function cameraCollageHandler(config: HomeAssistantConfig, params: { camera_names?: string[]; label?: boolean }): Promise<unknown> {
+/** Folders a collage keyframe may come from: OpenClaw's media store and the capture dir. */
+export function keyframeAllowed(file: string, captureDir: string, home = process.env.HOME ?? ""): boolean {
+  const real = (() => {
+    try {
+      return fs.realpathSync(file);
+    } catch {
+      return "";
+    }
+  })();
+  if (!real) return false;
+  const roots = [captureDir, home && path.join(home, ".openclaw", "media")].filter(Boolean).map((r) => {
+    try {
+      return fs.realpathSync(r);
+    } catch {
+      return path.resolve(r);
+    }
+  });
+  return roots.some((r) => real === r || real.startsWith(r + path.sep));
+}
+
+/**
+ * ffmpeg filter for a grid of `names` (inputs 0..n-1), optionally with input n
+ * (the keyframe) scaled to the grid's width and stacked on top.
+ */
+export function buildCollageFilter(names: string[], opts: { labels: boolean; keyframe: boolean }): string {
+  const n = names.length;
+  const cols = Math.ceil(Math.sqrt(n));
+  const scaleW = 640, scaleH = 360;
+  const parts: string[] = [];
+  for (let i = 0; i < n; i++) {
+    let f = `[${i}:v]scale=${scaleW}:${scaleH}:force_original_aspect_ratio=decrease,pad=${scaleW}:${scaleH}:(ow-iw)/2:(oh-ih)/2`;
+    if (opts.labels) {
+      f += `,drawtext=text='${names[i]}':fontsize=18:fontcolor=white:x=10:y=h-th-10:box=1:boxcolor=black@0.5:boxborderw=4`;
+    }
+    parts.push(`${f}[v${i}]`);
+  }
+  const gridOut = opts.keyframe ? "grid" : "out";
+  if (n === 1) {
+    parts.push(`[v0]null[${gridOut}]`);
+  } else {
+    const layout = Array.from({ length: n }, (_, i) => {
+      const row = Math.floor(i / cols), col = i % cols;
+      return `${col > 0 ? col * scaleW : 0}_${row > 0 ? row * scaleH : 0}`;
+    }).join("|");
+    // Pad the grid to full rows so the keyframe above lines up with it.
+    const rows = Math.ceil(n / cols);
+    const fill = n % cols === 0 ? "" : `:fill=black`;
+    parts.push(`${Array.from({ length: n }, (_, i) => `[v${i}]`).join("")}xstack=inputs=${n}:layout=${layout}${fill},pad=${cols * scaleW}:${rows * scaleH}[${gridOut}]`);
+  }
+  if (opts.keyframe) {
+    const width = n === 1 ? scaleW : cols * scaleW;
+    parts.push(`[${n}:v]scale=${width}:-2[key]`);
+    parts.push(`[key][grid]vstack=inputs=2[out]`);
+  }
+  return parts.join(";");
+}
+
+export async function cameraCollageHandler(
+  config: HomeAssistantConfig,
+  params: { camera_names?: string[]; label?: boolean; keyframe?: string },
+): Promise<unknown> {
   const { server, token, captureDir } = config;
   const requestedNames = params.camera_names ?? DEFAULT_COLLAGE_CAMERAS;
-  const drawLabel = params.label !== false;
+  // The cameras stamp their own name and time on each frame, so labels are opt-in.
+  const drawLabel = params.label === true;
+  const keyframe = params.keyframe?.trim() || undefined;
+  if (keyframe && !keyframeAllowed(keyframe, captureDir)) {
+    return { error: "keyframe must be an existing image under ~/.openclaw/media or the capture folder" };
+  }
 
   const unknown = requestedNames.filter((n) => !(n in CAMERAS));
   if (unknown.length) return { error: `Unknown cameras: ${unknown}`, available: Object.keys(CAMERAS) };
@@ -797,30 +862,8 @@ export async function cameraCollageHandler(config: HomeAssistantConfig, params: 
   const { promisify } = await import("node:util");
   const execFileAsync = promisify(execFile);
 
-  const n = snapshots.length;
-  const cols = Math.ceil(Math.sqrt(n));
-  const scaleW = 640, scaleH = 360;
-
-  const buildFilter = (withLabels: boolean): string => {
-    const filterParts: string[] = [];
-    for (let i = 0; i < n; i++) {
-      const [camName] = snapshots[i];
-      let f = `[${i}:v]scale=${scaleW}:${scaleH}:force_original_aspect_ratio=decrease,pad=${scaleW}:${scaleH}:(ow-iw)/2:(oh-ih)/2`;
-      if (withLabels) {
-        f += `,drawtext=text='${camName}':fontsize=18:fontcolor=white:x=10:y=h-th-10:box=1:boxcolor=black@0.5:boxborderw=4`;
-      }
-      f += `[v${i}]`;
-      filterParts.push(f);
-    }
-
-    const layout = Array.from({ length: n }, (_, i) => {
-      const row = Math.floor(i / cols), col = i % cols;
-      return `${col > 0 ? col * scaleW : 0}_${row > 0 ? row * scaleH : 0}`;
-    }).join("|");
-
-    filterParts.push(`${Array.from({ length: n }, (_, i) => `[v${i}]`).join("")}xstack=inputs=${n}:layout=${layout}[out]`);
-    return filterParts.join(";");
-  };
+  const names = snapshots.map(([name]) => name);
+  const buildFilter = (withLabels: boolean): string => buildCollageFilter(names, { labels: withLabels, keyframe: Boolean(keyframe) });
 
   const ts = new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);
   fs.mkdirSync(captureDir, { recursive: true });
@@ -829,6 +872,7 @@ export async function cameraCollageHandler(config: HomeAssistantConfig, params: 
   const runFfmpeg = (withLabels: boolean) => {
     const args = ["-y"];
     for (const [, file] of snapshots) args.push("-i", file);
+    if (keyframe) args.push("-i", keyframe);
     args.push("-filter_complex", buildFilter(withLabels), "-map", "[out]", "-frames:v", "1", "-update", "1", "-q:v", "3", outPath);
     return execFileAsync("ffmpeg", args, { timeout: 30_000 });
   };
@@ -854,6 +898,7 @@ export async function cameraCollageHandler(config: HomeAssistantConfig, params: 
   return {
     file: outPath,
     cameras: snapshots.map(([n]) => n),
+    ...(keyframe ? { keyframe } : {}),
     size_kb: sizeKb,
     ...(drawLabel && !labeled ? { note: "labels skipped: this ffmpeg has no drawtext filter" } : {}),
     ...(failed.length ? { failed } : {}),

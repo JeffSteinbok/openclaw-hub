@@ -485,22 +485,23 @@ export const createEntry = definePlugin({
       name: "hass_camera_collage",
       label: "HA Camera Collage",
       description:
-        "Snapshot multiple cameras simultaneously and compose them into a grid collage image. Defaults to all outdoor + garage cameras. Returns a single local file path to the collage image.",
+        "Snapshot multiple cameras simultaneously and compose them into a grid collage image. Defaults to all outdoor + garage cameras. With keyframe, that image goes on top at full width and the grid underneath, so one image shows the moment of an event and every camera now. Returns a single local file path to the collage image.",
       parameters: Type.Object({
         camera_names: Type.Optional(Type.Array(Type.String(), {
           description:
             "List of camera names to include. Defaults to all outdoor + garage cameras: front-doorbell, front-doorbell-package, driveway, backyard-left, backyard-right, garage. Available: living-room, front-doorbell, front-doorbell-package, backyard-right, backyard-left, driveway, family-room, garage.",
         })),
-        label: Type.Optional(Type.Boolean({ description: "Draw camera name labels on each cell (default: true)." })),
+        label: Type.Optional(Type.Boolean({ description: "Draw camera name labels on each cell (default: false; the cameras already stamp their name and time)." })),
+        keyframe: Type.Optional(Type.String({ description: "Local path of an event image (e.g. from llmvision_get_image) to put on top of the grid. Must be under ~/.openclaw/media or the capture folder." })),
       }),
-      async execute({ camera_names, label }, config) {
+      async execute({ camera_names, label, keyframe }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
             captureDir: CAPTURE_DIR,
           };
-          return await cameraCollageHandler(resolvedConfig, { camera_names, label });
+          return await cameraCollageHandler(resolvedConfig, { camera_names, label, keyframe });
         } catch (e) {
           return { error: (e as Error).message };
         }

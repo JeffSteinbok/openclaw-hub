@@ -22,6 +22,7 @@ Use Home Assistant as the control plane for the house. This plugin lets the agen
 | `hass_person_find` | Find a person by name or entity ID |
 | `hass_speaker_volume_get` | Get the volume level of one speaker or all speakers |
 | `hass_speaker_volume_set` | Set the volume level of a speaker |
+| `hass_camera_collage` | Snapshot several cameras (default: all outdoor + garage) into one grid image. With `keyframe` (a local event image under `~/.openclaw/media` or the capture folder), that image goes on top at full width and the grid underneath. `label: true` adds camera names; off by default, since the cameras stamp their own name and time |
 | `hass_camera_list` | List available Home Assistant cameras |
 | `hass_camera_snapshot` | Take a snapshot from a Home Assistant camera |
 | `hass_logbook` | Get Home Assistant logbook entries with optional filters |
