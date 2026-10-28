@@ -224,3 +224,69 @@ describe("cmdQueryEvents()", () => {
     ).rejects.toThrow("CalDAV");
   });
 });
+
+describe("custom headers", () => {
+  it("validates and encodes", async () => {
+    const { validateCustomHeaders } = await import("../src/email.js");
+    expect(validateCustomHeaders({ "X-Octo-Source": "usps", "Reply-To": "jeff@example.com" })).toEqual([
+      ["X-Octo-Source", "usps"],
+      ["Reply-To", "jeff@example.com"],
+    ]);
+    expect(validateCustomHeaders({ "X-Note": "café" })[0][1]).toBe("=?UTF-8?B?Y2Fmw6k=?=");
+    expect(validateCustomHeaders(undefined)).toEqual([]);
+  });
+
+  it("refuses reserved, malformed, injected and oversized headers", async () => {
+    const { validateCustomHeaders } = await import("../src/email.js");
+    for (const name of ["From", "bcc", "Subject", "Message-ID", "Content-Type", "Content-Foo", "DKIM-Signature", "Return-Path"]) {
+      expect(() => validateCustomHeaders({ [name]: "x" })).toThrow(/can't be set/);
+    }
+    expect(() => validateCustomHeaders({ "Bad Name": "x" })).toThrow(/Invalid header name/);
+    expect(() => validateCustomHeaders({ "X-A:": "x" })).toThrow(/Invalid header name/);
+    expect(() => validateCustomHeaders({ "X-A": "ok\r\nBcc: evil@example.com" })).toThrow(/line break/);
+    expect(() => validateCustomHeaders({ "Reply-To": "Jéff <j@example.com>" })).toThrow(/plain ASCII/);
+    expect(() => validateCustomHeaders({ "X-A": "x".repeat(1000) })).toThrow(/too long/);
+    expect(() => validateCustomHeaders({ "X-A": "1", "x-a": "2" })).toThrow(/Duplicate/);
+    const many = Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`X-H${i}`, "v"]));
+    expect(() => validateCustomHeaders(many)).toThrow(/At most 20/);
+  });
+
+  it("sets them as raw JMAP header properties on a plain send", async () => {
+    mockFetch.mockResolvedValueOnce(makeJmapOk());
+    const { cmdSend } = await import("../src/email.js");
+    await cmdSend(makeCfg(), { to: "r@example.com", subject: "S", body: "B", headers: { "X-Octo-Source": "test", "Reply-To": "jeff@example.com" } });
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const email = body.methodCalls[0][1].create.e;
+    expect(email["header:X-Octo-Source:asRaw"]).toBe(" test");
+    expect(email["header:Reply-To:asRaw"]).toBe(" jeff@example.com");
+  });
+
+  it("refuses bad headers before sending anything", async () => {
+    const { cmdSend } = await import("../src/email.js");
+    await expect(cmdSend(makeCfg(), { to: "r@example.com", subject: "S", body: "B", headers: { Bcc: "x@example.com" } })).rejects.toThrow(/can't be set/);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("custom headers with attachments", () => {
+  it("writes them into the MIME message", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "fm-"));
+    const file = join(dir, "note.txt");
+    writeFileSync(file, "hello");
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ blobId: "b1" }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ methodResponses: [["Email/import", { created: { m: { id: "x" } } }, "import"], ["EmailSubmission/set", { created: { s: {} } }, "submit"]] }),
+      });
+    const { cmdSend } = await import("../src/email.js");
+    await cmdSend(makeCfg(), { to: "r@example.com", subject: "S", body: "B", attachment: [file], headers: { "X-Octo-Source": "test" } });
+    const mime = String(mockFetch.mock.calls[0][1].body);
+    const head = mime.split("\r\n\r\n")[0];
+    expect(head).toContain("\r\nX-Octo-Source: test\r\n");
+    expect(head.indexOf("X-Octo-Source")).toBeLessThan(head.indexOf("MIME-Version"));
+  });
+});

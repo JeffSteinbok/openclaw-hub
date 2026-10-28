@@ -8,7 +8,7 @@ Send email and manage calendar events in Fastmail via JMAP and CalDAV.
 
 | Tool | Description |
 |------|-------------|
-| [`fastmail_send`](#tool-fastmail_send) | Send a plain-text email with optional attachments |
+| [`fastmail_send`](#tool-fastmail_send) | Send a plain-text or HTML email, with optional attachments, threading and custom headers |
 | [`fastmail_search`](#tool-fastmail_search) | Search emails by keyword, sender, subject, or date range |
 | [`fastmail_read`](#tool-fastmail_read) | Read a specific email by JMAP ID |
 | [`fastmail_inbox`](#tool-fastmail_inbox) | Show recent inbox emails, optionally filtered to unread |
@@ -68,12 +68,28 @@ Send email and manage calendar events in Fastmail via JMAP and CalDAV.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `to` | string | Yes | Recipient email address |
+| `to` | string or array | Yes | Recipient address(es) |
 | `subject` | string | Yes | Email subject line |
 | `body` | string | Yes | Plain-text email body |
+| `html_body` | string | No | HTML body; the message is sent as multipart/alternative with both parts |
 | `cc` | array | No | CC recipients |
-| `signature` | string | No | Signature to append |
+| `signature` | string | No | Signature appended after the body |
 | `attachment` | array | No | File paths to attach |
+| `in_reply_to` | string | No | Message-ID being replied to, with angle brackets, for threading |
+| `references` | string | No | Space-separated Message-IDs for the `References` header |
+| `headers` | object | No | Extra headers as `{ "Name": "value" }`, up to 20 (see below) |
+
+**Custom headers.** `headers` sets extra headers such as `Reply-To` or your own `X-` headers:
+
+```json
+{ "headers": { "Reply-To": "owner@example.com", "X-Octo-Source": "usps-digest" } }
+```
+
+- Names must be valid header names (printable ASCII, no spaces or colons), each set at most once.
+- Values can't contain line breaks, so a value can't add more headers. Non-ASCII values are RFC 2047 encoded, except in address headers (`Reply-To`, `Resent-*`), which must be plain ASCII.
+- Headers the tool sets itself or that route and authenticate mail are refused: `From`, `To`, `Cc`, `Bcc`, `Subject`, `Date`, `Message-ID`, `In-Reply-To`, `References`, `MIME-Version`, any `Content-*`, `Sender`, `Return-Path`, `Received`, `DKIM-Signature`, `ARC-*`, `Authentication-Results`, `Received-SPF`. Use the tool's own parameters for addressing, subject and threading.
+- A refused header fails the whole send before anything is sent.
+- Plain sends set them through JMAP (`header:<Name>:asRaw`); sends with attachments write them into the MIME message.
 
 <a id="tool-fastmail_search"></a>
 

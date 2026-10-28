@@ -144,6 +144,57 @@ function buildIcalVevent(opts: {
 
 // ── MIME helper ─────────────────────────────────────────────────────────────
 
+// ── Custom headers ───────────────────────────────────────────────────────────
+
+/**
+ * Headers the plugin sets itself, or that identify, route or authenticate a
+ * message. A caller (usually an agent) can't set these through `headers`.
+ */
+const RESERVED_HEADERS = new Set([
+  "from", "to", "cc", "bcc", "subject", "date", "message-id", "in-reply-to", "references",
+  "mime-version", "content-type", "content-transfer-encoding", "content-disposition", "content-id",
+  "sender", "return-path", "received", "dkim-signature", "authentication-results",
+  "arc-seal", "arc-message-signature", "arc-authentication-results", "received-spf",
+]);
+/** Address headers: their values must be plain ASCII (RFC 2047 encoding isn't valid there). */
+const ADDRESS_HEADERS = new Set(["reply-to", "resent-from", "resent-to", "resent-cc", "resent-bcc", "resent-sender"]);
+const MAX_CUSTOM_HEADERS = 20;
+const MAX_HEADER_LINE = 998; // RFC 5322 line limit, name + ": " + value
+
+/**
+ * Check custom headers and return them as [name, value] pairs ready to write.
+ * Throws on a reserved or malformed name, a value with a line break (header
+ * injection), non-ASCII in an address header, or a line over 998 characters.
+ * Other non-ASCII values are RFC 2047 encoded.
+ */
+export function validateCustomHeaders(headers: Record<string, string> | undefined): Array<[string, string]> {
+  if (!headers) return [];
+  const entries = Object.entries(headers);
+  if (entries.length > MAX_CUSTOM_HEADERS) throw new Error(`At most ${MAX_CUSTOM_HEADERS} custom headers`);
+  const seen = new Set<string>();
+  return entries.map(([rawName, rawValue]) => {
+    const name = rawName.trim();
+    // RFC 5322 field-name: printable ASCII except space and colon.
+    if (!/^[!-9;-~]+$/.test(name)) throw new Error(`Invalid header name: ${JSON.stringify(rawName)}`);
+    const lower = name.toLowerCase();
+    if (RESERVED_HEADERS.has(lower) || lower.startsWith("content-")) {
+      throw new Error(`Header ${name} can't be set; use the tool's own parameters for addressing, subject and threading`);
+    }
+    if (seen.has(lower)) throw new Error(`Duplicate header: ${name}`);
+    seen.add(lower);
+    if (typeof rawValue !== "string") throw new Error(`Header ${name} must be a string`);
+    if (/[\r\n\0]/.test(rawValue)) throw new Error(`Header ${name} contains a line break`);
+    let value = rawValue.trim();
+    // eslint-disable-next-line no-control-regex
+    if (/[^\x20-\x7e\t]/.test(value)) {
+      if (ADDRESS_HEADERS.has(lower)) throw new Error(`Header ${name} must be plain ASCII`);
+      value = `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
+    }
+    if (name.length + 2 + value.length > MAX_HEADER_LINE) throw new Error(`Header ${name} is too long`);
+    return [name, value];
+  });
+}
+
 function buildMimeMessage(opts: {
   from: string;
   to: string[];
@@ -153,6 +204,7 @@ function buildMimeMessage(opts: {
   htmlBody?: string;
   inReplyTo?: string;
   references?: string;
+  extraHeaders?: Array<[string, string]>;
   attachments?: Array<{ filename: string; contentType: string; data: Uint8Array }>;
 }): string {
   const outerBoundary = `----=_Part_${randomUUID().replace(/-/g, "")}`;
@@ -182,6 +234,7 @@ function buildMimeMessage(opts: {
     `Message-ID: ${msgId}`,
     ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
     ...(opts.references ? [`References: ${opts.references}`] : []),
+    ...(opts.extraHeaders ?? []).map(([name, value]) => `${name}: ${value}`),
     `MIME-Version: 1.0`,
     `Content-Type: ${topContentType}`,
   ];
@@ -362,9 +415,12 @@ export interface SendArgs {
   attachment?: string[];
   in_reply_to?: string;
   references?: string;
+  /** Extra headers, e.g. { "Reply-To": "...", "X-Octo-Source": "..." }. See validateCustomHeaders. */
+  headers?: Record<string, string>;
 }
 
 export async function cmdSend(cfg: FastmailConfig, args: SendArgs): Promise<string> {
+  const extraHeaders = validateCustomHeaders(args.headers);
   const toList = Array.isArray(args.to) ? args.to : [args.to];
   const ccList = args.cc ?? [];
   const recipients = [...toList, ...ccList];
@@ -405,6 +461,11 @@ export async function cmdSend(cfg: FastmailConfig, args: SendArgs): Promise<stri
     }
     if (args.references) {
       emailObj.references = args.references.split(/\s+/).filter(Boolean);
+    }
+    // JMAP (RFC 8621): the raw form is allowed for any header; its value is
+    // everything after the colon, so it starts with a space.
+    for (const [name, value] of extraHeaders) {
+      emailObj[`header:${name}:asRaw`] = ` ${value}`;
     }
 
     const result = await jmap(cfg.jmapToken, [
@@ -447,6 +508,7 @@ export async function cmdSend(cfg: FastmailConfig, args: SendArgs): Promise<stri
       htmlBody: args.html_body,
       inReplyTo: args.in_reply_to,
       references: args.references,
+      extraHeaders,
       attachments,
     });
 

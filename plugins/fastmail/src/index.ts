@@ -62,8 +62,14 @@ export const createEntry = definePlugin({
         references: Type.Optional(
           Type.String({ description: "Space-separated list of Message-IDs for the full thread References header. Typically: prior References + In-Reply-To." }),
         ),
+        headers: Type.Optional(
+          Type.Record(Type.String(), Type.String(), {
+            description:
+              "Extra headers to set, as { \"Name\": \"value\" }, e.g. { \"Reply-To\": \"jeff@example.com\", \"X-Octo-Source\": \"usps\" }. Up to 20. Values can't contain line breaks. Headers the tool sets itself or that route and authenticate mail (From, To, Cc, Bcc, Subject, Date, Message-ID, In-Reply-To, References, MIME-Version, Content-*, Sender, Return-Path, Received, DKIM/ARC/Authentication-Results) are refused.",
+          }),
+        ),
       }),
-      async execute({ to, subject, body, html_body, cc, signature, attachment, in_reply_to, references }, config) {
+      async execute({ to, subject, body, html_body, cc, signature, attachment, in_reply_to, references, headers }, config) {
         try {
           const resolvedConfig = resolveConfig({
             ...config,
@@ -79,6 +85,7 @@ export const createEntry = definePlugin({
             attachment,
             in_reply_to,
             references,
+            headers,
           });
           return { status: "ok", output };
         } catch (e) {
