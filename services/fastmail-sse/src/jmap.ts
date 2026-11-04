@@ -72,41 +72,75 @@ export async function getJmapSession(
 
 // ── Fetch new emails ─────────────────────────────────────────
 
+const GET_BATCH_SIZE = 50;
+const MAX_CHANGE_PAGES = 20;
+
+export interface NewEmailsResult {
+  emails: JmapEmail[];
+  /**
+   * Server state after the returned changes, or null when the server can no
+   * longer calculate changes from `oldState` (the caller should resync).
+   */
+  newState: string | null;
+}
+
+function methodArgs(
+  response: JmapResponse,
+  label: string,
+): Record<string, unknown> | null {
+  const [name, args] = response.methodResponses[0];
+  if (name !== "error") return args;
+  if (args["type"] === "cannotCalculateChanges") return null;
+  throw new Error(`JMAP ${label} error: ${String(args["type"] ?? "unknown")}`);
+}
+
 export async function fetchNewEmails(
   token: string,
   accountId: string,
   oldState: string,
   inboxIds: string[],
-): Promise<JmapEmail[]> {
-  const result = await jmap(token, [
-    [
-      "Email/changes",
-      { accountId, sinceState: oldState },
-      "changes",
-    ],
-  ]);
+): Promise<NewEmailsResult> {
+  const created: string[] = [];
+  let sinceState = oldState;
+  for (let page = 0; page < MAX_CHANGE_PAGES; page++) {
+    const result = await jmap(token, [
+      [
+        "Email/changes",
+        { accountId, sinceState },
+        "changes",
+      ],
+    ]);
+    const changes = methodArgs(result, "Email/changes");
+    if (changes === null) {
+      log(`warn: cannot calculate changes for ${accountId.slice(0, 8)} since ${oldState}; resyncing`);
+      return { emails: [], newState: null };
+    }
+    created.push(...((changes["created"] as string[]) ?? []));
+    sinceState = changes["newState"] as string;
+    if (!changes["hasMoreChanges"]) break;
+  }
 
-  const changes = result.methodResponses[0][1];
-  const created = (changes["created"] as string[]) ?? [];
-  if (created.length === 0) return [];
+  const emails: JmapEmail[] = [];
+  for (let i = 0; i < created.length; i += GET_BATCH_SIZE) {
+    const getResult = await jmap(token, [
+      [
+        "Email/get",
+        {
+          accountId,
+          ids: created.slice(i, i + GET_BATCH_SIZE),
+          properties: [...EMAIL_PROPS, "mailboxIds"],
+          bodyProperties: ["partId", "type"],
+          fetchTextBodyValues: true,
+          fetchHTMLBodyValues: true,
+          maxBodyValueBytes: 50000,
+        },
+        "get",
+      ],
+    ]);
+    const got = methodArgs(getResult, "Email/get");
+    emails.push(...(((got?.["list"]) as JmapEmail[]) ?? []));
+  }
 
-  const getResult = await jmap(token, [
-    [
-      "Email/get",
-      {
-        accountId,
-        ids: created.slice(0, 20),
-        properties: [...EMAIL_PROPS, "mailboxIds"],
-        bodyProperties: ["partId", "type"],
-        fetchTextBodyValues: true,
-        fetchHTMLBodyValues: true,
-        maxBodyValueBytes: 50000,
-      },
-      "get",
-    ],
-  ]);
-
-  const emails = (getResult.methodResponses[0][1]["list"] as JmapEmail[]) ?? [];
   const monitored = new Set(inboxIds);
   const filtered: JmapEmail[] = [];
 
@@ -122,7 +156,7 @@ export async function fetchNewEmails(
     }
   }
 
-  return filtered;
+  return { emails: filtered, newState: sinceState };
 }
 
 // ── Mark as read ─────────────────────────────────────────────

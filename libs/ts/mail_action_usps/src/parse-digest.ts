@@ -5,6 +5,9 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, extname, basename } from "node:path";
 
+/** Filename shape of USPS inline mailpiece scans, e.g. `1025359682-062.jpg`. */
+export const SCAN_IMAGE_RE = /^\d{10}-\d{3}\.(?:jpe?g|png)$/i;
+
 export interface DigestResult {
   mail_count: number;
   package_count: number;
@@ -94,14 +97,18 @@ export function parseDigestHtml(htmlPath: string): DigestResult {
     has_no_image: false,
   };
 
+  // Counts are wrapped in tags ("You have <span>3</span> mailpiece(s)"), so
+  // match against the text.
+  const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+
   // Extract mail count
-  const mailMatch = html.match(/You have (\d+) mailpiece/);
+  const mailMatch = text.match(/You have (\d+) mailpiece/i);
   if (mailMatch) {
     result.mail_count = parseInt(mailMatch[1], 10);
   }
 
-  // Extract package count
-  const pkgMatch = html.match(/You have (\d+) package/);
+  // Extract package count ("You have 3 mailpiece(s) and 1 inbound package(s)")
+  const pkgMatch = text.match(/You have (?:\d+ mailpiece\S* and )?(\d+) (?:inbound )?package/i);
   if (pkgMatch) {
     result.package_count = parseInt(pkgMatch[1], 10);
   }
@@ -115,10 +122,14 @@ export function parseDigestHtml(htmlPath: string): DigestResult {
     }
   }
 
-  // Extract CID image references (inline mailpiece scans)
-  const cidMatches = html.matchAll(/src="cid:([^"]+)"/g);
-  for (const m of cidMatches) {
-    result.image_cids.push(m[1]);
+  // Extract CID image references (inline mailpiece scans). Ads are inline
+  // too, but tagged with a campaign-* id or named mailer-*/content-*.
+  for (const m of html.matchAll(/<img\b[^>]*>/gi)) {
+    const cid = m[0].match(/src="cid:([^"]+)"/i)?.[1];
+    if (!cid) continue;
+    const id = m[0].match(/\bid="([^"]*)"/i)?.[1] ?? "";
+    if (/campaign/i.test(id) || /^(mailer|content)-/i.test(cid)) continue;
+    result.image_cids.push(cid);
   }
 
   // Extract tracking numbers (USPS format: 20-34 digits)
@@ -179,7 +190,7 @@ export function parseAllDigests(
     const images = dirFiles.filter(
       (f: string) => extname(f) === ".jpg" && !f.startsWith("content-"),
     );
-    const scanImages = images.filter((i: string) => /^\d{10}-\d{3}\.jpg$/.test(i));
+    const scanImages = images.filter((i: string) => SCAN_IMAGE_RE.test(i));
     const adImages = images.filter((i: string) => i.startsWith("mailer-"));
 
     allData[name] = {

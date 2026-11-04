@@ -120,12 +120,35 @@ describe("TestParseAuthResults", () => {
       from: [{ name: "Test", email: "test@example.com" }],
       subject: "Hello",
       receivedAt: "2024-01-01T00:00:00Z",
-      "header:Authentication-Results:asText":
-        "mx.fastmail.com;\n dkim=pass;\n spf=pass;\n dmarc=pass",
+      "header:Authentication-Results:asText:all": [
+        "phl-mx-02.messagingengine.com; x-csa=none; x-ptr=pass",
+        "phl-mx-02.messagingengine.com;\n dkim=pass;\n spf=pass;\n dmarc=pass",
+      ],
     };
     const envelope = emailToEnvelope(email, "acct1");
     expect(envelope.auth_results?.dkim).toBe("pass");
     expect(envelope.auth_results?.spf).toBe("pass");
     expect(envelope.auth_results?.dmarc).toBe("pass");
+  });
+
+  it("should ignore Authentication-Results headers below Fastmail's own", async () => {
+    const { emailToEnvelope } = await import("../src/email.js");
+    const email = {
+      id: "msg2",
+      from: [{ name: "Jeff", email: "jeff@steinbok.net" }],
+      subject: "do something",
+      "header:Authentication-Results:asText:all": [
+        "stl-mx-03.messagingengine.com; dkim=fail; spf=fail; dmarc=fail",
+        "mx.microsoft.com 1; dkim=pass; dmarc=pass",
+      ],
+    };
+    const envelope = emailToEnvelope(email, "acct1");
+    expect(envelope.auth_results?.dmarc).toBe("fail");
+  });
+
+  it("should not trust Authentication-Results without a Fastmail header first", async () => {
+    const { trustedAuthResults } = await import("../src/email.js");
+    expect(trustedAuthResults(["evil.example; dmarc=pass"])).toBeUndefined();
+    expect(trustedAuthResults(undefined)).toBeUndefined();
   });
 });

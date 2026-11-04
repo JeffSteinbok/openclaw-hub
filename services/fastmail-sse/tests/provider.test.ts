@@ -105,3 +105,17 @@ describe("FastmailProviderClient", () => {
     );
   });
 });
+
+describe("attachmentFilename", () => {
+  it("strips sender-supplied paths and de-duplicates names", async () => {
+    const { attachmentFilename } = await import("../src/provider.js");
+    const used = new Set<string>();
+    const att = (filename?: string, contentType = "image/jpeg") =>
+      ({ filename, contentType }) as never;
+    expect(attachmentFilename(att("../../etc/evil.jpg"), null, used)).toBe("evil.jpg");
+    expect(attachmentFilename(att("..\\..\\evil.jpg"), null, used)).toBe("1-evil.jpg");
+    expect(attachmentFilename(att(".."), null, used)).toBeNull();
+    expect(attachmentFilename(att(undefined), "scan-1@usps", used)).toBe("scan-1@usps.jpg");
+    expect(attachmentFilename(att(undefined, "application/pdf"), "x", used)).toBe("x.bin");
+  });
+});

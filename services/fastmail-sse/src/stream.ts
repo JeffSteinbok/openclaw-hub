@@ -162,26 +162,38 @@ export async function stream(
         const oldState = emailStates[acctId];
         if (newEmailState === oldState) continue;
 
+        let nextState = newEmailState;
         if (oldState != null) {
           log(
             `state change [${acctId.slice(0, 8)}]: ${oldState} → ${newEmailState}`,
           );
+          let result;
           try {
-            const emails = await fetchNewEmails(
+            result = await fetchNewEmails(
               token,
               acctId,
               oldState,
               config.inboxIds,
             );
-            const fresh = emails.filter((em) => {
-              if (wasRecentlyProcessed(em.id)) {
-                log(`dedup: skipping already-processed email ${em.id.slice(0, 8)}`);
-                return false;
-              }
-              return true;
-            });
-            for (const em of fresh) {
-              markProcessed(em.id);
+          } catch (e) {
+            // Keep the old state so the next push retries these changes.
+            log(`error fetching changes for ${acctId.slice(0, 8)}: ${e}`);
+            continue;
+          }
+          // The push state can lag or repeat; the server's Email/changes
+          // newState is the authoritative point we have processed up to.
+          if (result.newState) nextState = result.newState;
+          const fresh = result.emails.filter((em) => {
+            if (wasRecentlyProcessed(em.id)) {
+              log(`dedup: skipping already-processed email ${em.id.slice(0, 8)}`);
+              return false;
+            }
+            return true;
+          });
+          const handled: string[] = [];
+          for (const em of fresh) {
+            markProcessed(em.id);
+            try {
               await notify(em as Record<string, unknown>, {
                 accountId: acctId,
                 token,
@@ -191,21 +203,22 @@ export async function stream(
                 notifyChannel: config.notifyChannel,
                 notifyTarget: config.notifyTarget,
               });
+              handled.push(em.id);
+            } catch (e) {
+              // Left unread so it stays visible in the inbox.
+              log(`error processing email ${em.id.slice(0, 8)}: ${e}`);
             }
-            await markAsRead(
-              token,
-              acctId,
-              fresh.map((em) => em.id),
-            );
-            pruneDedup();
-          } catch (e) {
-            log(`error fetching changes for ${acctId.slice(0, 8)}: ${e}`);
           }
+          const accounts = config.runtimeConfig["accounts"] as Record<string, AccountConfig> | undefined;
+          if (accounts?.[acctId]?.mark_read === true) {
+            await markAsRead(token, acctId, handled);
+          }
+          pruneDedup();
         } else {
           log(`initial state [${acctId.slice(0, 8)}]: ${newEmailState}`);
         }
 
-        emailStates[acctId] = newEmailState;
+        emailStates[acctId] = nextState;
         stateChanged = true;
       }
 
