@@ -1,6 +1,6 @@
 {
   "name": "reporting",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Markdown to HTML to PDF report pipeline — single-file and multi-section assembly",
   "author": "OpenClaw",
   "license": "MIT",

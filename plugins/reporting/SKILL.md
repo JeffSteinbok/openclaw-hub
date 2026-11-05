@@ -9,7 +9,7 @@ The `reporting` plugin provides a unified Markdown → HTML → PDF pipeline. It
 | `report_render` | Assemble a multi-section report from a folder with `INDEX.json` → HTML |
 | `md_to_html` | Render a single `.md` file → HTML |
 | `md_to_html_syntax` | Get the full Markdown syntax reference |
-| `html_to_pdf` | Convert an HTML file → PDF via Chromium |
+| `html_to_pdf` | Convert an HTML file → PDF via Chromium (`CHROMIUM_PATH`, PATH, or on macOS Chrome, Chromium or Playwright's Chromium) |
 
 ---
 

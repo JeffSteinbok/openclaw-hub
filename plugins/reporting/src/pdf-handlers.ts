@@ -5,7 +5,9 @@
  */
 
 import { execFile } from "node:child_process";
-import { access } from "node:fs/promises";
+import { access, readdir } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -26,8 +28,53 @@ export interface HtmlToPdfResult {
 
 export const CHROMIUM_PATHS = ["chromium-browser", "chromium", "google-chrome"];
 
-export async function resolvedPaths(): Promise<string[]> {
+// macOS installs browsers as app bundles, off PATH.
+export const MAC_APP_PATHS = [
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
+];
+
+async function isFile(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Playwright's browser cache, newest chromium-<rev> first. OpenClaw's browser tool
+// installs one here, so on a Mac without Chrome it's usually the only Chromium.
+export async function playwrightChromiums(
+  cacheDir = join(homedir(), "Library", "Caches", "ms-playwright"),
+): Promise<string[]> {
+  let revs: string[];
+  try {
+    revs = (await readdir(cacheDir)).filter((d) => /^chromium-\d+$/.test(d));
+  } catch {
+    return [];
+  }
+  revs.sort((a, b) => Number(b.split("-")[1]) - Number(a.split("-")[1]));
   const found: string[] = [];
+  for (const rev of revs) {
+    for (const arch of ["chrome-mac-arm64", "chrome-mac-x64", "chrome-mac"]) {
+      for (const app of [
+        "Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+        "Chromium.app/Contents/MacOS/Chromium",
+      ]) {
+        const bin = join(cacheDir, rev, arch, app);
+        if (await isFile(bin)) found.push(bin);
+      }
+    }
+  }
+  return found;
+}
+
+// CHROMIUM_PATH first, then browsers on PATH, then (on macOS) app bundles and
+// Playwright's cache.
+export async function resolvedPaths(env: NodeJS.ProcessEnv = process.env): Promise<string[]> {
+  const found: string[] = [];
+  if (env.CHROMIUM_PATH && (await isFile(env.CHROMIUM_PATH))) found.push(env.CHROMIUM_PATH);
   for (const bin of CHROMIUM_PATHS) {
     try {
       const { stdout } = await execFileAsync("which", [bin]);
@@ -35,6 +82,10 @@ export async function resolvedPaths(): Promise<string[]> {
     } catch {
       // not found
     }
+  }
+  if (process.platform === "darwin") {
+    for (const app of MAC_APP_PATHS) if (await isFile(app)) found.push(app);
+    found.push(...(await playwrightChromiums()));
   }
   return [...new Set(found)];
 }
@@ -62,7 +113,7 @@ export async function htmlToPdf(
   if (paths.length === 0) {
     return {
       success: false,
-      error: "Chromium not found. Install chromium-browser, chromium, or google-chrome.",
+      error: "Chromium not found. Install Chrome or Chromium, or set CHROMIUM_PATH to a Chromium binary.",
     };
   }
 

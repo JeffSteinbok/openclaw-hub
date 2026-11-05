@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-04
+
+### Fixed
+- **reporting 1.1.0: `html_to_pdf` on macOS** — it only looked for `chromium-browser`, `chromium` or `google-chrome` on PATH, which a Mac doesn't have, so every PDF failed with "Chromium not found". It now tries `CHROMIUM_PATH` first, then PATH, then Chrome or Chromium in `/Applications` and the newest Chromium in Playwright's cache (`~/Library/Caches/ms-playwright`), where OpenClaw's browser tool installs one.
+
 ## 2026-10-26
 
 ### Added
