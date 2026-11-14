@@ -19,6 +19,8 @@ libs/ts/*/tests/*.d.ts
 services/*/dist/
 services/*/tests/*.js
 services/*/tests/*.d.ts
+mcp/*/.build/
+mcp/*/.swiftpm/
 .coverage
 .DS_Store
 Thumbs.db
