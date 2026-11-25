@@ -91,14 +91,17 @@ export const WORK_CALENDAR_DAYS = 28;
 
 export async function fetchWorkCalendar(
   config: OutlookWorkCalendarConfig,
-  params: { days?: number; after?: string; before?: string },
+  params: { days?: number | string; after?: string; before?: string },
 ): Promise<unknown> {
   const { calendarUrl, folderId } = config;
   if (!calendarUrl) return { error: "OUTLOOK_WORK_CALENDAR_URL is not set" };
   if (!folderId) return { error: "OUTLOOK_WORK_FOLDER_ID is not set" };
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
   const lastAvailable = addDays(today, WORK_CALENDAR_DAYS - 1);
-  const days = params.days ?? 7;
+  const rawDays = params.days ?? 7;
+  const days = typeof rawDays === "string"
+    ? (/^[0-9]+$/.test(rawDays) ? Number(rawDays) : NaN)
+    : rawDays;
   const startDate = params.after ?? today;
   const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value)
     && Number.isFinite(Date.parse(value)) && addDays(value, 0) === value;
@@ -109,11 +112,11 @@ export async function fetchWorkCalendar(
     return { error: "days must be a positive integer." };
   }
   const rollingWindow = params.after === undefined && params.before === undefined;
-  if (startDate > lastAvailable || (rollingWindow && days > WORK_CALENDAR_DAYS) ||
+  if (startDate > lastAvailable || (params.before === undefined && days > WORK_CALENDAR_DAYS) ||
       (params.before !== undefined && params.before > lastAvailable)) {
     return { error: `Future work calendar coverage is limited to ${WORK_CALENDAR_DAYS} days including today (through ${lastAvailable}, Pacific time).` };
   }
-  const requestedEnd = params.before ?? addDays(startDate, rollingWindow ? days - 1 : Math.min(days, WORK_CALENDAR_DAYS));
+  const requestedEnd = params.before ?? addDays(startDate, rollingWindow ? days - 1 : days);
   const lastDay = requestedEnd > lastAvailable ? lastAvailable : requestedEnd;
   const endDate = addDays(lastDay, 1);
   if (endDate <= startDate) return { error: "before must be on or after after." };
