@@ -14,7 +14,7 @@ The model sees one line per event, in local time (`2026-05-03 10:00–10:30 1:1 
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `url` | string | Optional | Published Outlook work calendar base URL |
+| `calendarUrl` | string | Optional | Published Outlook work calendar base URL |
 | `folderId` | string | Optional | EWS folder identifier for the published calendar |
 | `access` | object | Optional | Read access by agent and verified sender for the calendar id `work` (see [Access control](#access-control)) |
 
@@ -29,7 +29,7 @@ Set Outlook Work Calendar under `plugins.entries["outlook-work-calendar"].config
       "outlook-work-calendar": {
         "enabled": true,
         "config": {
-          "url": "${OUTLOOK_WORK_CALENDAR_URL}",
+          "calendarUrl": "${OUTLOOK_WORK_CALENDAR_URL}",
           "folderId": "${OUTLOOK_WORK_FOLDER_ID}"
         }
       }
@@ -82,7 +82,7 @@ without calling EWS.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OUTLOOK_WORK_CALENDAR_URL` | No | Backing value for plugin config `url` |
+| `OUTLOOK_WORK_CALENDAR_URL` | No | Backing value for plugin config `calendarUrl` |
 | `OUTLOOK_WORK_FOLDER_ID` | No | Backing value for plugin config `folderId` |
 
 ## Tool Parameters
@@ -91,7 +91,12 @@ without calling EWS.
 
 ### `outlook_work_calendar_fetch`
 
-- `days` — optional number of days ahead to fetch (default `7`)
+- `days` — optional rolling window including today (default `7`, maximum `28`).
+- `after` and `before` — inclusive Pacific dates in YYYY-MM-DD. Use the same date for a single day.
+
+Future coverage ends 27 days after today. A request with an explicit date beyond
+the window returns the last supported date. Empty or invalid upstream responses
+return an error so callers can distinguish an unavailable feed from an empty calendar.
 
 ## Notes
 
@@ -133,5 +138,5 @@ node dist/bin/outlook-work-calendar.js <command> [args...] --json
 
 | Variable | Description |
 |----------|-------------|
-| `OUTLOOK_WORK_CALENDAR_CALENDAR_URL` | Published Outlook work calendar base URL |
-| `OUTLOOK_WORK_CALENDAR_FOLDER_ID` | EWS folder ID for the calendar |
+| `OUTLOOK_WORK_CALENDAR_URL` | Published Outlook work calendar base URL |
+| `OUTLOOK_WORK_FOLDER_ID` | EWS folder ID for the calendar |

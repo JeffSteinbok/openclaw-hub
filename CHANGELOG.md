@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-25
+
+### Fixed
+
+- **Outlook Work Calendar** caps future coverage at 28 days including today, reports out-of-window dates, and returns distinct errors for HTTP failures and empty or malformed responses.
+
 ## 2026-11-04
 
 ### Fixed

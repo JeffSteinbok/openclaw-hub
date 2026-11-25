@@ -21,11 +21,11 @@ export interface OutlookWorkCalendarConfig {
 // HTTP helpers
 // ---------------------------------------------------------------------------
 
-function httpPost(url: string, body: string, headers: Record<string, string>): Promise<string> {
+function httpPost(url: string, body: string, headers: Record<string, string>): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith("https") ? https : http;
     const req = mod.request(url, { method: "POST", headers, timeout: 30_000 }, res => {
-      let data = ""; res.on("data", (c: Buffer) => data += c); res.on("end", () => resolve(data));
+      let data = ""; res.on("data", (c: Buffer) => data += c); res.on("end", () => resolve({ status: res.statusCode ?? 0, body: data }));
     });
     req.on("error", reject); req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); }); req.write(body); req.end();
   });
@@ -51,12 +51,15 @@ function buildRequestBody(folderId: string, startDate: string, endDate: string):
   };
 }
 
-function extractEvents(response: unknown): unknown[] {
-  try {
-    const body = (response as Record<string, unknown>).Body as Record<string, unknown>;
-    const items = (body?.ResponseMessages as Record<string, unknown>)?.Items as Array<Record<string, unknown>>;
-    return ((items?.[0]?.RootFolder as Record<string, unknown>)?.Items as unknown[]) ?? [];
-  } catch { return []; }
+interface FindItemResponse {
+  Body?: {
+    ResponseMessages?: {
+      Items?: Array<{
+        ResponseClass?: string;
+        RootFolder?: { Items?: Array<Record<string, unknown>> };
+      }>;
+    };
+  };
 }
 
 function formatEvent(e: Record<string, unknown>): Record<string, unknown> {
@@ -83,6 +86,8 @@ function addDays(date: string, days: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+export const WORK_CALENDAR_DAYS = 28;
+
 export async function fetchWorkCalendar(
   config: OutlookWorkCalendarConfig,
   params: { days?: number; after?: string; before?: string },
@@ -90,31 +95,46 @@ export async function fetchWorkCalendar(
   const { calendarUrl, folderId } = config;
   if (!calendarUrl) return { error: "OUTLOOK_WORK_CALENDAR_URL is not set" };
   if (!folderId) return { error: "OUTLOOK_WORK_FOLDER_ID is not set" };
-  // Use local date (America/Los_Angeles) — toISOString() would give UTC and shift the
-  // window forward by ~7h in the evening, dropping same-day events.
-  const toLocalDate = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
-
-  // An explicit date range wins over the rolling `days` window, so past dates
-  // and arbitrary future ranges are reachable — `days` alone can only look
-  // forward from today.
-  let startDate: string;
-  let endDate: string;
-  if (params.after || params.before) {
-    startDate = params.after ?? toLocalDate(new Date());
-    // `before` names a day the caller wants included; the EWS page view end is
-    // exclusive, so run to the following midnight.
-    endDate = addDays(params.before ?? addDays(startDate, params.days ?? 7), 1);
-  } else {
-    const days = params.days ?? 7;
-    startDate = toLocalDate(new Date());
-    endDate = toLocalDate(new Date(Date.now() + days * 86_400_000));
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+  const lastAvailable = addDays(today, WORK_CALENDAR_DAYS - 1);
+  const days = params.days ?? 7;
+  const startDate = params.after ?? today;
+  const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && Number.isFinite(Date.parse(value)) && addDays(value, 0) === value;
+  if (!validDate(startDate) || (params.before !== undefined && !validDate(params.before))) {
+    return { error: "Use YYYY-MM-DD for after and before." };
   }
+  if (params.before === undefined && (!Number.isInteger(days) || days < 1)) {
+    return { error: "days must be a positive integer." };
+  }
+  const rollingWindow = params.after === undefined && params.before === undefined;
+  if (startDate > lastAvailable || (rollingWindow && days > WORK_CALENDAR_DAYS) ||
+      (params.before !== undefined && params.before > lastAvailable)) {
+    return { error: `Future work calendar coverage is limited to ${WORK_CALENDAR_DAYS} days including today (through ${lastAvailable}, Pacific time).` };
+  }
+  const requestedEnd = params.before ?? addDays(startDate, rollingWindow ? days - 1 : Math.min(days, WORK_CALENDAR_DAYS));
+  const lastDay = requestedEnd > lastAvailable ? lastAvailable : requestedEnd;
+  const endDate = addDays(lastDay, 1);
+  if (endDate <= startDate) return { error: "before must be on or after after." };
   const url = `${calendarUrl}/service.svc?action=FindItem&app=PublishedCalendar&n=18`;
   const body = JSON.stringify(buildRequestBody(folderId, startDate, endDate));
   const res = await httpPost(url, body, { "Content-Type": "application/json; charset=utf-8", "Action": "FindItem", "User-Agent": "Mozilla/5.0" });
-  const data = JSON.parse(res);
-  const events = extractEvents(data).map(e => formatEvent(e as Record<string, unknown>));
-  return { start_date: startDate, end_date: addDays(endDate, -1), count: events.length, events };
+  if (res.status < 200 || res.status >= 300) {
+    return { error: `Published work calendar request failed (HTTP ${res.status}).` };
+  }
+  if (!res.body.trim()) return { error: "Published work calendar returned an empty response." };
+  let data: FindItemResponse | null;
+  try {
+    data = JSON.parse(res.body);
+  } catch {
+    return { error: "Published work calendar returned an invalid JSON response." };
+  }
+  const message = data?.Body?.ResponseMessages?.Items?.[0];
+  if (!message?.RootFolder || message.ResponseClass === "Error") {
+    return { error: "Published work calendar did not return calendar data." };
+  }
+  const events = (message.RootFolder.Items ?? []).map(formatEvent);
+  return { start_date: startDate, end_date: lastDay, count: events.length, events };
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0");

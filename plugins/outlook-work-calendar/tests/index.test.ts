@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import http from "node:http";
 import https from "node:https";
 import { EventEmitter } from "node:events";
 
 let lastRequest: { write: ReturnType<typeof vi.fn> } | undefined;
-afterEach(() => { vi.restoreAllMocks(); lastRequest = undefined; });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.useRealTimers(); lastRequest = undefined; });
 
 /** The CalendarPageView window the plugin asked EWS for. */
 function requestedWindow() {
@@ -44,18 +44,19 @@ describe("plugin entry", () => {
 });
 
 describe("outlook_work_calendar_fetch", () => {
+  beforeEach(() => {
+    vi.stubEnv("OUTLOOK_WORK_CALENDAR_URL", "https://outlook.office365.com/owa/calendar/abc");
+    vi.stubEnv("OUTLOOK_WORK_FOLDER_ID", "folder-123");
+  });
+
   it("returns error when env vars missing", async () => {
-    const OLD_URL = process.env.OUTLOOK_WORK_CALENDAR_URL;
-    delete process.env.OUTLOOK_WORK_CALENDAR_URL;
+    vi.stubEnv("OUTLOOK_WORK_CALENDAR_URL", undefined);
     const { api } = await loadPlugin();
     const data = resultText(await api.tools["outlook_work_calendar_fetch"].execute("id", {}));
     expect(data).toHaveProperty("error");
-    if (OLD_URL) process.env.OUTLOOK_WORK_CALENDAR_URL = OLD_URL;
   });
 
   it("fetches and returns work calendar events", async () => {
-    process.env.OUTLOOK_WORK_CALENDAR_URL = "https://outlook.office365.com/owa/calendar/abc";
-    process.env.OUTLOOK_WORK_FOLDER_ID = "folder-123";
     mockHttp(WORK_EVENTS_RESPONSE);
     const { api } = await loadPlugin();
     const data = resultText(await api.tools["outlook_work_calendar_fetch"].execute("id", { days: 7 })) as { count: number; events: Array<Record<string,unknown>> };
@@ -65,8 +66,8 @@ describe("outlook_work_calendar_fetch", () => {
   });
 
   it("shows the model one line per event", async () => {
-    process.env.OUTLOOK_WORK_CALENDAR_URL = "https://outlook.office365.com/owa/calendar/abc";
-    process.env.OUTLOOK_WORK_FOLDER_ID = "folder-123";
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-01T15:00:00Z"));
     mockHttp(WORK_EVENTS_RESPONSE);
     const { api } = await loadPlugin();
     const text = modelText(await api.tools["outlook_work_calendar_fetch"].execute("id", { after: "2026-05-03", before: "2026-05-03" }));
@@ -74,8 +75,8 @@ describe("outlook_work_calendar_fetch", () => {
   });
 
   it("queries an explicit date range with an inclusive end day", async () => {
-    process.env.OUTLOOK_WORK_CALENDAR_URL = "https://outlook.office365.com/owa/calendar/abc";
-    process.env.OUTLOOK_WORK_FOLDER_ID = "folder-123";
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-01T15:00:00Z"));
     mockHttp(WORK_EVENTS_RESPONSE);
     const { api } = await loadPlugin();
     const data = resultText(await api.tools["outlook_work_calendar_fetch"].execute("id", {
@@ -90,8 +91,8 @@ describe("outlook_work_calendar_fetch", () => {
   });
 
   it("treats after === before as a single day", async () => {
-    process.env.OUTLOOK_WORK_CALENDAR_URL = "https://outlook.office365.com/owa/calendar/abc";
-    process.env.OUTLOOK_WORK_FOLDER_ID = "folder-123";
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-05-01T15:00:00Z"));
     mockHttp(WORK_EVENTS_RESPONSE);
     const { api } = await loadPlugin();
     await api.tools["outlook_work_calendar_fetch"].execute("id", { after: "2026-05-03", before: "2026-05-03" });
@@ -100,9 +101,40 @@ describe("outlook_work_calendar_fetch", () => {
     expect(win.EndDate).toBe("2026-05-04T00:00:00.000");
   });
 
+  it("rejects a future range beyond the published window without requesting EWS", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-25T15:00:00Z"));
+    try {
+      const request = vi.spyOn(https, "request");
+      const { api } = await loadPlugin();
+      const fetch = api.tools["outlook_work_calendar_fetch"];
+      for (const args of [
+        { after: "2027-02-01", before: "2027-02-07" },
+        { start_date: "2027-02-01", end_date: "2027-02-07" },
+        { days: 29 },
+      ]) {
+        const data = resultText(await fetch.execute("id", args));
+        expect(data.error).toContain("through 2026-12-22");
+      }
+      expect(request).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    [200, "", "empty response"],
+    [200, "<html>", "invalid JSON response"],
+    [503, "", "HTTP 503"],
+    [200, '{"Body":{}}', "did not return calendar data"],
+  ])("reports upstream failure for HTTP %i with body %j", async (status, body, message) => {
+    mockHttp(body, status);
+    const { api } = await loadPlugin();
+    const result = resultText(await api.tools["outlook_work_calendar_fetch"].execute("id", {}));
+    expect(result.error).toContain(message);
+  });
+
   it("supports past date ranges, which the days window cannot reach", async () => {
-    process.env.OUTLOOK_WORK_CALENDAR_URL = "https://outlook.office365.com/owa/calendar/abc";
-    process.env.OUTLOOK_WORK_FOLDER_ID = "folder-123";
     mockHttp(WORK_EVENTS_RESPONSE);
     const { api } = await loadPlugin();
     await api.tools["outlook_work_calendar_fetch"].execute("id", { after: "2020-01-01", before: "2020-01-31" });
