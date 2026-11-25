@@ -94,8 +94,9 @@ without calling EWS.
 - `days` — optional rolling window including today (default `7`, maximum `28`).
 - `after` and `before` — inclusive Pacific dates in YYYY-MM-DD. Use the same date for a single day.
 
-Future coverage ends 27 days after today. A request with an explicit date beyond
-the window returns the last supported date. Empty or invalid upstream responses
+Future coverage ends 27 days after today. An explicit date beyond the window
+returns an error. When only `after` is supplied, the implicit end date is capped
+at the last supported date. Empty or invalid upstream responses
 return an error so callers can distinguish an unavailable feed from an empty calendar.
 
 ## Notes

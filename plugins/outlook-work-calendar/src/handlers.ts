@@ -56,6 +56,7 @@ interface FindItemResponse {
     ResponseMessages?: {
       Items?: Array<{
         ResponseClass?: string;
+        ResponseCode?: string;
         RootFolder?: { Items?: Array<Record<string, unknown>> };
       }>;
     };
@@ -130,7 +131,12 @@ export async function fetchWorkCalendar(
     return { error: "Published work calendar returned an invalid JSON response." };
   }
   const message = data?.Body?.ResponseMessages?.Items?.[0];
-  if (!message?.RootFolder || message.ResponseClass === "Error") {
+  if (message?.ResponseClass === "Error") {
+    const code = message.ResponseCode;
+    const detail = typeof code === "string" && /^Error[A-Za-z]{1,80}$/.test(code) ? ` (${code})` : "";
+    return { error: `Published work calendar request failed in Exchange${detail}.` };
+  }
+  if (!message?.RootFolder) {
     return { error: "Published work calendar did not return calendar data." };
   }
   const events = (message.RootFolder.Items ?? []).map(formatEvent);

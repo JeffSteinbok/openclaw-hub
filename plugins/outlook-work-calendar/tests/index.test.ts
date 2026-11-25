@@ -127,6 +127,7 @@ describe("outlook_work_calendar_fetch", () => {
     [200, "<html>", "invalid JSON response"],
     [503, "", "HTTP 503"],
     [200, '{"Body":{}}', "did not return calendar data"],
+    [200, '{"Body":{"ResponseMessages":{"Items":[{"ResponseClass":"Error","ResponseCode":"ErrorAccessDenied"}]}}}', "ErrorAccessDenied"],
   ])("reports upstream failure for HTTP %i with body %j", async (status, body, message) => {
     mockHttp(body, status);
     const { api } = await loadPlugin();
