@@ -91,7 +91,7 @@ without calling EWS.
 
 ### `outlook_work_calendar_fetch`
 
-- `days` — optional rolling window including today (default `7`, maximum `28`).
+- `days` — optional rolling window including today (default `7`, maximum `28`). Digit-only strings such as `"28"` are converted to numbers. When you supply `after` without `before`, `days` values above `28` are rejected.
 - `after` and `before` — inclusive Pacific dates in YYYY-MM-DD. Use the same date for a single day.
 
 Future coverage ends 27 days after today. An explicit date beyond the window
