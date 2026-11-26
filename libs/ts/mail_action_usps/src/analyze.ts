@@ -250,7 +250,8 @@ export async function processDigest(
     notification_plan: notificationPlan,
     notifications_sent: notifications.length,
     notification_details: notifications,
-    memory_file: memoryPath ? relative(getWorkspaceRoot(memoryAgent), memoryPath) : null,
+    memory_file: memoryPath,
+    memory_file_relative: memoryPath ? relative(getWorkspaceRoot(memoryAgent), memoryPath) : null,
     analysis_saved: persistAnalysis,
     memory_written: !!memoryPath,
   };

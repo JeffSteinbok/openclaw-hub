@@ -10,6 +10,7 @@
 
 ### Changed
 
+- **USPS Mail 1.1.0 and mail-action-usps 1.0.1** resolve workspaces from OpenClaw configuration. Existing rules, config and state remain readable during migration. Digest responses keep the absolute memory path, and agent handoffs use the workspace-relative path.
 - **Home Assistant 1.2.1** saves camera snapshots and collages under the OpenClaw managed media directory. Camera requests prune generated JPEGs older than seven days. The `captureDir` option can retain the previous temporary location and its keyframe access.
 
 ### Fixed

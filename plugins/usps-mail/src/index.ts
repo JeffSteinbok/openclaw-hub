@@ -349,7 +349,10 @@ export function createEntry() {
   const entry = createToolEntry();
   return {
     ...entry,
-    register(api: PluginApi & { config?: OpenClawWorkspaceConfig }) {
+    register(api: PluginApi & {
+      config?: OpenClawWorkspaceConfig;
+      runtime?: { agent?: { resolveAgentWorkspaceDir?: (config: OpenClawWorkspaceConfig, id: string) => string } };
+    }) {
       entry.register({
         ...api,
         registerTool(tool) {
@@ -357,7 +360,7 @@ export function createEntry() {
           api.registerTool({
             ...registered,
             execute: (id: string, params: unknown) =>
-              withWorkspaceConfig(api.config, () => registered.execute(id, params)),
+              withWorkspaceConfig(api.config, () => registered.execute(id, params), api.runtime?.agent?.resolveAgentWorkspaceDir),
           });
         },
       });

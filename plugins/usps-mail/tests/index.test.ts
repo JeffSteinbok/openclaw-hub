@@ -11,9 +11,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mocks — must be hoisted before the module under test is loaded
 // ---------------------------------------------------------------------------
 
-vi.mock("@openclaw/mail-action-usps", () => ({
+vi.mock("@openclaw/mail-action-usps", async () => ({
   processDigest: vi.fn(),
-  withWorkspaceConfig: (_config: unknown, run: () => unknown) => run(),
+  withWorkspaceConfig: (await import("../../../libs/ts/mail_action_usps/src/paths.js")).withWorkspaceConfig,
 }));
 
 vi.mock("../src/usps-rules.js", () => ({

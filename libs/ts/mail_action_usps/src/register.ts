@@ -16,7 +16,7 @@ function buildHandoffPrompt(
   visionAgent: string,
 ): string {
   const memoryWritten = !!result.memory_written;
-  const memoryFile = result.memory_file as string | undefined;
+  const memoryFile = (result.memory_file_relative ?? result.memory_file) as string | undefined;
   const payload = {
     kind: "usps_informed_delivery",
     date: result.date,
