@@ -52,7 +52,12 @@ export function getWorkspaceAgent(agent?: string | null): string {
   const id = agent?.trim().toLowerCase();
   if (!id) throw new Error("workspace_agent must be specified explicitly");
   if (/^[a-z0-9][a-z0-9_-]{0,63}$/.test(id)) return id;
-  const normalized = id.replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
+  const converted = id.replace(/[^a-z0-9_-]+/g, "-");
+  let start = 0;
+  let end = converted.length;
+  while (start < end && converted[start] === "-") start++;
+  while (end > start && converted[end - 1] === "-") end--;
+  const normalized = converted.slice(start, Math.min(end, start + 64));
   if (!normalized) throw new Error("Invalid workspace agent ID");
   return normalized;
 }
