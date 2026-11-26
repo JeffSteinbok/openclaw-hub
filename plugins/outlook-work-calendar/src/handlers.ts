@@ -65,13 +65,23 @@ interface FindItemResponse {
 
 function formatEvent(e: Record<string, unknown>): Record<string, unknown> {
   const subject = String(e.Subject ?? "No subject");
-  const sensitivity = String(e.Sensitivity ?? "Normal");
+  const sensitivity = typeof e.Sensitivity === "string" ? e.Sensitivity.toLowerCase() : undefined;
   const isAllDay = Boolean(e.IsAllDayEvent);
-  const title = subject + (sensitivity === "Private" ? " [PRIVATE]" : "") + (isAllDay ? " [ALL DAY]" : "");
+  const title = subject + (sensitivity === "private" ? " [PRIVATE]" : "") + (isAllDay ? " [ALL DAY]" : "");
   return {
     subject: title, start: String(e.Start ?? ""), end: String(e.End ?? ""),
     location: (e.Location as Record<string, string> | undefined)?.DisplayName || "No location",
     busy_type: String(e.FreeBusyType ?? "busy"), is_all_day: isAllDay,
+    ...(sensitivity ? { sensitivity } : {}),
+    attendees: ["RequiredAttendees", "OptionalAttendees"].flatMap(key => {
+      const people = e[key];
+      if (!Array.isArray(people)) return [];
+      return people.flatMap((person) => {
+        if (!person || typeof person.Mailbox !== "object" || !person.Mailbox) return [];
+        const { Name, EmailAddress } = person.Mailbox;
+        return [{ name: typeof Name === "string" ? Name : "", email: typeof EmailAddress === "string" ? EmailAddress : "" }];
+      });
+    }),
   };
 }
 
@@ -168,7 +178,12 @@ export function calendarView(result: unknown): unknown {
     const title = String(e.summary ?? e.subject ?? "(no title)");
     const where = e.location ? ` @ ${String(e.location)}` : "";
     const busy = e.busy_type && String(e.busy_type).toLowerCase() !== "busy" ? ` (${String(e.busy_type)})` : "";
-    return `${span} ${title}${where}${busy}`;
+    const privacy = String(e.sensitivity || "unknown").toLowerCase();
+    const attendees = Array.isArray(e.attendees)
+      ? e.attendees.map((person) => typeof person === "string" ? person : person.name || person.email).filter(Boolean)
+      : [];
+    const people = attendees.length ? ` | attendees: ${attendees.join(", ")}` : "";
+    return `${span} ${title}${where}${busy} | privacy: ${privacy}${people}`;
   });
   return [head, ...lines].join("\n");
 }
