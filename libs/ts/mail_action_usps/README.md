@@ -61,7 +61,9 @@ In your `fastmail-sse-config.json` (or equivalent mail source config), add a rul
 
 ### 4. Configure classification rules (optional)
 
-Create `~/.openclaw/agents/<workspace_agent>/workspace/usps-mail/rules.json` to customize how mailpieces are classified after vision analysis:
+The agent workspace follows the OpenClaw configuration. During migration, an existing rules, config, or state file under `~/.openclaw/agents/<workspace_agent>/workspace/` is used with a warning when the corresponding file is absent from the resolved workspace.
+
+Create `usps-mail/rules.json` in the resolved workspace for `workspace_agent` to customize classification after vision analysis:
 
 ```json
 {
@@ -77,7 +79,7 @@ Rules are **first match wins**. See [`docs/custom-rules.md`](docs/custom-rules.m
 
 ### 5. Configure notification routing (optional)
 
-Create `~/.openclaw/agents/<workspace_agent>/workspace/usps-mail/config.json` to route notifications to different recipients:
+Create `usps-mail/config.json` in the resolved workspace for `workspace_agent` to route notifications to different recipients:
 
 ```json
 {
