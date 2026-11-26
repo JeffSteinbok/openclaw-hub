@@ -46,6 +46,7 @@ Camera snapshots and collages default to `media/camera_captures` under the OpenC
 |-----|------|----------|-------------|
 | `server` | string | Yes | Home Assistant server URL |
 | `token` | string | Yes | Home Assistant long-lived access token |
+| `captureDir` | string | No | Camera output folder. Defaults to `media/camera_captures` under the OpenClaw state directory. |
 | `notifyTargets` | object | No | Targets `hass_notify` may send to. Keys are the names the agent uses; `service` is the part after `notify.` (a `mobile_app_*` service or a notify group); `description` is optional. With none, `hass_notify` refuses. |
 | `notifyUrlSchemes` | string[] | No | URL schemes `hass_notify` accepts for its tap-to-open `url`. Default `["hassonic"]`. |
 

@@ -8,6 +8,10 @@
 
 ## 2026-11-25
 
+### Changed
+
+- **Home Assistant 1.2.1** saves camera snapshots and collages under the OpenClaw managed media directory. Camera requests prune generated JPEGs older than seven days. The `captureDir` option can retain the previous temporary location and its keyframe access.
+
 ### Fixed
 
 - **Outlook Work Calendar** caps future coverage at 28 days including today, reports out-of-window dates, and returns distinct errors for HTTP failures and empty or malformed responses.

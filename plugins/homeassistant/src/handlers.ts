@@ -24,7 +24,10 @@ function openclawMediaDir(home = homedir()): string {
 }
 
 export function resolveCaptureDir(configured?: string): string {
-  return path.resolve(configured?.trim() || path.join(openclawMediaDir(), "camera_captures"));
+  const dir = configured?.trim();
+  if (dir === "~") return homedir();
+  if (dir?.startsWith("~/")) return path.resolve(homedir(), dir.slice(2));
+  return path.resolve(dir || path.join(openclawMediaDir(), "camera_captures"));
 }
 
 const CAPTURE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
