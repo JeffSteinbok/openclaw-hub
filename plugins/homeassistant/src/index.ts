@@ -5,7 +5,7 @@
 import { definePlugin } from "carapace-plugin-sdk";
 import { Type } from "@sinclair/typebox";
 import {
-  type HomeAssistantConfig,
+  type HomeAssistantConfig, resolveCaptureDir,
   CAMERAS, DEFAULT_COLLAGE_CAMERAS,
   stateGet, stateList,
   stateListView, serviceCall, lovelaceGet, lovelaceSet, eventList, personFind,
@@ -15,8 +15,6 @@ import {
   notify, parseNotifyTargets, parseNotifyUrlSchemes,
   NOTIFY_INTERRUPTION_LEVELS, NOTIFY_MESSAGE_MAX, NOTIFY_TITLE_MAX,
 } from "./handlers.js";
-
-const CAPTURE_DIR = "/tmp/openclaw/camera_captures";
 
 function stripTrailingSlashes(s: string): string {
   while (s.endsWith("/")) s = s.slice(0, -1);
@@ -45,6 +43,9 @@ export const createEntry = definePlugin({
     ),
     token: Type.Optional(
       Type.String({ description: "Home Assistant long-lived access token" }),
+    ),
+    captureDir: Type.Optional(
+      Type.String({ description: "Camera output directory. Defaults to media/camera_captures under the OpenClaw state directory." }),
     ),
     notifyTargets: Type.Optional(
       Type.Record(
@@ -76,7 +77,7 @@ export const createEntry = definePlugin({
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await stateGet(resolvedConfig, { entity_id: String(entity_id ?? "") });
         } catch (e) {
@@ -109,7 +110,7 @@ export const createEntry = definePlugin({
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await stateList(resolvedConfig, { domain, search });
         } catch (e) {
@@ -140,7 +141,7 @@ export const createEntry = definePlugin({
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await serviceCall(resolvedConfig, {
             domain: String(domain ?? ""),
@@ -175,7 +176,7 @@ export const createEntry = definePlugin({
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await notify(resolvedConfig, {
             target: String(target ?? ""),
@@ -210,7 +211,7 @@ export const createEntry = definePlugin({
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await lovelaceGet(resolvedConfig, { dashboard, view });
         } catch (e) {
@@ -236,7 +237,7 @@ export const createEntry = definePlugin({
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await lovelaceSet(resolvedConfig, {
             dashboard,
@@ -256,7 +257,7 @@ export const createEntry = definePlugin({
       const resolve = (config: { server?: string; token?: string }): HomeAssistantConfig => ({
         server: requireServer(config.server),
         token: config.token ?? "",
-        captureDir: CAPTURE_DIR,
+        captureDir: resolveCaptureDir(config.captureDir),
       });
 
       return [
@@ -333,7 +334,7 @@ export const createEntry = definePlugin({
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await eventList(resolvedConfig, { entity_id });
         } catch (e) {
@@ -355,7 +356,7 @@ export const createEntry = definePlugin({
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await personFind(resolvedConfig, { name, entity_id });
         } catch (e) {
@@ -376,7 +377,7 @@ export const createEntry = definePlugin({
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await speakerVolumeGet(resolvedConfig, { entity_id });
         } catch (e) {
@@ -398,7 +399,7 @@ export const createEntry = definePlugin({
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await speakerVolumeSet(resolvedConfig, {
             entity_id: String(entity_id ?? ""),
@@ -427,7 +428,7 @@ export const createEntry = definePlugin({
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await logbook(resolvedConfig, {
             entity_id,
@@ -472,7 +473,7 @@ export const createEntry = definePlugin({
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await cameraSnapshotHandler(resolvedConfig, { camera_name: String(camera_name ?? "") });
         } catch (e) {
@@ -492,14 +493,14 @@ export const createEntry = definePlugin({
             "List of camera names to include. Defaults to all outdoor + garage cameras: front-doorbell, front-doorbell-package, driveway, backyard-left, backyard-right, garage. Available: living-room, front-doorbell, front-doorbell-package, backyard-right, backyard-left, driveway, family-room, garage.",
         })),
         label: Type.Optional(Type.Boolean({ description: "Draw camera name labels on each cell (default: false; the cameras already stamp their name and time)." })),
-        keyframe: Type.Optional(Type.String({ description: "Local path of an event image (e.g. from llmvision_get_image) to put on top of the grid. Must be under ~/.openclaw/media or the capture folder." })),
+        keyframe: Type.Optional(Type.String({ description: "Local path of an event image (e.g. from llmvision_get_image) to put on top of the grid. Must be under the OpenClaw media directory or the capture folder." })),
       }),
       async execute({ camera_names, label, keyframe }, config) {
         try {
           const resolvedConfig: HomeAssistantConfig = {
             server: requireServer(config.server),
             token: config.token ?? "",
-            captureDir: CAPTURE_DIR,
+            captureDir: resolveCaptureDir(config.captureDir),
           };
           return await cameraCollageHandler(resolvedConfig, { camera_names, label, keyframe });
         } catch (e) {

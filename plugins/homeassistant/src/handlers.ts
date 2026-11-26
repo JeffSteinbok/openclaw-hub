@@ -6,6 +6,7 @@ import fs from "node:fs";
 import https from "node:https";
 import http from "node:http";
 import path from "node:path";
+import { homedir } from "node:os";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -15,6 +16,35 @@ export interface HomeAssistantConfig {
   server: string;
   token: string;
   captureDir: string;
+}
+
+function openclawMediaDir(home = homedir()): string {
+  const stateDir = process.env.OPENCLAW_STATE_DIR?.trim() || path.join(home, ".openclaw");
+  return path.resolve(stateDir, "media");
+}
+
+export function resolveCaptureDir(configured?: string): string {
+  return path.resolve(configured?.trim() || path.join(openclawMediaDir(), "camera_captures"));
+}
+
+const CAPTURE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const CAPTURE_NAME = /^[a-z0-9-]+_\d{4}-\d{2}-\d{2}T\d{4}\.jpg$/;
+
+export function pruneCameraCaptures(captureDir: string, now = Date.now()): void {
+  try {
+    for (const entry of fs.readdirSync(captureDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !CAPTURE_NAME.test(entry.name)) continue;
+      const file = path.join(captureDir, entry.name);
+      try {
+        const stat = fs.lstatSync(file);
+        if (stat.isFile() && now - stat.mtimeMs > CAPTURE_TTL_MS) fs.unlinkSync(file);
+      } catch {
+        // Another capture or cleanup may have already removed this file.
+      }
+    }
+  } catch {
+    // Retention is best effort. An unavailable directory must not block a capture.
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -758,6 +788,7 @@ export async function cameraSnapshotHandler(config: HomeAssistantConfig, params:
   if (!name) return { error: "camera_name is required" };
 
   if (name === "all") {
+    pruneCameraCaptures(captureDir);
     const results: Array<{ camera: string; file: string }> = [];
     const failed: string[] = [];
     for (const [camName, entityId] of Object.entries(CAMERAS)) {
@@ -771,13 +802,14 @@ export async function cameraSnapshotHandler(config: HomeAssistantConfig, params:
   if (!(name in CAMERAS)) {
     return { error: `Unknown camera: '${name}'`, available: [...Object.keys(CAMERAS), "all"] };
   }
+  pruneCameraCaptures(captureDir);
   const file = await cameraSnapshot(server, token, name, CAMERAS[name], captureDir);
   if (file) return { camera: name, file };
   return { error: `Snapshot failed for camera '${name}'` };
 }
 
 /** Folders a collage keyframe may come from: OpenClaw's media store and the capture dir. */
-export function keyframeAllowed(file: string, captureDir: string, home = process.env.HOME ?? ""): boolean {
+export function keyframeAllowed(file: string, captureDir: string, home = homedir()): boolean {
   const real = (() => {
     try {
       return fs.realpathSync(file);
@@ -786,7 +818,7 @@ export function keyframeAllowed(file: string, captureDir: string, home = process
     }
   })();
   if (!real) return false;
-  const roots = [captureDir, home && path.join(home, ".openclaw", "media")].filter(Boolean).map((r) => {
+  const roots = [captureDir, openclawMediaDir(home)].map((r) => {
     try {
       return fs.realpathSync(r);
     } catch {
@@ -843,7 +875,7 @@ export async function cameraCollageHandler(
   const drawLabel = params.label === true;
   const keyframe = params.keyframe?.trim() || undefined;
   if (keyframe && !keyframeAllowed(keyframe, captureDir)) {
-    return { error: "keyframe must be an existing image under ~/.openclaw/media or the capture folder" };
+    return { error: "keyframe must be an existing image under the OpenClaw media directory or the capture folder" };
   }
 
   const unknown = requestedNames.filter((n) => !(n in CAMERAS));
@@ -895,6 +927,7 @@ export async function cameraCollageHandler(
   }
 
   const sizeKb = Math.round(fs.statSync(outPath).size / 1024);
+  pruneCameraCaptures(captureDir);
   return {
     file: outPath,
     cameras: snapshots.map(([n]) => n),
