@@ -27,6 +27,8 @@ Use Home Assistant as the control plane for the house. This plugin lets the agen
 | `hass_camera_snapshot` | Take a snapshot from a Home Assistant camera |
 | `hass_logbook` | Get Home Assistant logbook entries with optional filters |
 
+Camera snapshots and collages default to `media/camera_captures` under the OpenClaw state directory (`OPENCLAW_STATE_DIR` or `~/.openclaw`). Set plugin config `captureDir` to override the destination. Camera requests prune generated JPEGs older than seven days.
+
 ## Configuration Schema
 
 ```json
@@ -44,6 +46,7 @@ Use Home Assistant as the control plane for the house. This plugin lets the agen
 |-----|------|----------|-------------|
 | `server` | string | Yes | Home Assistant server URL |
 | `token` | string | Yes | Home Assistant long-lived access token |
+| `captureDir` | string | No | Camera output folder. Defaults to `media/camera_captures` under the OpenClaw state directory. |
 | `notifyTargets` | object | No | Targets `hass_notify` may send to. Keys are the names the agent uses; `service` is the part after `notify.` (a `mobile_app_*` service or a notify group); `description` is optional. With none, `hass_notify` refuses. |
 | `notifyUrlSchemes` | string[] | No | URL schemes `hass_notify` accepts for its tap-to-open `url`. Default `["hassonic"]`. |
 

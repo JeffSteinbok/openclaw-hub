@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { buildCollageFilter, keyframeAllowed } from "../src/handlers.js";
+import { buildCollageFilter, keyframeAllowed, pruneCameraCaptures, resolveCaptureDir } from "../src/handlers.js";
 
 const six = ["front-doorbell", "front-doorbell-package", "driveway", "backyard-left", "backyard-right", "garage"];
 
@@ -68,4 +68,37 @@ describe.skipIf(!hasFfmpeg)("collage render", () => {
     expect(w).toBe(gridW);
     expect(h).toBe(Math.round((gridW * 720) / 1280 / 2) * 2 + (count === 1 ? 360 : rows * 360));
   });
+});
+
+
+it("honors OpenClaw state and capture directory overrides", () => {
+  const old = process.env.OPENCLAW_STATE_DIR;
+  try {
+    process.env.OPENCLAW_STATE_DIR = path.join(os.tmpdir(), "test-openclaw-state");
+    expect(resolveCaptureDir()).toBe(path.join(process.env.OPENCLAW_STATE_DIR, "media", "camera_captures"));
+    expect(resolveCaptureDir(os.tmpdir())).toBe(path.resolve(os.tmpdir()));
+  } finally {
+    if (old === undefined) delete process.env.OPENCLAW_STATE_DIR;
+    else process.env.OPENCLAW_STATE_DIR = old;
+  }
+});
+
+it("prunes only expired generated camera files", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "capture-retention-"));
+  try {
+    const oldCapture = path.join(dir, "front-doorbell_2026-11-01T1234.jpg");
+    const newCapture = path.join(dir, "collage_2026-11-25T1234.jpg");
+    const other = path.join(dir, "keep.jpg");
+    const link = path.join(dir, "garage_2026-11-01T1234.jpg");
+    for (const file of [oldCapture, newCapture, other]) fs.writeFileSync(file, "");
+    const past = new Date(Date.now() - 8 * 86400000);
+    fs.utimesSync(oldCapture, past, past);
+    fs.utimesSync(other, past, past);
+    fs.symlinkSync(other, link);
+    pruneCameraCaptures(dir);
+    expect(fs.existsSync(oldCapture)).toBe(false);
+    expect(fs.readdirSync(dir).sort()).toEqual([path.basename(newCapture), path.basename(link), path.basename(other)].sort());
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
