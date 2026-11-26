@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-26
+
+### Added
+
+- **mcp-bridge 0.3.1** logs the OAuth client ID from verified access tokens. Auth refusals omit the subject claim.
+
 ## 2026-11-25
 
 ### Fixed

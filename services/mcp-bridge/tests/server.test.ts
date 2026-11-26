@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair, type CryptoKey } from "jose";
 import { createMcpHttpServer } from "../src/server.js";
-import type { AuthConfig } from "../src/auth.js";
+import { authenticate, type AuthConfig } from "../src/auth.js";
 import { parseConfig } from "../src/config.js";
 import exampleConfig from "../tools.example.json" with { type: "json" };
 
@@ -19,6 +19,7 @@ let base: string;
 let privateKey: CryptoKey;
 let otherKey: CryptoKey;
 let auth: AuthConfig;
+const logs: string[] = [];
 
 async function token(claims: Record<string, unknown> = {}, opts: { key?: CryptoKey; exp?: string } = {}) {
   return new SignJWT({ ...claims })
@@ -52,6 +53,7 @@ beforeAll(async () => {
   server = createMcpHttpServer({ config: CONFIG,
     allowedHosts: [],
     auth,
+    log: (line) => logs.push(line),
     now: () => new Date("2026-10-25T00:00:00Z"),
     fetch: (async (url: string) =>
       new Response(JSON.stringify({ issuer: ISSUER, fetched: url }), { status: 200 })) as unknown as typeof fetch,
@@ -112,6 +114,46 @@ describe("auth", () => {
     const res = await rpc("tools/list", await token({ sub: "user_stranger" }));
     expect(res.status).toBe(403);
     expect(res.headers.get("www-authenticate")).toContain('error="insufficient_scope"');
+  });
+});
+
+describe("OAuth client logging", () => {
+  it("returns and logs the verified client ID without logging the bearer or other claims", async () => {
+    const t = await token({ client_id: "client_connect", custom: "private-claim-value" });
+    expect(await authenticate(`Bearer ${t}`, auth)).toEqual({ ok: true, sub: OWNER, clientId: "client_connect" });
+    const start = logs.length;
+    expect((await rpc("tools/list", t)).status).toBe(200);
+    const requestLogs = logs.slice(start);
+    expect(requestLogs).toEqual([expect.stringMatching(/^→ POST \/mcp .* client=client_connect$/)]);
+    for (const privateValue of [t, OWNER, ISSUER, RESOURCE, "private-claim-value"]) {
+      expect(requestLogs.join("\n")).not.toContain(privateValue);
+    }
+  });
+
+  it.each([undefined, "", 123])("logs client=- for an unavailable client ID (%s)", async (client_id) => {
+    const start = logs.length;
+    expect((await rpc("tools/list", await token({ client_id }))).status).toBe(200);
+    expect(logs.slice(start)).toEqual([expect.stringMatching(/^→ POST \/mcp .* client=-$/)]);
+  });
+
+  it("keeps a verified client ID on a 403 and escapes log separators", async () => {
+    const start = logs.length;
+    const t = await token({ client_id: "client\nnext", sub: "private-stranger" });
+    expect((await rpc("tools/list", t)).status).toBe(403);
+    expect(logs.slice(start)).toEqual([
+      expect.stringMatching(/^→ POST \/mcp .* client=client%0Anext$/),
+      "403 insufficient_scope: This account is not allowed",
+    ]);
+  });
+
+  it("ignores the client ID on a token that fails verification", async () => {
+    const start = logs.length;
+    const t = await token({ client_id: "unverified-client" }, { key: otherKey });
+    expect((await rpc("tools/list", t)).status).toBe(401);
+    expect(logs.slice(start)).toEqual([
+      expect.stringMatching(/^→ POST \/mcp .* client=-$/),
+      "401 invalid_token: Invalid token",
+    ]);
   });
 });
 
