@@ -2,7 +2,7 @@
  * Notification routing for USPS mail alerts.
  *
  * Routes notifications to different recipients based on the addressee.
- * Config lives at ~/.openclaw/agents/mail/workspace/usps-mail/config.json.
+ * Config lives at <mail workspace>/usps-mail/config.json.
  * Notifications are planned first, then optionally delivered via `openclaw message send`.
  */
 

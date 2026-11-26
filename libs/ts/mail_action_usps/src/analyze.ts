@@ -5,8 +5,9 @@
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { extname, join, basename } from "node:path";
+import { extname, join, basename, relative } from "node:path";
 
+import { getWorkspaceRoot } from "./paths.js";
 import { parseDigestHtml } from "./parse-digest.js";
 import { analyzeViaAgent, validateAnalysis } from "./vision.js";
 import { applyRules, loadRules } from "./rules.js";
@@ -250,6 +251,7 @@ export async function processDigest(
     notifications_sent: notifications.length,
     notification_details: notifications,
     memory_file: memoryPath,
+    memory_file_relative: memoryPath ? relative(getWorkspaceRoot(memoryAgent), memoryPath) : null,
     analysis_saved: persistAnalysis,
     memory_written: !!memoryPath,
   };

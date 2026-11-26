@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { homedir } from "node:os";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { homedir, tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   getAnalysisFile,
@@ -11,7 +13,22 @@ import {
   getUspsDir,
   getWorkspaceAgent,
   getWorkspaceRoot,
+  withWorkspaceConfig,
 } from "../src/paths.js";
+
+let stateDir: string;
+
+beforeEach(() => {
+  stateDir = mkdtempSync(join(tmpdir(), "usps-paths-"));
+  vi.stubEnv("OPENCLAW_STATE_DIR", stateDir);
+  vi.stubEnv("OPENCLAW_CONFIG_PATH", undefined);
+  vi.stubEnv("OPENCLAW_WORKSPACE_DIR", undefined);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  rmSync(stateDir, { recursive: true, force: true });
+});
 
 describe("getWorkspaceAgent", () => {
   it("returns valid agent", () => {
@@ -28,14 +45,82 @@ describe("getWorkspaceAgent", () => {
 });
 
 describe("getWorkspaceRoot", () => {
-  it("returns path ending with agents/mail/workspace", () => {
-    const p = getWorkspaceRoot("mail");
-    expect(p).toMatch(/agents\/mail\/workspace$/);
+  it("uses a per-agent fallback under the state directory", () => {
+    expect(getWorkspaceRoot("mail")).toBe(join(stateDir, "workspace-mail"));
   });
 
-  it("contains .openclaw", () => {
-    const p = getWorkspaceRoot("mail");
-    expect(p).toContain(".openclaw");
+  it("uses the runtime workspace across asynchronous work", async () => {
+    const result = await withWorkspaceConfig(
+      { agents: { entries: { mail: { workspace: "~/mail-example" } } } },
+      async () => {
+        await Promise.resolve();
+        return getWorkspaceRoot("mail");
+      },
+    );
+    expect(result).toBe(join(homedir(), "mail-example"));
+    expect(getWorkspaceRoot("mail")).toBe(join(stateDir, "workspace-mail"));
+  });
+
+  it("resolves the local JSON5 config for a standalone caller", () => {
+    const cfg = join(stateDir, "custom.json");
+    const workspace = join(stateDir, "custom-workspace");
+    vi.stubEnv("OPENCLAW_CONFIG_PATH", cfg);
+    writeFileSync(cfg, "{ agents: { list: [{ id: 'mail', workspace: " + JSON.stringify(workspace) + ", }], }, }");
+    expect(getWorkspaceRoot("mail")).toBe(workspace);
+  });
+
+  it("normalizes agent IDs without using raw path components", () => {
+    expect(getWorkspaceRoot("  MAIL Agent  ")).toBe(join(stateDir, "workspace-mail-agent"));
+    expect(() => getWorkspaceRoot("...")).toThrow("Invalid workspace agent ID");
+  });
+
+  it("uses the implicit default agent workspace", () => {
+    expect(getWorkspaceRoot("main")).toBe(join(stateDir, "workspace"));
+  });
+
+  it("uses the defaults root for the default agent and a subdirectory for others", () => {
+    const root = join(stateDir, "shared");
+    const config = { agents: { defaults: { workspace: root }, entries: { main: {}, mail: { default: true } } } };
+    withWorkspaceConfig(config, () => {
+      expect(getWorkspaceRoot("mail")).toBe(root);
+      expect(getWorkspaceRoot("main")).toBe(join(root, "main"));
+    });
+  });
+
+  it("fails clearly on malformed local config without including its text", () => {
+    const cfg = join(stateDir, "openclaw.json");
+    writeFileSync(cfg, "{ agent: malformed-fixture");
+    expect(() => getWorkspaceRoot("mail")).toThrow(/^Could not read the OpenClaw workspace configuration$/);
+  });
+
+  it("preserves legacy rules, config and state until corresponding files exist in the configured workspace", () => {
+    const legacy = join(stateDir, "agents", "mail", "workspace");
+    const workspace = join(stateDir, "configured-mail");
+    const files = [
+      [getRulesFile, "usps-mail", "rules.json"],
+      [getConfigFile, "usps-mail", "config.json"],
+      [getAnalysisFile, "memory", "usps_analysis.json"],
+      [getStateFile, "memory", "usps_state.json"],
+    ] as const;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      withWorkspaceConfig({ agents: { entries: { mail: { workspace } } } }, () => {
+        for (const [getFile, subdir, name] of files) {
+          mkdirSync(join(legacy, subdir), { recursive: true });
+          const oldFile = join(legacy, subdir, name);
+          writeFileSync(oldFile, "{}");
+          expect(getFile("mail")).toBe(oldFile);
+          expect(getFile("mail")).toBe(oldFile);
+          mkdirSync(join(workspace, subdir), { recursive: true });
+          const newFile = join(workspace, subdir, name);
+          writeFileSync(newFile, "{}");
+          expect(getFile("mail")).toBe(newFile);
+        }
+      });
+      expect(warn).toHaveBeenCalledTimes(files.length);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("throws on null", () => {
@@ -44,16 +129,16 @@ describe("getWorkspaceRoot", () => {
 });
 
 describe("derived paths", () => {
-  it("memory dir ends with workspace/memory", () => {
-    expect(getMemoryDir("x")).toMatch(/workspace\/memory$/);
+  it("memory dir ends with workspace-x/memory", () => {
+    expect(getMemoryDir("x")).toMatch(/workspace-x\/memory$/);
   });
 
   it("long term memory dir ends with memory/mail", () => {
     expect(getLongTermMemoryDir("x")).toMatch(/memory\/mail$/);
   });
 
-  it("usps dir ends with workspace/usps-mail", () => {
-    expect(getUspsDir("x")).toMatch(/workspace\/usps-mail$/);
+  it("usps dir ends with workspace-x/usps-mail", () => {
+    expect(getUspsDir("x")).toMatch(/workspace-x\/usps-mail$/);
   });
 
   it("analysis file ends with memory/usps_analysis.json", () => {

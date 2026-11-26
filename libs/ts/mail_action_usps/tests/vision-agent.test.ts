@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,6 +9,7 @@ vi.mock("node:child_process", () => ({ execFileSync }));
 const home = mkdtempSync(join(tmpdir(), "usps-vision-home-"));
 vi.mock("node:os", async (orig) => ({ ...(await orig<typeof import("node:os")>()), homedir: () => home }));
 
+const { withWorkspaceConfig } = await import("../src/paths.js");
 const { analyzeViaAgent } = await import("../src/vision.js");
 
 function scan(): string {
@@ -34,4 +35,18 @@ describe("analyzeViaAgent", () => {
     analyzeViaAgent(scan(), "mail");
     expect(execFileSync.mock.calls[0][1]).not.toContain("--session-key");
   });
+});
+
+
+it("stages the scan in the configured vision workspace and removes it afterward", () => {
+  const workspace = join(home, "configured-vision");
+  const staged = join(workspace, "camera_captures", "usps-scan-1001-01.jpg");
+  execFileSync.mockImplementationOnce(() => {
+    expect(existsSync(staged)).toBe(true);
+    return JSON.stringify({ result: { payloads: [{ text: '{"sender":"Example"}' }] } });
+  });
+  withWorkspaceConfig({ agents: { entries: { vision: { workspace } } } }, () => {
+    expect(analyzeViaAgent(scan(), "vision")).toEqual({ sender: "Example" });
+  });
+  expect(existsSync(staged)).toBe(false);
 });

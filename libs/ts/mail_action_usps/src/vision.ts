@@ -14,7 +14,7 @@ import {
 } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, join } from "node:path";
-import { homedir } from "node:os";
+import { getWorkspaceRoot } from "./paths.js";
 
 import { ANALYSIS_PROMPT } from "./analysis-prompt.js";
 
@@ -30,14 +30,7 @@ function getAgentMediaDir(agent: string): string {
   if (!agent) {
     throw new Error("vision_agent is required");
   }
-  return join(
-    homedir(),
-    ".openclaw",
-    "agents",
-    agent,
-    "workspace",
-    "camera_captures",
-  );
+  return join(getWorkspaceRoot(agent), "camera_captures");
 }
 
 export interface AnalysisResult {

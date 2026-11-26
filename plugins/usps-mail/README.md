@@ -17,7 +17,7 @@ Analyze USPS Informed Delivery digest emails: parse mailpiece scans, vision-clas
 
 ## Configuration Schema
 
-No configuration required — the plugin uses workspace and agent references passed as tool parameters.
+The plugin follows OpenClaw’s workspace configuration. The local CLI and mail service read the local OpenClaw configuration. When rules, routing config or state exist only in the old workspace, USPS uses the file and emits a migration warning. Digest responses preserve the absolute `memory_file` and add `memory_file_relative`, which is relative to the memory agent’s workspace. Agent handoffs use the relative path.
 
 ## Tool Parameters
 
@@ -33,7 +33,7 @@ No configuration required — the plugin uses workspace and agent references pas
 | `dry_run` | boolean | No | If true, don't persist results |
 | `vision_backend` | string | No | Vision backend to use |
 | `message_id` | string | No | Source email message ID |
-| `workspace_agent` | string | No | Workspace agent reference |
+| `workspace_agent` | string | Yes | Configured agent ID that owns USPS workflow files |
 | `memory_agent` | string | No | Memory agent reference |
 | `vision_agent` | string | No | Vision agent reference |
 
@@ -46,7 +46,7 @@ No configuration required — the plugin uses workspace and agent references pas
 | `guid` | string | No | Mailpiece GUID to look up |
 | `date` | string | No | Date to search (YYYY-MM-DD) |
 | `search` | string | No | Free-text search query |
-| `workspace_agent` | string | No | Workspace agent reference |
+| `workspace_agent` | string | Yes | Configured agent ID that owns USPS workflow files |
 
 <a id="tool-usps_update_rule"></a>
 
@@ -61,7 +61,7 @@ No configuration required — the plugin uses workspace and agent references pas
 | `index` | number | No | Rule index (for remove) |
 | `comment_match` | string | No | Match rules by comment text |
 | `mailpiece` | string | No | Mailpiece to test against |
-| `workspace_agent` | string | No | Workspace agent reference |
+| `workspace_agent` | string | Yes | Configured agent ID that owns USPS workflow files |
 
 <a id="tool-usps_rules"></a>
 
@@ -70,7 +70,7 @@ No configuration required — the plugin uses workspace and agent references pas
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `test_mailpiece` | string | No | Optional mailpiece to test against rules |
-| `workspace_agent` | string | No | Workspace agent reference |
+| `workspace_agent` | string | Yes | Configured agent ID that owns USPS workflow files |
 
 <a id="tool-usps_stats"></a>
 
@@ -78,7 +78,7 @@ No configuration required — the plugin uses workspace and agent references pas
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `workspace_agent` | string | No | Workspace agent reference |
+| `workspace_agent` | string | Yes | Configured agent ID that owns USPS workflow files |
 
 <a id="tool-usps_status"></a>
 
@@ -86,7 +86,7 @@ No configuration required — the plugin uses workspace and agent references pas
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `workspace_agent` | string | No | Workspace agent reference |
+| `workspace_agent` | string | Yes | Configured agent ID that owns USPS workflow files |
 
 ---
 
