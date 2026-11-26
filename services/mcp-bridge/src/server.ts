@@ -43,7 +43,7 @@ export interface ServerOptions {
 
 export function buildMcpServer(config: BridgeConfig, now: () => Date = () => new Date(), backend?: BridgeBackend): McpServer {
   const server = new McpServer(
-    { name: config.name, version: "0.3.0" },
+    { name: config.name, version: "0.3.1" },
     config.instructions ? { instructions: config.instructions } : undefined,
   );
   registerTools(server, config, now, backend);
@@ -122,9 +122,14 @@ export function createMcpHttpServer(options: ServerOptions): Server {
     // A Funnel mount can forward /mcp as /mcp/; treat a trailing slash as the same path.
     const path = new URL(req.url ?? "/", "http://localhost").pathname.replace(/(.)\/+$/, "$1");
     const host = (req.headers.host ?? "").toLowerCase();
-    log(`→ ${req.method} ${path} host=${host} ua=${req.headers["user-agent"] ?? "-"}`);
+    const hostAllowed = allowed.size === 0 || allowed.has(host);
+    const auth = hostAllowed && path === MCP_PATH && req.method === "POST"
+      ? await authenticate(req.headers.authorization, options.auth)
+      : undefined;
+    const client = auth?.clientId?.replace(/[\s\x00-\x1f\x7f-\x9f]/g, encodeURIComponent) ?? "-";
+    log(`→ ${req.method} ${path} host=${host} ua=${req.headers["user-agent"] ?? "-"} client=${client}`);
 
-    if (allowed.size > 0 && !allowed.has(host)) {
+    if (!hostAllowed) {
       log(`421 host not allowed: ${host}`);
       sendJson(res, 421, { error: "misdirected request" });
       return;
@@ -146,15 +151,14 @@ export function createMcpHttpServer(options: ServerOptions): Server {
       sendJson(res, 404, { error: "not found" });
       return;
     }
-    if (req.method !== "POST") {
+    if (!auth) {
       // Stateless mode has no standalone SSE stream or session to delete.
       res.writeHead(405, { allow: "POST" }).end();
       return;
     }
 
-    const auth = await authenticate(req.headers.authorization, options.auth);
     if (!auth.ok) {
-      log(`${auth.status} ${auth.error}: ${auth.description}${auth.sub ? ` (sub=${auth.sub})` : ""}`);
+      log(`${auth.status} ${auth.error}: ${auth.description}`);
       req.resume();
       sendJson(res, auth.status, { error: auth.error, error_description: auth.description }, {
         "www-authenticate": challenge(options.auth, auth.error, auth.description),

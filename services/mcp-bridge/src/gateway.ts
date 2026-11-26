@@ -156,7 +156,7 @@ export function createGatewayClient(opts: GatewayOptions, onReady: () => void, o
     // pairing, so the bridge ends up with its own scoped device token.
     clientName: "cli",
     clientDisplayName: opts.displayName ?? "mcp-bridge",
-    clientVersion: "0.3.0",
+    clientVersion: "0.3.1",
     mode: "backend",
     platform: "macos",
     role: ROLE,

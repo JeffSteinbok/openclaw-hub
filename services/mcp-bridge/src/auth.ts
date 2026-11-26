@@ -27,8 +27,9 @@ export interface AuthConfig {
 }
 
 export type AuthResult =
-  | { ok: true; sub: string }
-  | { ok: false; status: 401 | 403; error: string; description: string; sub?: string };
+  | { ok: true; sub: string; clientId?: string }
+  | { ok: false; status: 403; error: string; description: string; clientId?: string }
+  | { ok: false; status: 401; error: string; description: string; clientId?: never };
 
 export function jwksFor(issuer: string): JWTVerifyGetKey {
   return createRemoteJWKSet(new URL(`${issuer}/oauth2/jwks`));
@@ -68,11 +69,14 @@ export async function authenticate(header: string | undefined, config: AuthConfi
       algorithms: ["RS256", "ES256"],
       requiredClaims: ["sub", "exp"],
     });
+    const clientId = typeof payload.client_id === "string" && payload.client_id.length > 0
+      ? payload.client_id
+      : undefined;
     const sub = String(payload.sub);
     if (!config.allowedSubjects.includes(sub)) {
-      return { ok: false, status: 403, error: "insufficient_scope", description: "This account is not allowed", sub };
+      return { ok: false, status: 403, error: "insufficient_scope", description: "This account is not allowed", clientId };
     }
-    return { ok: true, sub };
+    return { ok: true, sub, clientId };
   } catch (e) {
     const description =
       e instanceof errors.JWTExpired

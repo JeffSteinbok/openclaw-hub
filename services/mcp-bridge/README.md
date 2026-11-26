@@ -80,7 +80,7 @@ flowchart LR
 6. **Publish** the MCP URL over HTTPS on **port 443** (ChatGPT won't connect to other ports). With Tailscale Funnel,
    mount `/mcp`, `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server` onto the bridge.
 7. **Run** with an env file holding the settings below, then add the server in your client with OAuth. The first
-   sign-in is refused with `403` and logs the user's `sub`; add it to `MCP_BRIDGE_ALLOWED_SUBJECTS`.
+   sign-in gets `403` until you add the user ID from your OAuth provider to `MCP_BRIDGE_ALLOWED_SUBJECTS`.
 
 | Env | Required | Description |
 |---|---|---|
@@ -114,5 +114,5 @@ Keep hostnames, issuer subdomains and user IDs in the env file, not in a repo.
 
 ## Logs
 
-Requests are logged with path and user agent, refusals with the reason (a `403` includes the `sub`), sends with the
-destination name only.
+Requests are logged with path, user agent, and the verified token’s `client_id` (`client=-` when unavailable).
+Refusals include the reason, and sends include only the destination name.
