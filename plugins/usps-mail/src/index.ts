@@ -5,11 +5,12 @@
  * interfaces to the Python usps-mail plugin.
  */
 
-import { definePlugin } from "carapace-plugin-sdk";
+import { withWorkspaceConfig, type OpenClawWorkspaceConfig } from "@openclaw/mail-action-usps";
+import { definePlugin, type PluginApi } from "carapace-plugin-sdk";
 import { Type } from "@sinclair/typebox";
 import { processDigest, addRule, removeRule, testRule, listRules, lookup, getStats, loadState } from "./handlers.js";
 
-export const createEntry = definePlugin({
+const createToolEntry = definePlugin({
   id: "usps-mail",
   name: "USPS Mail Analyzer",
   description:
@@ -342,3 +343,24 @@ export const createEntry = definePlugin({
     }),
   ],
 });
+
+
+export function createEntry() {
+  const entry = createToolEntry();
+  return {
+    ...entry,
+    register(api: PluginApi & { config?: OpenClawWorkspaceConfig }) {
+      entry.register({
+        ...api,
+        registerTool(tool) {
+          const registered = tool as { execute: (id: string, params: unknown) => unknown };
+          api.registerTool({
+            ...registered,
+            execute: (id: string, params: unknown) =>
+              withWorkspaceConfig(api.config, () => registered.execute(id, params)),
+          });
+        },
+      });
+    },
+  };
+}

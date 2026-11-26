@@ -8,3 +8,5 @@
 export { processDigest } from "./analyze.js";
 export { processUspsDigestAction, registerUspsActions } from "./register.js";
 export { registerUspsActions as register } from "./register.js";
+
+export { withWorkspaceConfig, type OpenClawWorkspaceConfig } from "./paths.js";

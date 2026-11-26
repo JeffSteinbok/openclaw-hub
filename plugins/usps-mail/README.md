@@ -17,7 +17,7 @@ Analyze USPS Informed Delivery digest emails: parse mailpiece scans, vision-clas
 
 ## Configuration Schema
 
-No configuration required — the plugin uses workspace and agent references passed as tool parameters.
+The plugin resolves agent IDs from OpenClaw’s configured workspaces, with `workspace-<id>` under the state directory as the fallback. The local CLI and mail service read the local OpenClaw configuration. Returned `memory_file` paths are relative to the requested memory agent’s workspace.
 
 ## Tool Parameters
 

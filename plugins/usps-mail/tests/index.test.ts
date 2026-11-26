@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@openclaw/mail-action-usps", () => ({
   processDigest: vi.fn(),
+  withWorkspaceConfig: (_config: unknown, run: () => unknown) => run(),
 }));
 
 vi.mock("../src/usps-rules.js", () => ({

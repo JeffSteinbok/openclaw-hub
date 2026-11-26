@@ -2,7 +2,7 @@
  * Write monthly mail memory markdown files for the OpenClaw agent.
  *
  * Memory files live at:
- *   ~/.openclaw/agents/main/workspace/memory/mail/mail_memory_YYYY-MM.md
+ *   <memory workspace>/memory/mail/mail_memory_YYYY-MM.md
  */
 
 import { createHash } from "node:crypto";
