@@ -15,6 +15,7 @@ export const createEntry = definePlugin({
   description: "Fetch upcoming events from a published ICS calendar feed",
 
   configSchema: Type.Object({
+    calendarsByAgent: Type.Optional(Type.Record(Type.String(), Type.Array(Type.String()))),
     calendars: Type.Optional(
       Type.Array(
         Type.Object({
@@ -51,6 +52,12 @@ export const createEntry = definePlugin({
           // An ad-hoc url is checked as the pseudo-calendar "_url" (it takes
           // precedence over calendar_id in the handler, so check it first).
           const resourceId = url ? URL_PSEUDO_CALENDAR : calendar_id;
+          if (config.calendarsByAgent && !ctx?.agentId) return { error: "An authenticated agent context is required" };
+          const allowed = ctx?.agentId && Object.hasOwn(config.calendarsByAgent ?? {}, ctx.agentId)
+            ? config.calendarsByAgent?.[ctx.agentId] : undefined;
+          if (allowed && (!resourceId || !allowed.includes(resourceId))) {
+            return { error: "Calendar unavailable for this agent" };
+          }
           if (resourceId) {
             const decision = checkAccess(config.access, "calendars", resourceId, "read", ctx);
             if (!decision.allowed) return { error: decision.message };

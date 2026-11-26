@@ -29,6 +29,8 @@ export interface CalendarEvent {
   location?: string;
   organizer?: string;
   description?: string;
+  classification: string;
+  attendees?: string[];
   uid: string;
 }
 
@@ -93,37 +95,41 @@ function unescape(s: string): string {
   return s.replace(/\\n/g, "\n").replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\\\/g, "\\");
 }
 
-function parseEvents(ics: string, startDt: Date, endDt: Date): Array<Record<string, string>> {
-  const events: Array<Record<string, string>> = [];
-  let inEvent = false,
-    current: Record<string, string> = {},
-    prevKey = "";
-  for (const raw of ics.split(/\r?\n/)) {
-    if (/^[ \t]/.test(raw) && prevKey) {
-      current[prevKey] = (current[prevKey] ?? "") + raw.slice(1);
-      continue;
-    }
+type ParsedEvent = { fields: Record<string, string>; attendees: string[] };
+
+function parseEvents(ics: string, startDt: Date, endDt: Date): ParsedEvent[] {
+  const events: ParsedEvent[] = [];
+  let current: ParsedEvent | undefined;
+  // Unfold before parsing so each repeated ATTENDEE retains its own value.
+  for (const raw of ics.replace(/\r?\n[ \t]/gu, "").split(/\r?\n/u)) {
     const line = raw.trim();
     if (line === "BEGIN:VEVENT") {
-      inEvent = true;
-      current = {};
-      prevKey = "";
+      current = { fields: {}, attendees: [] };
     } else if (line === "END:VEVENT") {
-      inEvent = false;
-      const dtstart = current["DTSTART"];
-      if (dtstart) {
-        const dt = parseDt(dtstart);
-        if (dt && dt >= startDt && dt < endDt) events.push(current);
+      const start = current?.fields.DTSTART;
+      if (current && start) {
+        const date = parseDt(start);
+        if (date && date >= startDt && date < endDt) events.push(current);
       }
-      prevKey = "";
-    } else if (inEvent && line.includes(":")) {
-      const [k, ...rest] = line.split(":");
-      const key = k.split(";")[0];
-      current[key] = rest.join(":");
-      prevKey = key;
-    } else prevKey = "";
+      current = undefined;
+    } else if (current && line.includes(":")) {
+      const property = /^((?:"[^"]*"|[^":])+):(.*)$/u.exec(line);
+      if (!property) continue;
+      const key = property[1].split(";")[0].toUpperCase();
+      const value = property[2];
+      if (key === "ATTENDEE") current.attendees.push(value.replace(/^mailto:/iu, ""));
+      else if (key !== "CLASS" || current.fields.CLASS?.trim().toUpperCase() !== "PRIVATE") {
+        current.fields[key] = value;
+      }
+    }
   }
   return events;
+}
+
+function accessClassification(value: string | undefined): string {
+  // RFC 5545 §3.8.1.3 treats omitted CLASS as PUBLIC and unknown values as PRIVATE.
+  const classification = value?.trim().toUpperCase() ?? "PUBLIC";
+  return ["PUBLIC", "PRIVATE", "CONFIDENTIAL"].includes(classification) ? classification : "PRIVATE";
 }
 
 function fmtDt(s: string): string {
@@ -181,7 +187,7 @@ export async function fetchCalendarEvents(
 
   const ics = await httpGet(icsUrl);
   const events = parseEvents(ics, startDt, endDt);
-  const formatted: CalendarEvent[] = events.map((e) => ({
+  const formatted: CalendarEvent[] = events.map(({ fields: e, attendees }) => ({
     summary: unescape(e["SUMMARY"] ?? "No subject"),
     start: fmtDt(e["DTSTART"] ?? ""),
     end: fmtDt(e["DTEND"] ?? ""),
@@ -189,6 +195,8 @@ export async function fetchCalendarEvents(
     organizer: (e["ORGANIZER"] ?? "").replace("mailto:", "") || undefined,
     description: unescape(e["DESCRIPTION"] ?? "").split("\n")[0].trim() || undefined,
     uid: e["UID"] ?? "",
+    classification: accessClassification(e["CLASS"]),
+    ...(attendees.length ? { attendees } : {}),
   }));
 
   return {
@@ -223,7 +231,12 @@ export function calendarView(result: unknown): unknown {
     const title = String(e.summary ?? e.subject ?? "(no title)");
     const where = e.location ? ` @ ${String(e.location)}` : "";
     const busy = e.busy_type && String(e.busy_type).toLowerCase() !== "busy" ? ` (${String(e.busy_type)})` : "";
-    return `${span} ${title}${where}${busy}`;
+    const privacy = String(e.classification || "unknown").toLowerCase();
+    const attendees = Array.isArray(e.attendees)
+      ? e.attendees.map((person) => typeof person === "string" ? person : person.name || person.email).filter(Boolean)
+      : [];
+    const people = attendees.length ? ` | attendees: ${attendees.join(", ")}` : "";
+    return `${span} ${title}${where}${busy} | privacy: ${privacy}${people}`;
   });
   return [head, ...lines].join("\n");
 }

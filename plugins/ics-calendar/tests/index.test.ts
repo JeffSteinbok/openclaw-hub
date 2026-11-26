@@ -77,6 +77,30 @@ describe("plugin entry", () => {
 });
 
 describe("ics_calendar_fetch", () => {
+  it.each([
+    ["", "PUBLIC"], ["CLASS:X-UNKNOWN", "PRIVATE"], ["CLASS:CONFIDENTIAL", "CONFIDENTIAL"],
+  ])("classifies %s as %s according to iCalendar rules", async (line, classification) => {
+    mockHttp(ICS_BODY.replace("SUMMARY:Team Standup", "SUMMARY:Team Standup\n" + line));
+    const { api } = await loadPlugin();
+    const result = await api.tools.ics_calendar_fetch.execute("id", { url: "https://example.test/calendar" });
+    expect(resultText(result).events[0].classification).toBe(classification);
+  });
+
+  it("retains CLASS and repeated attendees in the model view", async () => {
+    mockHttp(ICS_BODY.replace("SUMMARY:Team Standup", [
+      "SUMMARY:Team Standup", "CLASS:PRIVATE",
+      'ATTENDEE;CN="Example: One":mailto:one@example.test',
+      "ATTENDEE:mailto:two@example.test",
+    ].join("\n")));
+    const { api } = await loadPlugin();
+    const result = await api.tools.ics_calendar_fetch.execute("id", { url: "https://example.test/calendar" });
+    expect(resultText(result).events[0]).toMatchObject({
+      classification: "PRIVATE", attendees: ["one@example.test", "two@example.test"],
+    });
+    expect(modelText(result)).toContain("privacy: private");
+    expect(modelText(result)).toContain("attendees: one@example.test, two@example.test");
+  });
+
   it("returns error when neither calendar_id nor url provided", async () => {
     const { api } = await loadPlugin();
     const data = resultText(await api.tools["ics_calendar_fetch"].execute("id", {}));
@@ -135,7 +159,7 @@ UID:x
 END:VEVENT
 END:VCALENDAR`);
     const r = await api.tools["ics_calendar_fetch"].execute("id", { url: "http://example.com/c.ics", label: "Family", after: "2026-10-27", before: "2026-10-27" });
-    expect(modelText(r)).toBe("Family: 1 events, 2026-10-27 to 2026-10-28\n2026-10-27 09:00–10:00 Dentist @ Main St");
+    expect(modelText(r)).toBe("Family: 1 events, 2026-10-27 to 2026-10-28\n2026-10-27 09:00–10:00 Dentist @ Main St | privacy: public");
     expect(resultText(r).events[0].description).toBe("Bring the forms");
   });
 

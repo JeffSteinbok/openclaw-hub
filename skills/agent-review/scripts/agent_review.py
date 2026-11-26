@@ -92,6 +92,7 @@ DEFAULT_ISSUE_LABELS = ["agent-review", "auto-filed"]
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Extract weekly agent review diagnostics.")
+    parser.add_argument("--exclude-agent", action="append", default=[], help="Skip this agent before reading session or memory content. Repeat for multiple agents.")
     parser.add_argument(
         "--days",
         type=int,
@@ -659,7 +660,7 @@ def _parse_session_records(
     return events
 
 
-def parse_trajectories(since_ts: datetime) -> tuple[list[dict], dict, list[str]]:
+def parse_trajectories(since_ts: datetime, excluded: frozenset[str] = frozenset()) -> tuple[list[dict], dict, list[str]]:
     """
     Scan all trajectory JSONL files.
 
@@ -693,6 +694,8 @@ def parse_trajectories(since_ts: datetime) -> tuple[list[dict], dict, list[str]]
     all_paths: list[tuple[Path, str]] = []  # (path, agent_name)
     for pattern in globs:
         for path in AGENTS_DIR.glob(pattern):
+            if path.relative_to(AGENTS_DIR).parts[0] in excluded:
+                continue
             try:
                 real = path.resolve()
             except OSError:
@@ -745,7 +748,7 @@ def _decode_transcript_row(event_json: str | None, event_zstd: bytes | None) -> 
     return record if isinstance(record, dict) else None
 
 
-def parse_sqlite_sessions(since_ts: datetime) -> tuple[list[dict], dict, list[str]]:
+def parse_sqlite_sessions(since_ts: datetime, excluded: frozenset[str] = frozenset()) -> tuple[list[dict], dict, list[str]]:
     """
     Scan the per-agent SQLite session stores used since OpenClaw 2026.9.x.
 
@@ -770,8 +773,10 @@ def parse_sqlite_sessions(since_ts: datetime) -> tuple[list[dict], dict, list[st
     have_zstd = shutil.which("zstd") is not None
 
     for db_path in sorted(AGENTS_DIR.glob("*/agent/openclaw-agent.sqlite")):
-        stats["databases_seen"] += 1
         agent = db_path.relative_to(AGENTS_DIR).parts[0]
+        if agent in excluded:
+            continue
+        stats["databases_seen"] += 1
         try:
             conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=10)
         except sqlite3.Error as exc:
@@ -829,7 +834,7 @@ def parse_sqlite_sessions(since_ts: datetime) -> tuple[list[dict], dict, list[st
     return events, stats, issues
 
 
-def scan_memory_files(since_ts: datetime) -> tuple[list[tuple[str, str, str]], dict, list[str]]:
+def scan_memory_files(since_ts: datetime, excluded: frozenset[str] = frozenset()) -> tuple[list[tuple[str, str, str]], dict, list[str]]:
     """
     Scan daily memory markdown files for lines containing correction/issue signals.
     Returns (flags, scan_stats, scan_issues).
@@ -848,6 +853,8 @@ def scan_memory_files(since_ts: datetime) -> tuple[list[tuple[str, str, str]], d
     all_md_paths: list[Path] = []
     for pattern in patterns:
         for p in AGENTS_DIR.glob(pattern):
+            if p.relative_to(AGENTS_DIR).parts[0] in excluded:
+                continue
             resolved = p.resolve()
             if resolved not in seen_paths:
                 seen_paths.add(resolved)
@@ -892,6 +899,7 @@ def scan_memory_files(since_ts: datetime) -> tuple[list[tuple[str, str, str]], d
 
 def main() -> None:
     parsed = parse_args()
+    excluded = frozenset(parsed.exclude_agent)
     now = datetime.now(tz=timezone.utc)
     since = now - timedelta(days=parsed.days)
     state_file = Path(parsed.state_file).expanduser()
@@ -901,8 +909,8 @@ def main() -> None:
     all_cron_sessions = set()
     cron_sessions_errored = set()
 
-    events, trajectory_stats, trajectory_issues = parse_trajectories(since)
-    sqlite_events, sqlite_stats, sqlite_issues = parse_sqlite_sessions(since)
+    events, trajectory_stats, trajectory_issues = parse_trajectories(since, excluded)
+    sqlite_events, sqlite_stats, sqlite_issues = parse_sqlite_sessions(since, excluded)
     events.extend(sqlite_events)
     if sqlite_stats["events_read"]:
         # Legacy JSONL files are pre-migration archives; finding nothing recent
@@ -939,7 +947,7 @@ def main() -> None:
                 cron_sessions_errored.add(session_key)
                 cron_sessions_with_errors[session_key]["count"] += 1
 
-    raw_flags, memory_stats, memory_issues = scan_memory_files(since)
+    raw_flags, memory_stats, memory_issues = scan_memory_files(since, excluded)
 
     # Deduplicate and trim
     seen_lines = set()

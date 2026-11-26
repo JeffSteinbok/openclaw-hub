@@ -87,6 +87,20 @@ describe("ics_calendar_fetch access control", () => {
     expect(text(await tool({ agentId: "main" }).execute("id", { url: "http://example.com/a.ics", label: "A" })).calendar).toBe("A");
   });
 
+  it("restricts a mapped agent before wildcard ACLs or direct URL overrides apply", async () => {
+    const { tool } = await loadTool({
+      calendars: CONFIG.calendars,
+      calendarsByAgent: { partner: ["bob"] },
+    });
+    expect(text(await tool({ agentId: "partner" }).execute("id", { calendar_id: "family" })).error)
+      .toMatch(/unavailable/);
+    expect(text(await tool({ agentId: "partner" }).execute("id", { url: "https://example.test/hidden" })).error)
+      .toMatch(/unavailable/);
+    expect(text(await tool({}).execute("id", { calendar_id: "bob" })).error).toMatch(/authenticated agent/);
+    mockIcs();
+    expect(text(await tool({ agentId: "partner" }).execute("id", { calendar_id: "bob" })).calendar).toBe("Bob");
+  });
+
   it("allows everything without an access block", async () => {
     mockIcs();
     const { tool } = await loadTool({ calendars: CONFIG.calendars });

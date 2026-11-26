@@ -49,6 +49,20 @@ describe("outlook_work_calendar_fetch", () => {
     vi.stubEnv("OUTLOOK_WORK_FOLDER_ID", "folder-123");
   });
 
+  it("keeps upstream sensitivity and attendees visible to the owning agent", async () => {
+    const fixture = JSON.parse(WORK_EVENTS_RESPONSE);
+    const event = fixture.Body.ResponseMessages.Items[0].RootFolder.Items[0];
+    event.Sensitivity = "Private";
+    event.RequiredAttendees = [{ Mailbox: { Name: "Example", EmailAddress: "person@example.test" } }];
+    mockHttp(JSON.stringify(fixture));
+    const { api } = await loadPlugin();
+    const result = await api.tools.outlook_work_calendar_fetch.execute("id", {});
+    expect(resultText(result).events[0]).toMatchObject({
+      sensitivity: "private", attendees: [{ name: "Example", email: "person@example.test" }],
+    });
+    expect(modelText(result)).toContain("privacy: private");
+  });
+
   it("returns error when env vars missing", async () => {
     vi.stubEnv("OUTLOOK_WORK_CALENDAR_URL", undefined);
     const { api } = await loadPlugin();
@@ -71,7 +85,7 @@ describe("outlook_work_calendar_fetch", () => {
     mockHttp(WORK_EVENTS_RESPONSE);
     const { api } = await loadPlugin();
     const text = modelText(await api.tools["outlook_work_calendar_fetch"].execute("id", { after: "2026-05-03", before: "2026-05-03" }));
-    expect(text.split("\n")[1]).toBe("2026-05-03 10:00–10:30 1:1 with Manager @ Teams");
+    expect(text.split("\n")[1]).toBe("2026-05-03 10:00–10:30 1:1 with Manager @ Teams | privacy: normal");
   });
 
   it("queries an explicit date range with an inclusive end day", async () => {
