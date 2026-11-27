@@ -131,3 +131,45 @@ it("retries a disconnect that happened before the request was sent", async () =>
     queue.close();
   }
 });
+
+it("starts another due reminder while a send awaits confirmation", async () => {
+  let finishSlow!: () => void;
+  deliver.mockImplementationOnce(() => new Promise<void>((resolve) => { finishSlow = resolve; }));
+  const queue = new ReminderQueue({ directory, prepare, log });
+  queue.schedule(Date.now() + 1000, "owner", "route", "Slow");
+  queue.schedule(Date.now() + 2000, "owner", "route", "Fast");
+  try {
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(deliver.mock.calls.map((call) => call[2])).toEqual(["Slow", "Fast"]);
+    finishSlow();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(readdirSync(directory)).toEqual([]);
+  } finally {
+    queue.close();
+  }
+});
+
+it("retries restoring an unsent claim before attempting delivery again", async () => {
+  prepare.mockResolvedValueOnce(async () => { throw new Error("Gateway disconnected"); });
+  const queue = new ReminderQueue({ directory, prepare, log });
+  const id = queue.schedule(Date.now() + 1000, "owner", "route", "Call home");
+  const originalRename = fs.renameSync;
+  const rename = vi.spyOn(fs, "renameSync").mockImplementation((from, to) => {
+    if (String(from).endsWith(".sending")) throw new Error("temporarily unable to restore");
+    originalRename(from, to);
+  });
+  try {
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(readdirSync(directory)).toEqual([`${id}.sending`]);
+    expect(deliver).not.toHaveBeenCalled();
+    rename.mockRestore();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(readdirSync(directory)).toEqual([`${id}.json`]);
+    expect(deliver).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(deliver).toHaveBeenCalledTimes(1);
+  } finally {
+    rename.mockRestore();
+    queue.close();
+  }
+});

@@ -7,6 +7,7 @@ interface Reminder {
   id: string;
   at: number;
   retryAfter?: number;
+  restoreFrom?: string;
   destination: string;
   routeKey: string;
   message: string;
@@ -23,7 +24,7 @@ interface ReminderQueueOptions {
 export class ReminderQueue {
   private readonly pending = new Map<string, Reminder>();
   private timer?: ReturnType<typeof setTimeout>;
-  private running = false;
+  private readonly working = new Set<string>();
   private stopped = false;
 
   constructor(private readonly options: ReminderQueueOptions) {
@@ -93,10 +94,11 @@ export class ReminderQueue {
 
   private arm(): void {
     clearTimeout(this.timer);
-    if (this.running || this.stopped) return;
+    if (this.working.size >= 4 || this.stopped) return;
     const readyAt = (job: Reminder) => Math.max(job.at, job.retryAfter ?? 0);
     const next = [...this.pending.values()].reduce<Reminder | undefined>(
-      (earliest, job) => !earliest || readyAt(job) < readyAt(earliest) ? job : earliest, undefined,
+      (earliest, job) => !this.working.has(job.id) && (!earliest || readyAt(job) < readyAt(earliest)) ? job : earliest,
+      undefined,
     );
     if (!next) return;
     this.timer = setTimeout(() => void this.deliver(next), Math.min(60_000, Math.max(0, readyAt(next) - Date.now())));
@@ -108,25 +110,27 @@ export class ReminderQueue {
       this.arm();
       return;
     }
-    this.running = true;
+    this.working.add(job.id);
+    this.arm();
     try {
       await this.attempt(job);
     } finally {
-      this.running = false;
+      this.working.delete(job.id);
       this.arm();
     }
   }
 
-  private restorePending(job: Reminder, sending: string): void {
-    try {
-      fs.renameSync(sending, this.file(job.id, "json"));
-    } catch {
-      this.pending.delete(job.id);
-      this.options.log(`could not restore reminder claim id=${job.id}`);
-      return;
-    }
+  private restorePending(job: Reminder, from: string): void {
     job.retryAfter = Date.now() + 5000;
     this.pending.set(job.id, job);
+    try {
+      fs.renameSync(from, this.file(job.id, "json"));
+      delete job.restoreFrom;
+    } catch {
+      job.restoreFrom = from;
+      this.options.log(`could not restore reminder claim id=${job.id}; retrying`);
+      return;
+    }
     try {
       this.syncDirectory();
     } catch {
@@ -136,6 +140,10 @@ export class ReminderQueue {
   }
 
   private async attempt(job: Reminder): Promise<void> {
+    if (job.restoreFrom) {
+      this.restorePending(job, job.restoreFrom);
+      return;
+    }
     let send: PreparedSend | null;
     try {
       send = await this.options.prepare(job.destination, job.routeKey, job.message, `mcp-reminder:${job.id}`);
