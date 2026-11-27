@@ -33,8 +33,59 @@ export function resolveCaptureDir(configured?: string): string {
 const CAPTURE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const CAPTURE_NAME = /^[a-z0-9-]+_\d{4}-\d{2}-\d{2}T\d{4}\.jpg$/;
 
+// Require the configured output path and its existing ancestors to be physical
+// directories. A redirected directory must not become a new camera output root.
+function ensureCaptureDir(dir: string): void {
+  if (path.resolve(dir) !== dir) throw new Error("Camera output directory must be absolute");
+  try {
+    if (!fs.lstatSync(dir).isDirectory() || fs.realpathSync(dir) !== dir) {
+      throw new Error("Camera output directory must not traverse symlinks");
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    ensureCaptureDir(path.dirname(dir));
+    try {
+      fs.mkdirSync(dir, { mode: 0o700 });
+    } catch (mkdirError) {
+      if ((mkdirError as NodeJS.ErrnoException).code !== "EEXIST") throw mkdirError;
+    }
+    ensureCaptureDir(dir);
+  }
+}
+
+async function writeCameraCapture(
+  dir: string,
+  basename: string,
+  write: (temporaryPath: string) => Promise<void> | void,
+): Promise<{ file: string; size: number }> {
+  if (path.basename(basename) !== basename || !CAPTURE_NAME.test(basename)) {
+    throw new Error("Invalid camera capture filename");
+  }
+  ensureCaptureDir(dir);
+  const stage = fs.mkdtempSync(path.join(dir, ".capture-"));
+  try {
+    const temporaryPath = path.join(stage, "image.jpg");
+    await write(temporaryPath);
+    ensureCaptureDir(dir);
+    if (fs.realpathSync(temporaryPath) !== temporaryPath) throw new Error("Camera output escaped the capture directory");
+    const stat = fs.lstatSync(temporaryPath);
+    if (!stat.isFile() || stat.nlink !== 1) throw new Error("Invalid camera output file");
+    fs.chmodSync(temporaryPath, 0o600);
+    const file = path.join(dir, basename);
+    // Replace the directory entry atomically, without opening any existing
+    // destination that could be a symlink or hard link to another file.
+    fs.renameSync(temporaryPath, file);
+    return { file, size: stat.size };
+  } finally {
+    if (fs.existsSync(stage) && fs.realpathSync(stage) === stage) {
+      fs.rmSync(stage, { recursive: true, force: true });
+    }
+  }
+}
+
 export function pruneCameraCaptures(captureDir: string, now = Date.now()): void {
   try {
+    if (fs.realpathSync(captureDir) !== captureDir) return;
     for (const entry of fs.readdirSync(captureDir, { withFileTypes: true })) {
       if (!entry.isFile() || !CAPTURE_NAME.test(entry.name)) continue;
       const file = path.join(captureDir, entry.name);
@@ -256,17 +307,17 @@ export async function cameraSnapshot(
   entityId: string,
   captureDir: string,
 ): Promise<string | null> {
-  fs.mkdirSync(captureDir, { recursive: true });
   const ts = new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);
-  const filePath = path.join(captureDir, `${name}_${ts}.jpg`);
   const url = `${baseUrl}/api/camera_proxy/${entityId}`;
   try {
     const res = await httpRequest("GET", url, { Authorization: `Bearer ${token}` }, undefined, 15_000);
     if (res.status < 200 || res.status >= 300) return null;
     const buf = res.rawBody;
     if (buf.length < 3 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
-    fs.writeFileSync(filePath, buf);
-    return filePath;
+    const { file } = await writeCameraCapture(captureDir, `${name}_${ts}.jpg`, (temporaryPath) => {
+      fs.writeFileSync(temporaryPath, buf, { flag: "wx", mode: 0o600 });
+    });
+    return file;
   } catch {
     return null;
   }
@@ -901,10 +952,7 @@ export async function cameraCollageHandler(
   const buildFilter = (withLabels: boolean): string => buildCollageFilter(names, { labels: withLabels, keyframe: Boolean(keyframe) });
 
   const ts = new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);
-  fs.mkdirSync(captureDir, { recursive: true });
-  const outPath = path.join(captureDir, `collage_${ts}.jpg`);
-
-  const runFfmpeg = (withLabels: boolean) => {
+  const runFfmpeg = (withLabels: boolean, outPath: string) => {
     const args = ["-y"];
     for (const [, file] of snapshots) args.push("-i", file);
     if (keyframe) args.push("-i", keyframe);
@@ -913,26 +961,28 @@ export async function cameraCollageHandler(
   };
 
   let labeled = drawLabel;
+  let output: { file: string; size: number };
   try {
-    try {
-      await runFfmpeg(labeled);
-    } catch (e: unknown) {
-      // Homebrew's ffmpeg is built without freetype, so it has no drawtext filter.
-      // A collage without camera names beats no collage.
-      if (!labeled || !String((e as { stderr?: string }).stderr ?? "").includes("drawtext")) throw e;
-      labeled = false;
-      await runFfmpeg(false);
-    }
+    output = await writeCameraCapture(captureDir, `collage_${ts}.jpg`, async (temporaryPath) => {
+      try {
+        await runFfmpeg(labeled, temporaryPath);
+      } catch (e: unknown) {
+        // Homebrew's ffmpeg can lack the drawtext filter. Retry without labels.
+        if (!labeled || !String((e as { stderr?: string }).stderr ?? "").includes("drawtext")) throw e;
+        labeled = false;
+        await runFfmpeg(false, temporaryPath);
+      }
+    });
   } catch (e: unknown) {
     const err = e as { stderr?: string; message?: string };
     // stderr is "" when ffmpeg never started (e.g. ENOENT), so fall through to the message
     return { error: "ffmpeg error", detail: (err.stderr || err.message || String(e)).slice(-500) };
   }
 
-  const sizeKb = Math.round(fs.statSync(outPath).size / 1024);
+  const sizeKb = Math.round(output.size / 1024);
   pruneCameraCaptures(captureDir);
   return {
-    file: outPath,
+    file: output.file,
     cameras: snapshots.map(([n]) => n),
     ...(keyframe ? { keyframe } : {}),
     size_kb: sizeKb,

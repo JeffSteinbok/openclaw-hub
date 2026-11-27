@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
+import { createServer } from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { buildCollageFilter, keyframeAllowed, pruneCameraCaptures, resolveCaptureDir } from "../src/handlers.js";
+import { buildCollageFilter, cameraCollageHandler, cameraSnapshot, keyframeAllowed, pruneCameraCaptures, resolveCaptureDir } from "../src/handlers.js";
 
 const six = ["front-doorbell", "front-doorbell-package", "driveway", "backyard-left", "backyard-right", "garage"];
 
@@ -84,7 +85,7 @@ it("honors OpenClaw state and capture directory overrides", () => {
 });
 
 it("prunes only expired generated camera files", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "capture-retention-"));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "capture-retention-")));
   try {
     const oldCapture = path.join(dir, "front-doorbell_2026-11-01T1234.jpg");
     const newCapture = path.join(dir, "collage_2026-11-25T1234.jpg");
@@ -99,6 +100,44 @@ it("prunes only expired generated camera files", () => {
     expect(fs.existsSync(oldCapture)).toBe(false);
     expect(fs.readdirSync(dir).sort()).toEqual([path.basename(newCapture), path.basename(link), path.basename(other)].sort());
   } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+it.skipIf(!hasFfmpeg)("writes a real collage inside the capture directory without following destination links", async () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "capture-output-")));
+  const jpeg = path.join(dir, "source.jpg");
+  execFileSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "color=c=gray:s=320x180", "-frames:v", "1", jpeg]);
+  const bytes = fs.readFileSync(jpeg);
+  const server = createServer((_request, response) => response.end(bytes));
+  try {
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const addr = server.address();
+    if (!addr || typeof addr === "string") throw new Error("Expected a TCP listener");
+    const baseUrl = `http://127.0.0.1:${addr.port}`;
+    const captureDir = path.join(dir, "capture");
+    const outside = path.join(dir, "outside");
+    fs.mkdirSync(outside);
+    fs.symlinkSync(outside, captureDir);
+    const config = { server: baseUrl, token: "test", captureDir };
+    expect(await cameraCollageHandler(config, { camera_names: ["garage"] })).toMatchObject({ error: "All camera snapshots failed" });
+    expect(fs.readdirSync(outside)).toEqual([]);
+    fs.unlinkSync(captureDir);
+    fs.mkdirSync(captureDir);
+    vi.setSystemTime(new Date("2026-11-26T15:00:00Z"));
+    const victim = path.join(outside, "keep.jpg");
+    const output = path.join(captureDir, "collage_2026-11-26T1500.jpg");
+    fs.writeFileSync(victim, "untouched");
+    fs.symlinkSync(victim, output);
+    expect(await cameraSnapshot(baseUrl, "test", "../escape", "camera.garage", captureDir)).toBeNull();
+    expect(await cameraCollageHandler(config, { camera_names: ["garage"] })).toMatchObject({ file: output });
+    expect(fs.realpathSync(output)).toBe(output);
+    expect(fs.readFileSync(output).subarray(0, 3)).toEqual(Buffer.from([255, 216, 255]));
+    expect(fs.readFileSync(victim, "utf8")).toBe("untouched");
+    expect(fs.readdirSync(captureDir).some((file) => file.startsWith(".capture-"))).toBe(false);
+  } finally {
+    vi.useRealTimers();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
