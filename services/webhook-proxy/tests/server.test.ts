@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { AddressInfo } from "node:net";
 import type http from "node:http";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "../src/config.js";
 import { AuthFailureLimiter } from "../src/limiter.js";
 import { createProxyServer } from "../src/server.js";
@@ -203,4 +203,24 @@ describe("github-issues filter", () => {
     expect(res.status).toBe(204);
     expect(forwarded).toHaveLength(0);
   });
+});
+
+
+it("annotates a marked rejection only on the direct loopback connection", async () => {
+  const lines = vi.spyOn(console, "log").mockImplementation(() => {});
+  try {
+    const agent = `octo-healthcheck/${"ab".repeat(16)}`;
+    const headers = { "user-agent": agent, connection: "close" };
+    for (const extra of [{}, { "x-forwarded-for": "192.0.2.42" }]) {
+      const response = await fetch(`${base}/hass`, { method: "POST", headers: { ...headers, ...extra } });
+      expect(response.status).toBe(401);
+      await response.text();
+    }
+    const rejected = lines.mock.calls.map(([line]) => String(line)).filter((line) => line.includes("401 auth failed"));
+    expect(rejected).toHaveLength(2);
+    expect(rejected[0]).toContain(`smoke=${agent} route=/hass source=loopback`);
+    expect(rejected[1]).not.toContain("smoke=");
+  } finally {
+    lines.mockRestore();
+  }
 });

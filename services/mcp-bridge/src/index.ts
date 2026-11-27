@@ -11,6 +11,7 @@
  *   MCP_BRIDGE_GATEWAY_URL      OpenClaw Gateway WebSocket (default ws://127.0.0.1:18789)
  *   MCP_BRIDGE_ALLOWED_HOSTS    Host header allowlist (default: loopback + the resource's host)
  *   MCP_BRIDGE_PORT             listen port (default 18793)
+ *   MCP_BRIDGE_PROXY_SOCKET_DIR private directory for Tailscale Unix listeners (optional)
  *
  * Fails closed: without a resource, an https issuer, signing keys or a valid
  * tools file it refuses to start; it never serves /mcp unauthenticated.
@@ -23,7 +24,8 @@ import path from "node:path";
 import { createRemoteJWKSet } from "jose";
 import { loadConfig, reloadClientTools, type BridgeConfig } from "./config.js";
 import { DeviceStore, OpenClawGateway, type Destination } from "./gateway.js";
-import { createMcpHttpServer } from "./server.js";
+import type { ServerOptions } from "./server.js";
+import { listenMcpBridge } from "./proxy-listeners.js";
 import { ReminderQueue } from "./reminders.js";
 import type { BridgeBackend } from "./tools.js";
 
@@ -141,24 +143,22 @@ process.on("SIGHUP", () => {
 });
 
 const keys = createRemoteJWKSet(new URL(await jwksUrl()));
-const server = createMcpHttpServer({
+const options: ServerOptions = {
   allowedHosts: ALLOWED_HOSTS,
   auth: { issuer: ISSUER, resource: RESOURCE, allowedSubjects: SUBJECTS, keys },
   config: () => config,
   log,
   ...(backend ? { backend } : {}),
-});
-server.listen(PORT, "127.0.0.1", () => {
-  try {
-    startReminders?.();
-  } catch {
-    fatal("could not start the reminder queue");
+};
+try {
+  const servers = await listenMcpBridge(options, PORT, env("PROXY_SOCKET_DIR"));
+  for (const server of servers) {
+    server.on("error", (error) => fatal(`server error: ${error.message}`));
   }
-  log(`listening on 127.0.0.1:${PORT}/mcp as "${config.name}"`);
-  log(`${SUBJECTS.length} allowed subject(s); tools: ${backend ? config.tools.map((t) => t.name).join(", ") : "ping only (not paired)"}`);
-  if (backend) log(`destinations: ${Object.keys(backend.destinations).join(", ") || "none"}`);
-});
-server.on("error", (e) => {
-  log(`server error: ${e}`);
-  process.exit(1);
-});
+  startReminders?.();
+} catch (error) {
+  fatal(error instanceof Error ? error.message : "could not start the bridge");
+}
+log(`listening on 127.0.0.1:${PORT}/mcp as "${config.name}"`);
+log(`${SUBJECTS.length} allowed subject(s); tools: ${backend ? config.tools.map((t) => t.name).join(", ") : "ping only (not paired)"}`);
+if (backend) log(`destinations: ${Object.keys(backend.destinations).join(", ") || "none"}`);

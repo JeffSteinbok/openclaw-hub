@@ -257,3 +257,8 @@ The config file and `.env` live in `octo` (not this repo):
 - Repeated auth failures lock the client out; bodies are size-limited; only `POST` is accepted
 - Only a fixed allowlist of headers is forwarded to OpenClaw, so a sender can't inject headers such as identity or forwarding headers
 - `none` auth type should only be used for routes that are never exposed via Funnel
+
+
+An auth failure from direct loopback can include a route and health-check marker when the request uses
+the expected one-time marker format and carries no proxy forwarding headers. The annotations leave the
+auth checks and per-client limiter in effect.

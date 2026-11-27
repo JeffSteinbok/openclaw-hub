@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AddressInfo } from "node:net";
-import type { Server } from "node:http";
+import { request, type Server } from "node:http";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair, type CryptoKey } from "jose";
 import { createMcpHttpServer } from "../src/server.js";
 import { authenticate, type AuthConfig } from "../src/auth.js";
@@ -36,8 +39,8 @@ async function token(claims: Record<string, unknown> = {}, opts: { key?: CryptoK
     .sign(opts.key ?? privateKey);
 }
 
-async function rpc(method: string, bearer?: string, params: unknown = {}) {
-  const headers: Record<string, string> = { "content-type": "application/json", accept: ACCEPT };
+async function rpc(method: string, bearer?: string, params: unknown = {}, extraHeaders: Record<string, string> = {}) {
+  const headers: Record<string, string> = { "content-type": "application/json", accept: ACCEPT, ...extraHeaders };
   if (bearer) headers.authorization = `Bearer ${bearer}`;
   const res = await fetch(`${base}/mcp`, {
     method: "POST",
@@ -121,6 +124,19 @@ describe("auth", () => {
   });
 });
 
+function unixRequest(socketPath: string, path: string, method: string, headers: Record<string, string>) {
+  return new Promise<number | undefined>((resolve, reject) => {
+    const req = request({ socketPath, path, method, headers }, (res) => {
+      res.resume();
+      res.on("end", () => resolve(res.statusCode));
+      res.on("error", reject);
+    });
+    req.on("error", reject);
+    if (method === "POST") req.end(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }));
+    else req.end();
+  });
+}
+
 describe("OAuth client logging", () => {
   it("returns and logs the verified client ID without logging the bearer or other claims", async () => {
     const t = await token({ client_id: "client_connect", custom: "private-claim-value" });
@@ -128,7 +144,7 @@ describe("OAuth client logging", () => {
     const start = logs.length;
     expect((await rpc("tools/list", t)).status).toBe(200);
     const requestLogs = logs.slice(start);
-    expect(requestLogs).toEqual([expect.stringMatching(/^→ POST \/mcp .* client=client_connect$/)]);
+    expect(requestLogs).toEqual(["signed-in POST /mcp ip=- via=unknown client=client_connect"]);
     for (const privateValue of [t, OWNER, ISSUER, RESOURCE, "private-claim-value"]) {
       expect(requestLogs.join("\n")).not.toContain(privateValue);
     }
@@ -137,7 +153,7 @@ describe("OAuth client logging", () => {
   it.each([undefined, "", 123])("logs client=- for an unavailable client ID (%s)", async (client_id) => {
     const start = logs.length;
     expect((await rpc("tools/list", await token({ client_id }))).status).toBe(200);
-    expect(logs.slice(start)).toEqual([expect.stringMatching(/^→ POST \/mcp .* client=-$/)]);
+    expect(logs.slice(start)).toEqual(["signed-in POST /mcp ip=- via=unknown client=-"]);
   });
 
   it("keeps a verified client ID on a 403 and escapes log separators", async () => {
@@ -145,8 +161,71 @@ describe("OAuth client logging", () => {
     const t = await token({ client_id: "client\nnext", sub: "private-stranger" });
     expect((await rpc("tools/list", t)).status).toBe(403);
     expect(logs.slice(start)).toEqual([
-      expect.stringMatching(/^→ POST \/mcp .* client=client%0Anext$/),
+      "→ POST /mcp client=client%0Anext auth=403",
       "403 insufficient_scope: This account is not allowed",
+    ]);
+  });
+
+  it("ignores spoofed forwarding headers on direct loopback", async () => {
+    const start = logs.length;
+    const forwarded = {
+      "x-forwarded-for": "192.0.2.42",
+      "x-forwarded-host": "mcp.example.test",
+      "tailscale-funnel-request": "?1",
+    };
+    expect((await rpc("tools/list", await token(), {}, forwarded)).status).toBe(200);
+    expect(logs.slice(start)).toEqual(["signed-in POST /mcp ip=- via=unknown client=-"]);
+  });
+
+  it("records validated origins only on the Unix mount and verifies the forwarded host", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mcp-"));
+    const socketPath = join(dir, "mcp.sock");
+    const proxy = createMcpHttpServer({
+      config: () => CONFIG, auth, allowedHosts: ["mcp.example.test"],
+      log: (line) => logs.push(line), proxyMount: "/mcp",
+    });
+    try {
+      await new Promise<void>((resolve, reject) => proxy.once("error", reject).listen(socketPath, resolve));
+      const bearer = await token();
+      for (const [address, funnel, origin] of [
+        ["192.0.2.42", "?1", "ip=192.0.2.42 via=funnel"],
+        ["fd7a:115c:a1e0::8", undefined, "ip=fd7a:115c:a1e0::8 via=tailnet"],
+        ["192.0.2.42, 192.0.2.43", "?1", "ip=- via=unknown"],
+        ["fe80::1%private-interface", "?1", "ip=- via=unknown"],
+        ["192.0.2.42", "invalid", "ip=- via=unknown"],
+      ] as const) {
+        const headers: Record<string, string> = {
+          "content-type": "application/json", accept: ACCEPT, authorization: `Bearer ${bearer}`,
+          host: "localhost", "x-forwarded-for": address,
+          "x-forwarded-host": "mcp.example.test", "tailscale-user-login": "private@example.test",
+        };
+        if (funnel) headers["tailscale-funnel-request"] = funnel;
+        const start = logs.length;
+        expect(await unixRequest(socketPath, "/", "POST", headers)).toBe(200);
+        expect(logs.slice(start)).toEqual([`signed-in POST /mcp ${origin} client=-`]);
+      }
+      expect(await unixRequest(socketPath, "/", "GET", { host: "mcp.example.test" })).toBe(421);
+      const start = logs.length;
+      expect(await unixRequest(socketPath, "/", "POST", {
+        "x-forwarded-host": "mcp.example.test", "user-agent": `octo-healthcheck/${"ab".repeat(16)}`,
+      })).toBe(401);
+      expect(logs.slice(start).at(-1)).toBe("401 invalid_request: Authorization needed");
+    } finally {
+      await new Promise<void>((resolve) => proxy.close(() => resolve()));
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("logs only the exact smoke user-agent on a missing-token challenge", async () => {
+    const agent = `octo-healthcheck/${"ab".repeat(16)}`;
+    const start = logs.length;
+    await rpc("tools/list", undefined, {}, { "user-agent": agent });
+    await rpc("tools/list", "invalid-token", {}, { "user-agent": agent });
+    expect(logs.slice(start)).toEqual([
+      "→ POST /mcp client=- auth=401",
+      `401 invalid_request: Authorization needed smoke=${agent} route=/mcp source=loopback`,
+      "→ POST /mcp client=- auth=401",
+      "401 invalid_token: Invalid token",
     ]);
   });
 
@@ -155,7 +234,7 @@ describe("OAuth client logging", () => {
     const t = await token({ client_id: "unverified-client" }, { key: otherKey });
     expect((await rpc("tools/list", t)).status).toBe(401);
     expect(logs.slice(start)).toEqual([
-      expect.stringMatching(/^→ POST \/mcp .* client=-$/),
+      "→ POST /mcp client=- auth=401",
       "401 invalid_token: Invalid token",
     ]);
   });
