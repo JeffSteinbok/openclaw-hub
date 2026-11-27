@@ -156,7 +156,7 @@ export function createGatewayClient(opts: GatewayOptions, onReady: () => void, o
     // pairing, so the bridge ends up with its own scoped device token.
     clientName: "cli",
     clientDisplayName: opts.displayName ?? "mcp-bridge",
-    clientVersion: "0.3.1",
+    clientVersion: "0.3.3",
     mode: "backend",
     platform: "macos",
     role: ROLE,
@@ -283,13 +283,13 @@ export class OpenClawGateway {
   }
 
   /** Send a message directly through the Gateway (no agent involved). */
-  async send(dest: Destination, message: string): Promise<AskResult> {
+  async send(dest: Destination, message: string, idempotencyKey: string = crypto.randomUUID()): Promise<AskResult> {
     const client = await this.connected();
     await client.request("send", {
       channel: dest.channel,
       to: dest.to,
       message,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey,
     });
     return { ok: true, text: "Sent." };
   }

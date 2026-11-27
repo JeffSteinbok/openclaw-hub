@@ -1,0 +1,105 @@
+/** One-shot reminders persisted next to the bridge's paired-device data. */
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+
+interface Reminder {
+  id: string;
+  at: number;
+  destination: string;
+  routeKey: string;
+  message: string;
+}
+
+interface ReminderQueueOptions {
+  directory: string;
+  deliver: (destination: string, routeKey: string, message: string, id: string) => Promise<void>;
+  log: (message: string) => void;
+}
+
+export class ReminderQueue {
+  private readonly pending = new Map<string, Reminder>();
+  private timer?: ReturnType<typeof setTimeout>;
+  private running = false;
+  private stopped = false;
+
+  constructor(private readonly options: ReminderQueueOptions) {
+    fs.mkdirSync(options.directory, { recursive: true, mode: 0o700 });
+    for (const file of fs.readdirSync(options.directory)) {
+      if (file.endsWith(".sending")) {
+        options.log("a reminder has unconfirmed delivery; automatic replay is disabled");
+      }
+      if (!/^[a-f0-9]{32}\.json$/.test(file)) continue;
+      try {
+        const job = JSON.parse(fs.readFileSync(path.join(options.directory, file), "utf8")) as Reminder;
+        if (file !== `${job.id}.json` || !Number.isFinite(job.at) ||
+            typeof job.destination !== "string" || typeof job.routeKey !== "string" || typeof job.message !== "string") {
+          throw new Error("invalid reminder");
+        }
+        this.pending.set(job.id, job);
+      } catch {
+        options.log("could not load a saved reminder");
+      }
+    }
+    this.arm();
+  }
+
+  schedule(at: number, destination: string, routeKey: string, message: string): string {
+    const data = { at, destination, routeKey, message };
+    const id = createHash("sha256").update(JSON.stringify(data)).digest("hex").slice(0, 32);
+    if (this.pending.has(id) || fs.existsSync(this.file(id, "sending"))) return id;
+    const job = { id, ...data };
+    const temp = this.file(id, "tmp");
+    try {
+      fs.writeFileSync(temp, JSON.stringify(job), { mode: 0o600, flag: "wx", flush: true });
+      fs.renameSync(temp, this.file(id, "json"));
+    } finally {
+      fs.rmSync(temp, { force: true });
+    }
+    this.pending.set(id, job);
+    this.arm();
+    return id;
+  }
+
+  close(): void {
+    this.stopped = true;
+    clearTimeout(this.timer);
+  }
+
+  private file(id: string, extension: string): string {
+    return path.join(this.options.directory, `${id}.${extension}`);
+  }
+
+  private arm(): void {
+    clearTimeout(this.timer);
+    if (this.running || this.stopped) return;
+    const next = [...this.pending.values()].reduce<Reminder | undefined>(
+      (earliest, job) => !earliest || job.at < earliest.at ? job : earliest, undefined,
+    );
+    if (!next) return;
+    this.timer = setTimeout(() => void this.deliver(next), Math.min(60_000, Math.max(0, next.at - Date.now())));
+    this.timer.unref();
+  }
+
+  private async deliver(job: Reminder): Promise<void> {
+    if (job.at > Date.now()) {
+      this.arm();
+      return;
+    }
+    this.running = true;
+    this.pending.delete(job.id);
+    const sending = this.file(job.id, "sending");
+    try {
+      // Claim before sending. After a crash or timeout, delivery is ambiguous.
+      fs.renameSync(this.file(job.id, "json"), sending);
+      await this.options.deliver(job.destination, job.routeKey, job.message, `mcp-reminder:${job.id}`);
+      fs.unlinkSync(sending);
+      this.options.log(`delivered reminder id=${job.id}`);
+    } catch {
+      this.options.log(`reminder delivery unconfirmed id=${job.id}`);
+    } finally {
+      this.running = false;
+      this.arm();
+    }
+  }
+}

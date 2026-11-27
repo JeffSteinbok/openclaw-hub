@@ -20,6 +20,8 @@ export interface BridgeBackend {
   ask(agent: string, prompt: string): Promise<ToolResult>;
   /** Send a message to a named destination. */
   send(destination: string, message: string): Promise<ToolResult>;
+  /** Persist a one-shot message to an approved destination. */
+  remind?: (at: number, destination: string, message: string) => string;
   /** Destination names → channel ("imessage", "discord"), for the send tool's description. */
   destinations: Record<string, string>;
 }
@@ -100,6 +102,13 @@ function runTool(spec: ToolSpec, config: BridgeConfig, backend: BridgeBackend, n
   const timezone = config.timezone ?? "UTC";
   return async (params: Record<string, unknown>) =>
     guarded(async () => {
+      if (spec.reminder && backend.remind) {
+        const at = Date.parse(String(params["time"]));
+        if (!(at > now().getTime())) return { ok: false, text: "Give a time in the future." };
+        const channel = String(params["channel"] ?? spec.reminder.defaultChannel);
+        const id = backend.remind(at, spec.reminder.destinations[channel], String(params["text"]));
+        return { ok: true, text: `Reminder ${id} scheduled for ${new Date(at).toISOString()} via ${channel}.` };
+      }
       if (spec.send) {
         return backend.send(String(params["to"]), String(params["message"]));
       }
@@ -153,6 +162,17 @@ export function registerTools(server: McpServer, config: BridgeConfig, now: () =
         range: z.enum(DATE_RANGES).optional().describe("A named range; defaults to today"),
         start: z.string().regex(ISO_DATE).optional().describe("Start date, YYYY-MM-DD (use with end)"),
         end: z.string().regex(ISO_DATE).optional().describe("End date, YYYY-MM-DD, inclusive"),
+      };
+    }
+    if (spec.reminder) {
+      const channels = Object.keys(spec.reminder.destinations).filter((channel) =>
+        backend.destinations[spec.reminder!.destinations[channel]] === channel,
+      );
+      if (!backend.remind || !channels.includes(spec.reminder.defaultChannel)) continue;
+      inputSchema = {
+        text: z.string().trim().min(1).max(1000).describe("The reminder text"),
+        time: z.iso.datetime({ offset: true }).describe("Future ISO 8601 date and time with a UTC offset"),
+        channel: z.enum(channels as [string, ...string[]]).optional().describe(`Defaults to ${spec.reminder.defaultChannel}`),
       };
     }
     if (spec.send) {
