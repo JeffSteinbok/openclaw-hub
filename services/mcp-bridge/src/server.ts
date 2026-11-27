@@ -188,16 +188,15 @@ export function createMcpHttpServer(options: ServerOptions): Server {
         log(`tool call denied client=${client}`);
       }
     }
-    const server = buildMcpServer({
-      ...config,
-      tools: config.tools.filter((tool) => permitted.has(tool.name)),
-    }, options.now, options.backend);
+    const tools = config.tools.filter((tool) => permitted.has(tool.name));
+    const instructions = tools.length === config.tools.length ? config.instructions : undefined;
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-    res.on("close", () => {
-      void transport.close();
-      void server.close();
-    });
     try {
+      const server = buildMcpServer({ ...config, instructions, tools }, options.now, options.backend);
+      res.on("close", () => {
+        void transport.close();
+        void server.close();
+      });
       await server.connect(transport);
       await transport.handleRequest(req, res, body);
     } catch (e) {
