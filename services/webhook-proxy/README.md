@@ -261,4 +261,4 @@ The config file and `.env` live in `octo` (not this repo):
 
 An auth failure from direct loopback can include a route and health-check marker when the request uses
 the expected one-time marker format and carries no proxy forwarding headers. The annotations leave the
-auth checks and per-client limiter in effect.
+auth checks and per-client limiter in effect. Rejection diagnostics include a bounded user-agent family, a validated address when available, and an origin category. The proxy labels Funnel metadata on its TCP listener as reported forwarding.
