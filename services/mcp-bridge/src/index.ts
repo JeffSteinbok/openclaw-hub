@@ -95,12 +95,8 @@ if (store.isPaired()) {
         prepare: async (name, expectedRoute, message, id) => {
           const send = await gateway.prepareSend();
           const current = store.loadDestinations({ strict: true });
-          return async () => {
-            if (!Object.hasOwn(current, name) || routeKey(current[name]) !== expectedRoute) {
-              throw new Error("destination changed");
-            }
-            await send(current[name], message, id);
-          };
+          if (!Object.hasOwn(current, name) || routeKey(current[name]) !== expectedRoute) return null;
+          return async (onSent) => { await send(current[name], message, id, onSent); };
         },
       })
     : undefined;

@@ -2,7 +2,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { GatewayClientRequestTimeoutError } from "@openclaw/gateway-client";
 
 interface Reminder {
   id: string;
@@ -13,9 +12,11 @@ interface Reminder {
   message: string;
 }
 
+type PreparedSend = (onSent: () => void) => Promise<void>;
+
 interface ReminderQueueOptions {
   directory: string;
-  prepare: (destination: string, routeKey: string, message: string, id: string) => Promise<() => Promise<void>>;
+  prepare: (destination: string, routeKey: string, message: string, id: string) => Promise<PreparedSend | null>;
   log: (message: string) => void;
 }
 
@@ -119,17 +120,23 @@ export class ReminderQueue {
   private restorePending(job: Reminder, sending: string): void {
     try {
       fs.renameSync(sending, this.file(job.id, "json"));
-      job.retryAfter = Date.now() + 5000;
-      this.pending.set(job.id, job);
-      this.options.log(`reminder send did not start id=${job.id}; retrying`);
     } catch {
       this.pending.delete(job.id);
       this.options.log(`could not restore reminder claim id=${job.id}`);
+      return;
     }
+    job.retryAfter = Date.now() + 5000;
+    this.pending.set(job.id, job);
+    try {
+      this.syncDirectory();
+    } catch {
+      this.options.log(`could not sync restored reminder id=${job.id}`);
+    }
+    this.options.log(`reminder send did not start id=${job.id}; retrying`);
   }
 
   private async attempt(job: Reminder): Promise<void> {
-    let send: () => Promise<void>;
+    let send: PreparedSend | null;
     try {
       send = await this.options.prepare(job.destination, job.routeKey, job.message, `mcp-reminder:${job.id}`);
     } catch {
@@ -138,7 +145,7 @@ export class ReminderQueue {
       return;
     }
 
-    const sending = this.file(job.id, "sending");
+    const sending = this.file(job.id, send ? "sending" : "cancelled");
     try {
       // Claim before sending. After a crash or timeout, delivery is ambiguous.
       fs.renameSync(this.file(job.id, "json"), sending);
@@ -158,17 +165,24 @@ export class ReminderQueue {
       return;
     }
     this.pending.delete(job.id);
+    if (!send) {
+      this.options.log(`reminder cancelled because the destination changed id=${job.id}`);
+      return;
+    }
+    let sent = false;
     try {
-      await send();
+      await send(() => { sent = true; });
+    } catch {
+      if (!sent) this.restorePending(job, sending);
+      else this.options.log(`reminder delivery unconfirmed id=${job.id}`);
+      return;
+    }
+    try {
       fs.unlinkSync(sending);
       this.syncDirectory();
       this.options.log(`delivered reminder id=${job.id}`);
-    } catch (error) {
-      if (error instanceof GatewayClientRequestTimeoutError && !error.requestSent) {
-        this.restorePending(job, sending);
-      } else {
-        this.options.log(`reminder delivery unconfirmed id=${job.id}`);
-      }
+    } catch {
+      this.options.log(`reminder delivered but could not clean up its record id=${job.id}`);
     }
   }
 }

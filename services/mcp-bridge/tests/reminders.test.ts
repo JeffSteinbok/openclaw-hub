@@ -2,7 +2,6 @@ import fs, { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { GatewayClientRequestTimeoutError } from "@openclaw/gateway-client";
 import { ReminderQueue } from "../src/reminders.js";
 
 let directory: string;
@@ -10,7 +9,10 @@ const log = vi.fn();
 const deliver = vi.fn<(destination: string, routeKey: string, message: string, id: string) => Promise<void>>();
 
 const prepare = vi.fn(async (destination: string, routeKey: string, message: string, id: string) =>
-  () => deliver(destination, routeKey, message, id),
+  (onSent: () => void) => {
+    onSent();
+    return deliver(destination, routeKey, message, id);
+  },
 );
 
 beforeEach(() => {
@@ -116,15 +118,15 @@ it("restores the pending job if syncing its claim fails before sending", async (
   }
 });
 
-it.each([false, true])("retries a timeout only if the request was unsent (%s)", async (requestSent) => {
-  deliver.mockRejectedValueOnce(new GatewayClientRequestTimeoutError({ method: "send", timeoutMs: 1000, requestSent }));
+it("retries a disconnect that happened before the request was sent", async () => {
+  prepare.mockResolvedValueOnce(async () => { throw new Error("Gateway disconnected"); });
   const queue = new ReminderQueue({ directory, prepare, log });
   const id = queue.schedule(Date.now() + 1000, "owner", "route", "Call home");
   try {
     await vi.advanceTimersByTimeAsync(1000);
-    expect(readdirSync(directory)).toEqual([`${id}.${requestSent ? "sending" : "json"}`]);
+    expect(readdirSync(directory)).toEqual([`${id}.json`]);
     await vi.advanceTimersByTimeAsync(5000);
-    expect(deliver).toHaveBeenCalledTimes(requestSent ? 1 : 2);
+    expect(deliver).toHaveBeenCalledTimes(1);
   } finally {
     queue.close();
   }

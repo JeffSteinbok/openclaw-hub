@@ -310,13 +310,18 @@ export class OpenClawGateway {
   /** Wait for a connection before an operation that must distinguish preflight failure from a send. */
   async prepareSend() {
     const client = await this.connected();
-    return async (dest: Destination, message: string, idempotencyKey: string = crypto.randomUUID()): Promise<AskResult> => {
+    return async (
+      dest: Destination,
+      message: string,
+      idempotencyKey: string = crypto.randomUUID(),
+      onSent?: () => void,
+    ): Promise<AskResult> => {
       await client.request("send", {
         channel: dest.channel,
         to: dest.to,
         message,
         idempotencyKey,
-      });
+      }, { onSent });
       return { ok: true, text: "Sent." };
     };
   }
