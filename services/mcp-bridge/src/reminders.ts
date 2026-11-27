@@ -6,6 +6,7 @@ import path from "node:path";
 interface Reminder {
   id: string;
   at: number;
+  retryAfter?: number;
   destination: string;
   routeKey: string;
   message: string;
@@ -73,25 +74,37 @@ export class ReminderQueue {
   private arm(): void {
     clearTimeout(this.timer);
     if (this.running || this.stopped) return;
+    const readyAt = (job: Reminder) => Math.max(job.at, job.retryAfter ?? 0);
     const next = [...this.pending.values()].reduce<Reminder | undefined>(
-      (earliest, job) => !earliest || job.at < earliest.at ? job : earliest, undefined,
+      (earliest, job) => !earliest || readyAt(job) < readyAt(earliest) ? job : earliest, undefined,
     );
     if (!next) return;
-    this.timer = setTimeout(() => void this.deliver(next), Math.min(60_000, Math.max(0, next.at - Date.now())));
+    this.timer = setTimeout(() => void this.deliver(next), Math.min(60_000, Math.max(0, readyAt(next) - Date.now())));
     this.timer.unref();
   }
 
   private async deliver(job: Reminder): Promise<void> {
-    if (job.at > Date.now()) {
+    if (Math.max(job.at, job.retryAfter ?? 0) > Date.now()) {
+      this.arm();
+      return;
+    }
+    const sending = this.file(job.id, "sending");
+    try {
+      // Claim before sending. After a crash or timeout, delivery is ambiguous.
+      fs.renameSync(this.file(job.id, "json"), sending);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        this.pending.delete(job.id);
+      } else {
+        job.retryAfter = Date.now() + 5000;
+        this.options.log(`could not claim reminder id=${job.id}; retrying`);
+      }
       this.arm();
       return;
     }
     this.running = true;
     this.pending.delete(job.id);
-    const sending = this.file(job.id, "sending");
     try {
-      // Claim before sending. After a crash or timeout, delivery is ambiguous.
-      fs.renameSync(this.file(job.id, "json"), sending);
       await this.options.deliver(job.destination, job.routeKey, job.message, `mcp-reminder:${job.id}`);
       fs.unlinkSync(sending);
       this.options.log(`delivered reminder id=${job.id}`);

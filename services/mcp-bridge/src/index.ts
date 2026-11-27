@@ -22,7 +22,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRemoteJWKSet } from "jose";
 import { loadConfig, reloadClientTools, type BridgeConfig } from "./config.js";
-import { DeviceStore, OpenClawGateway } from "./gateway.js";
+import { DeviceStore, OpenClawGateway, type Destination } from "./gateway.js";
 import { createMcpHttpServer } from "./server.js";
 import { ReminderQueue } from "./reminders.js";
 import type { BridgeBackend } from "./tools.js";
@@ -86,15 +86,18 @@ let backend: BridgeBackend | undefined;
 if (store.isPaired()) {
   const gateway = new OpenClawGateway({ url: GATEWAY_URL, store, log });
   const destinations = store.loadDestinations();
-  const routeKey = (name: string) => createHash("sha256").update(JSON.stringify(destinations[name])).digest("hex");
+  const routeKey = (destination: Destination) => createHash("sha256").update(JSON.stringify(destination)).digest("hex");
   const directory = path.join(DEVICE_DIR, "reminders");
   const reminders = config.tools.some((tool) => tool.reminder) || fs.existsSync(directory)
     ? new ReminderQueue({
         directory,
         log,
         deliver: async (name, expectedRoute, message, id) => {
-          if (!Object.hasOwn(destinations, name) || routeKey(name) !== expectedRoute) throw new Error("destination changed");
-          await gateway.send(destinations[name], message, id);
+          const current = store.loadDestinations();
+          if (!Object.hasOwn(current, name) || routeKey(current[name]) !== expectedRoute) {
+            throw new Error("destination changed");
+          }
+          await gateway.send(current[name], message, id);
         },
       })
     : undefined;
@@ -107,7 +110,7 @@ if (store.isPaired()) {
       log(`send to ${name} (${dest.channel})`);
       return gateway.send(dest, message);
     },
-    ...(reminders ? { remind: (at: number, name: string, message: string) => reminders.schedule(at, name, routeKey(name), message) } : {}),
+    ...(reminders ? { remind: (at: number, name: string, message: string) => reminders.schedule(at, name, routeKey(destinations[name]), message) } : {}),
     destinations: Object.fromEntries(Object.entries(destinations).map(([n, d]) => [n, d.channel])),
   };
 } else {

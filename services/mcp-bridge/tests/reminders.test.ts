@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
+import fs, { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -54,5 +54,26 @@ it("retains ambiguous deliveries for inspection without replaying them on restar
     expect(deliver).toHaveBeenCalledTimes(1);
   } finally {
     resumed.close();
+  }
+});
+
+it("keeps a reminder pending when its claim fails and allows other reminders through", async () => {
+  const queue = new ReminderQueue({ directory, deliver, log });
+  queue.schedule(Date.now() + 1000, "owner", "route", "Retry me");
+  queue.schedule(Date.now() + 2000, "owner", "route", "Second reminder");
+  const claim = vi.spyOn(fs, "renameSync").mockImplementationOnce(() => {
+    throw Object.assign(new Error("temporarily unavailable"), { code: "EBUSY" });
+  });
+  try {
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(deliver).not.toHaveBeenCalled();
+    expect(readdirSync(directory)).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(deliver.mock.calls.map((call) => call[2])).toEqual(["Second reminder"]);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(deliver.mock.calls.map((call) => call[2])).toEqual(["Second reminder", "Retry me"]);
+  } finally {
+    claim.mockRestore();
+    queue.close();
   }
 });
