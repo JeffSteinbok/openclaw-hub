@@ -8,6 +8,7 @@
 
 import http from "node:http";
 import crypto from "node:crypto";
+import { isIP } from "node:net";
 import type { IncomingMessage } from "node:http";
 import { DEFAULT_MAX_BODY_BYTES, log } from "./config.js";
 import type { Config } from "./config.js";
@@ -33,6 +34,15 @@ export function clientKey(req: IncomingMessage): string {
   const xff = req.headers["x-forwarded-for"];
   const forwarded = (Array.isArray(xff) ? xff[0] : xff)?.split(",")[0]?.trim();
   return isLoopback && forwarded ? forwarded : remote;
+}
+
+function agentFamily(value: string | string[] | undefined): string {
+  if (typeof value !== "string") return "other";
+  if (/^curl(?:[ /]|$)/i.test(value)) return "curl";
+  if (/^Mozilla\//i.test(value)) return "browser";
+  if (/^(?:node|undici)(?:[ /]|$)/i.test(value)) return "node";
+  if (/^openai-mcp(?:[ /]|$)/i.test(value)) return "openai-mcp";
+  return "other";
 }
 
 function reply(res: http.ServerResponse, status: number, text: string, headers: Record<string, string> = {}): void {
@@ -82,7 +92,7 @@ export function createProxyServer(config: Config, deps: ProxyDeps): http.Server 
     const ua = req.headers["user-agent"] ?? "unknown";
     const event = req.headers["x-github-event"] ?? "-";
     const delivery = req.headers["x-github-delivery"] ?? "-";
-    log(`[${reqId}] → ${method} ${path} event=${event} delivery=${delivery} ua=${ua}`);
+    log(`[${reqId}] → ${method} ${path} event=${event} delivery=${delivery} agent=${agentFamily(ua)}`);
 
     let body: Buffer;
     try {
@@ -104,12 +114,18 @@ export function createProxyServer(config: Config, deps: ProxyDeps): http.Server 
     const authResult = validateAuth(route.auth, req.headers, body);
     if (!authResult.ok) {
       limiter.recordFailure(client);
-      const directLoopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "") &&
-        req.headers["x-forwarded-for"] === undefined && req.headers["x-forwarded-host"] === undefined &&
-        req.headers["tailscale-funnel-request"] === undefined;
+      const loopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "");
+      const directLoopback = loopback && req.headers["x-forwarded-for"] === undefined &&
+        req.headers["x-forwarded-host"] === undefined && req.headers["tailscale-funnel-request"] === undefined;
       const smoke = directLoopback && typeof ua === "string" && /^octo-healthcheck\/[a-f0-9]{32}$/.test(ua)
         ? ` smoke=${ua} route=${path} source=loopback` : "";
-      log(`[${reqId}] 401 auth failed: ${authResult.reason}${smoke}`);
+      const via = directLoopback ? "local" : !loopback ? "lan" :
+        req.headers["tailscale-funnel-request"] === "?1" ? "reported-funnel" : "forwarded";
+      const address = !directLoopback && !client.includes("%") && isIP(client) ? client : "-";
+      const reason = authResult.reason ?? "unknown validation error";
+      const cause = reason.startsWith("missing ") ? "missing-credentials" :
+        reason.endsWith("mismatch") ? "credential-mismatch" : "configuration";
+      log(`[${reqId}] 401 auth failed: ${reason} watch=${via},${address},${agentFamily(ua)},${cause}${smoke}`);
       reply(res, 401, "Unauthorized");
       return;
     }

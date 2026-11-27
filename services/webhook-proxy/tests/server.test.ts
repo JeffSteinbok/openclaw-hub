@@ -220,6 +220,8 @@ it("annotates a marked rejection only on the direct loopback connection", async 
     expect(rejected).toHaveLength(2);
     expect(rejected[0]).toContain(`smoke=${agent} route=/hass source=loopback`);
     expect(rejected[1]).not.toContain("smoke=");
+    expect(rejected[0]).toContain("watch=local,-,other,missing-credentials");
+    expect(rejected[1]).toContain("watch=forwarded,192.0.2.42,other,missing-credentials");
   } finally {
     lines.mockRestore();
   }

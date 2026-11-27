@@ -100,16 +100,25 @@ function jsonRpcError(res: ServerResponse, status: number, code: number, message
   sendJson(res, status, { jsonrpc: "2.0", error: { code, message }, id: null });
 }
 
-function callerOrigin(req: IncomingMessage): string {
+function agentFamily(value: string | string[] | undefined): string {
+  if (typeof value !== "string") return "other";
+  if (/^curl(?:[ /]|$)/i.test(value)) return "curl";
+  if (/^Mozilla\//i.test(value)) return "browser";
+  if (/^(?:node|undici)(?:[ /]|$)/i.test(value)) return "node";
+  if (/^openai-mcp(?:[ /]|$)/i.test(value)) return "openai-mcp";
+  return "other";
+}
+
+function callerOrigin(req: IncomingMessage): { ip: string; via: string } {
   // Called only on a private Unix listener. Serve replaces X-Forwarded-For
   // with a single IP and sets its own Funnel flag.
   const address = req.headers["x-forwarded-for"];
   const funnel = req.headers["tailscale-funnel-request"];
   if (req.headers["x-forwarded-host"] && typeof address === "string" &&
       !address.includes("%") && isIP(address) && (funnel === undefined || funnel === "?1")) {
-    return `ip=${address} via=${funnel === "?1" ? "funnel" : "tailnet"}`;
+    return { ip: address, via: funnel === "?1" ? "funnel" : "tailnet" };
   }
-  return "ip=- via=unknown";
+  return { ip: "-", via: "unknown" };
 }
 
 export function createMcpHttpServer(options: ServerOptions): Server {
@@ -146,8 +155,14 @@ export function createMcpHttpServer(options: ServerOptions): Server {
       ? await authenticate(req.headers.authorization, options.auth)
       : undefined;
     const client = auth?.clientId?.replace(/[\s\x00-\x1f\x7f-\x9f]/g, encodeURIComponent) ?? "-";
+    const agent = req.headers["user-agent"];
+    const directLoopback = !options.proxyMount && req.socket.remoteAddress === "127.0.0.1" &&
+      req.headers["x-forwarded-for"] === undefined && req.headers["x-forwarded-host"] === undefined &&
+      req.headers["tailscale-funnel-request"] === undefined;
+    const origin = options.proxyMount ? callerOrigin(req) : { ip: "-", via: directLoopback ? "local" : "unknown" };
+    const context = (cause: string) => `watch=${origin.via},${origin.ip},${agentFamily(agent)},${cause}`;
     if (auth?.ok) {
-      log(`signed-in POST /mcp ${options.proxyMount ? callerOrigin(req) : "ip=- via=unknown"} client=${client}`);
+      log(`signed-in POST /mcp ip=${origin.ip} via=${origin.via} client=${client} ${context("signed-in")}`);
     } else {
       log(`→ ${req.method} ${path} client=${client} auth=${auth?.status ?? "-"}`);
     }
@@ -181,14 +196,12 @@ export function createMcpHttpServer(options: ServerOptions): Server {
     }
 
     if (!auth.ok) {
-      const agent = req.headers["user-agent"];
-      const directLoopback = !options.proxyMount && req.socket.remoteAddress === "127.0.0.1" &&
-        req.headers["x-forwarded-for"] === undefined && req.headers["x-forwarded-host"] === undefined &&
-        req.headers["tailscale-funnel-request"] === undefined;
       const smoke = directLoopback && auth.status === 401 && req.headers.authorization === undefined &&
         typeof agent === "string" && /^octo-healthcheck\/[a-f0-9]{32}$/.test(agent)
         ? ` smoke=${agent} route=/mcp source=loopback` : "";
-      log(`${auth.status} ${auth.error}: ${auth.description}${smoke}`);
+      const cause = auth.error === "invalid_token" ? "invalid-token" :
+        auth.error === "invalid_request" ? "missing-token" : "account-denied";
+      log(`${auth.status} ${auth.error}: ${auth.description} ${context(cause)}${smoke}`);
       req.resume();
       sendJson(res, auth.status, { error: auth.error, error_description: auth.description }, {
         "www-authenticate": challenge(options.auth, auth.error, auth.description),
@@ -215,7 +228,7 @@ export function createMcpHttpServer(options: ServerOptions): Server {
     for (const message of Array.isArray(body) ? body : [body]) {
       if (message?.method === "tools/call" && typeof message.params?.name === "string" &&
           !permitted.has(message.params.name)) {
-        log(`tool call denied client=${client}`);
+        log(`tool call denied client=${client} ${context("tool-denied")}`);
       }
     }
     const tools = config.tools.filter((tool) => permitted.has(tool.name));

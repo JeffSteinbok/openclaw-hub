@@ -144,7 +144,7 @@ describe("OAuth client logging", () => {
     const start = logs.length;
     expect((await rpc("tools/list", t)).status).toBe(200);
     const requestLogs = logs.slice(start);
-    expect(requestLogs).toEqual(["signed-in POST /mcp ip=- via=unknown client=client_connect"]);
+    expect(requestLogs).toEqual(["signed-in POST /mcp ip=- via=local client=client_connect watch=local,-,node,signed-in"]);
     for (const privateValue of [t, OWNER, ISSUER, RESOURCE, "private-claim-value"]) {
       expect(requestLogs.join("\n")).not.toContain(privateValue);
     }
@@ -153,7 +153,7 @@ describe("OAuth client logging", () => {
   it.each([undefined, "", 123])("logs client=- for an unavailable client ID (%s)", async (client_id) => {
     const start = logs.length;
     expect((await rpc("tools/list", await token({ client_id }))).status).toBe(200);
-    expect(logs.slice(start)).toEqual(["signed-in POST /mcp ip=- via=unknown client=-"]);
+    expect(logs.slice(start)).toEqual(["signed-in POST /mcp ip=- via=local client=- watch=local,-,node,signed-in"]);
   });
 
   it("keeps a verified client ID on a 403 and escapes log separators", async () => {
@@ -162,7 +162,7 @@ describe("OAuth client logging", () => {
     expect((await rpc("tools/list", t)).status).toBe(403);
     expect(logs.slice(start)).toEqual([
       "→ POST /mcp client=client%0Anext auth=403",
-      "403 insufficient_scope: This account is not allowed",
+      "403 insufficient_scope: This account is not allowed watch=local,-,node,account-denied",
     ]);
   });
 
@@ -174,7 +174,7 @@ describe("OAuth client logging", () => {
       "tailscale-funnel-request": "?1",
     };
     expect((await rpc("tools/list", await token(), {}, forwarded)).status).toBe(200);
-    expect(logs.slice(start)).toEqual(["signed-in POST /mcp ip=- via=unknown client=-"]);
+    expect(logs.slice(start)).toEqual(["signed-in POST /mcp ip=- via=unknown client=- watch=unknown,-,node,signed-in"]);
   });
 
   it("records validated origins only on the Unix mount and verifies the forwarded host", async () => {
@@ -202,14 +202,15 @@ describe("OAuth client logging", () => {
         if (funnel) headers["tailscale-funnel-request"] = funnel;
         const start = logs.length;
         expect(await unixRequest(socketPath, "/", "POST", headers)).toBe(200);
-        expect(logs.slice(start)).toEqual([`signed-in POST /mcp ${origin} client=-`]);
+        const [, ip, via] = /^ip=(\S+) via=(\S+)$/.exec(origin)!;
+        expect(logs.slice(start)).toEqual([`signed-in POST /mcp ${origin} client=- watch=${via},${ip},other,signed-in`]);
       }
       expect(await unixRequest(socketPath, "/", "GET", { host: "mcp.example.test" })).toBe(421);
       const start = logs.length;
       expect(await unixRequest(socketPath, "/", "POST", {
         "x-forwarded-host": "mcp.example.test", "user-agent": `octo-healthcheck/${"ab".repeat(16)}`,
       })).toBe(401);
-      expect(logs.slice(start).at(-1)).toBe("401 invalid_request: Authorization needed");
+      expect(logs.slice(start).at(-1)).toBe("401 invalid_request: Authorization needed watch=unknown,-,other,missing-token");
     } finally {
       await new Promise<void>((resolve) => proxy.close(() => resolve()));
       await rm(dir, { recursive: true, force: true });
@@ -223,10 +224,25 @@ describe("OAuth client logging", () => {
     await rpc("tools/list", "invalid-token", {}, { "user-agent": agent });
     expect(logs.slice(start)).toEqual([
       "→ POST /mcp client=- auth=401",
-      `401 invalid_request: Authorization needed smoke=${agent} route=/mcp source=loopback`,
+      `401 invalid_request: Authorization needed watch=local,-,other,missing-token smoke=${agent} route=/mcp source=loopback`,
       "→ POST /mcp client=- auth=401",
-      "401 invalid_token: Invalid token",
+      "401 invalid_token: Invalid token watch=local,-,other,invalid-token",
     ]);
+  });
+
+  it.each([
+    ["curl/8.7.1 private-text", "curl"],
+    ["curl/999.42.123 private-text", "curl"],
+    ["Mozilla/5.0 private-text", "browser"],
+    ["openai-mcp/1.2.3 private-text", "openai-mcp"],
+    ["custom/private-text", "other"],
+  ])("logs a fixed agent family for %s", async (agent, family) => {
+    const start = logs.length;
+    await rpc("tools/list", undefined, {}, { "user-agent": agent });
+    expect(logs.slice(start).at(-1)).toBe(
+      `401 invalid_request: Authorization needed watch=local,-,${family},missing-token`,
+    );
+    expect(logs.slice(start).join("\n")).not.toContain("private-text");
   });
 
   it("ignores the client ID on a token that fails verification", async () => {
@@ -235,7 +251,7 @@ describe("OAuth client logging", () => {
     expect((await rpc("tools/list", t)).status).toBe(401);
     expect(logs.slice(start)).toEqual([
       "→ POST /mcp client=- auth=401",
-      "401 invalid_token: Invalid token",
+      "401 invalid_token: Invalid token watch=local,-,node,invalid-token",
     ]);
   });
 });
@@ -350,7 +366,7 @@ describe("configured tools", () => {
         expect(denied.result?.isError ?? denied.error).toBeTruthy();
       }
       expect(calls).toEqual([]);
-      expect(logs).toContain("tool call denied client=unlisted");
+      expect(logs).toContain("tool call denied client=unlisted watch=local,-,node,tool-denied");
     } finally {
       s.close();
     }
