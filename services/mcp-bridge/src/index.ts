@@ -83,13 +83,17 @@ async function jwksUrl(): Promise<string> {
 
 const store = new DeviceStore(DEVICE_DIR);
 let backend: BridgeBackend | undefined;
+let startReminders: (() => void) | undefined;
 if (store.isPaired()) {
   const gateway = new OpenClawGateway({ url: GATEWAY_URL, store, log });
   const destinations = store.loadDestinations();
   const routeKey = (destination: Destination) => createHash("sha256").update(JSON.stringify(destination)).digest("hex");
   const directory = path.join(DEVICE_DIR, "reminders");
-  const reminders = config.tools.some((tool) => tool.reminder) || fs.existsSync(directory)
-    ? new ReminderQueue({
+  const remindersEnabled = config.tools.some((tool) => tool.reminder) || fs.existsSync(directory);
+  let reminders: ReminderQueue | undefined;
+  if (remindersEnabled) {
+    startReminders = () => {
+      reminders = new ReminderQueue({
         directory,
         log,
         prepare: async (name, expectedRoute, message, id) => {
@@ -98,8 +102,9 @@ if (store.isPaired()) {
           if (!Object.hasOwn(current, name) || routeKey(current[name]) !== expectedRoute) return null;
           return async (onSent) => { await send(current[name], message, id, onSent); };
         },
-      })
-    : undefined;
+      });
+    };
+  }
   backend = {
     invoke: (agent, tool, args) => gateway.invoke(agent, tool, args),
     ask: (agent, prompt) => gateway.ask(agent, prompt),
@@ -109,8 +114,9 @@ if (store.isPaired()) {
       log(`send to ${name} (${dest.channel})`);
       return gateway.send(dest, message);
     },
-    ...(reminders ? {
+    ...(remindersEnabled ? {
       remind: (at: number, name: string, message: string) => {
+        if (!reminders) throw new Error("reminder queue unavailable");
         const current = store.loadDestinations();
         const expected = routeKey(destinations[name]);
         if (!Object.hasOwn(current, name) || routeKey(current[name]) !== expected) {
@@ -143,6 +149,11 @@ const server = createMcpHttpServer({
   ...(backend ? { backend } : {}),
 });
 server.listen(PORT, "127.0.0.1", () => {
+  try {
+    startReminders?.();
+  } catch {
+    fatal("could not start the reminder queue");
+  }
   log(`listening on 127.0.0.1:${PORT}/mcp as "${config.name}"`);
   log(`${SUBJECTS.length} allowed subject(s); tools: ${backend ? config.tools.map((t) => t.name).join(", ") : "ping only (not paired)"}`);
   if (backend) log(`destinations: ${Object.keys(backend.destinations).join(", ") || "none"}`);

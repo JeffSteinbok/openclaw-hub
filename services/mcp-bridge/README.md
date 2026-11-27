@@ -78,7 +78,8 @@ Tool definition changes take effect on restart.
 
 A reminder action exposes `text`, a future ISO 8601 `time` with a UTC offset, and
 an optional `channel`. The bridge persists pending reminders in its private device
-directory and resumes them on restart. At delivery time it uses the same paired
+directory and resumes them on restart. Use a dedicated device directory for each
+bridge process. At delivery time the bridge uses the same paired
 Gateway `send` method as messaging. The configured recipient must still match the
 one selected at scheduling. An interrupted or failed send leaves a private
 `.sending` record for inspection. The bridge does not automatically resend an
