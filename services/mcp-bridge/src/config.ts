@@ -117,3 +117,13 @@ export function parseConfig(raw: unknown): BridgeConfig {
 export function loadConfig(path: string): BridgeConfig {
   return parseConfig(JSON.parse(fs.readFileSync(path, "utf8")));
 }
+
+/** Reload grants against the tool definitions active in this process. */
+export function reloadClientTools(path: string, current: BridgeConfig): BridgeConfig {
+  const raw: unknown = JSON.parse(fs.readFileSync(path, "utf8"));
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("mcp-bridge config: not an object");
+  }
+  const { clientTools } = raw as Partial<BridgeConfig>;
+  return parseConfig({ ...current, clientTools });
+}

@@ -19,9 +19,9 @@
 import os from "node:os";
 import path from "node:path";
 import { createRemoteJWKSet } from "jose";
-import { loadConfig, type BridgeConfig } from "./config.js";
+import { loadConfig, reloadClientTools, type BridgeConfig } from "./config.js";
 import { DeviceStore, OpenClawGateway } from "./gateway.js";
-import { buildMcpServer, createMcpHttpServer } from "./server.js";
+import { createMcpHttpServer } from "./server.js";
 import type { BridgeBackend } from "./tools.js";
 
 const env = (name: string) => process.env[`MCP_BRIDGE_${name}`] ?? "";
@@ -98,28 +98,12 @@ if (store.isPaired()) {
   log(`not paired with the Gateway (${DEVICE_DIR}); only ping is offered. Run dist/pair.js to pair.`);
 }
 
-function validateRegistration(candidate: BridgeConfig): void {
-  const validationBackend: BridgeBackend = {
-    destinations: { validation: "imessage" },
-    invoke: async () => { throw new Error("validation only"); },
-    ask: async () => { throw new Error("validation only"); },
-    send: async () => { throw new Error("validation only"); },
-  };
-  void buildMcpServer(candidate, undefined, validationBackend).close();
-}
-try {
-  validateRegistration(config);
-} catch (e) {
-  fatal(e instanceof Error ? e.message : String(e));
-}
 process.on("SIGHUP", () => {
   try {
-    const candidate = loadConfig(env("TOOLS"));
-    validateRegistration(candidate);
-    config = candidate;
-    log("reloaded tools and client grants");
+    config = reloadClientTools(env("TOOLS"), config);
+    log("reloaded client grants");
   } catch {
-    log("failed to reload tools and client grants; keeping the previous config");
+    log("failed to reload client grants; keeping the previous grants");
   }
 });
 

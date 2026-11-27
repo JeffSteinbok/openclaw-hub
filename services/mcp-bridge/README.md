@@ -37,8 +37,9 @@ no entry or no client ID receive only `ping`, including when `clientTools` is om
 Grant entries can reference configured names and `ping`.
 
 Replace the JSON file atomically and signal the running process with `SIGHUP` to reload.
-The bridge keeps the previous configuration if parsing or validation fails. Check the
-log for reload confirmation. New requests use the reloaded grants.
+The bridge reloads only the grants and checks names against the running tool definitions.
+It retains the previous grants if parsing or validation fails. Check the log for confirmation.
+Tool definition changes take effect on restart.
 
 ```json
 {
