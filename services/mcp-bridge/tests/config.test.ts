@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseConfig } from "../src/config.js";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { parseConfig, reloadClientTools } from "../src/config.js";
 import { CONDENSERS } from "../src/condense.js";
 import { fillPrompt, resolveRange } from "../src/tools.js";
 import exampleConfig from "../tools.example.json" with { type: "json" };
@@ -10,6 +13,21 @@ const read = { name: "status", description: "d", kind: "read", invoke: [{ tool: 
 describe("parseConfig", () => {
   it("accepts the example config", () => {
     expect(parseConfig(exampleConfig).tools.map((t) => t.name)).toEqual(["house_status", "calendar", "control_house", "send_message"]);
+  });
+
+  it("reloads only grants for active tools and rejects invalid replacements", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mcp-bridge-test-"));
+    const file = join(dir, "tools.json");
+    const current = parseConfig(exampleConfig);
+    try {
+      writeFileSync(file, JSON.stringify({ timezone: "bad", clientTools: { client: ["calendar"] } }));
+      expect(reloadClientTools(file, current)).toEqual({ ...current, clientTools: { client: ["calendar"] } });
+      writeFileSync(file, JSON.stringify({ clientTools: { client: ["missing"] } }));
+      expect(() => reloadClientTools(file, current)).toThrow("defined tool names");
+      expect(current.clientTools).toEqual(exampleConfig.clientTools);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
   });
 
   it.each([

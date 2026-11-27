@@ -1,6 +1,6 @@
 {
   "name": "@openclaw/mcp-bridge",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "OAuth-protected MCP server that offers a curated, config-defined set of OpenClaw capabilities to outside agents (ChatGPT, Claude, \u2026).",
   "type": "module",
   "main": "dist/index.js",

@@ -19,7 +19,7 @@
 import os from "node:os";
 import path from "node:path";
 import { createRemoteJWKSet } from "jose";
-import { loadConfig, type BridgeConfig } from "./config.js";
+import { loadConfig, reloadClientTools, type BridgeConfig } from "./config.js";
 import { DeviceStore, OpenClawGateway } from "./gateway.js";
 import { createMcpHttpServer } from "./server.js";
 import type { BridgeBackend } from "./tools.js";
@@ -98,11 +98,20 @@ if (store.isPaired()) {
   log(`not paired with the Gateway (${DEVICE_DIR}); only ping is offered. Run dist/pair.js to pair.`);
 }
 
+process.on("SIGHUP", () => {
+  try {
+    config = reloadClientTools(env("TOOLS"), config);
+    log("reloaded client grants");
+  } catch {
+    log("failed to reload client grants; keeping the previous grants");
+  }
+});
+
 const keys = createRemoteJWKSet(new URL(await jwksUrl()));
 const server = createMcpHttpServer({
   allowedHosts: ALLOWED_HOSTS,
   auth: { issuer: ISSUER, resource: RESOURCE, allowedSubjects: SUBJECTS, keys },
-  config,
+  config: () => config,
   log,
   ...(backend ? { backend } : {}),
 });

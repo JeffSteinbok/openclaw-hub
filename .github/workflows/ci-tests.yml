@@ -44,6 +44,13 @@ jobs:
           done
           [ "$failed" -eq 0 ]
 
+      - name: Build and test MCP bridge
+        working-directory: services/mcp-bridge
+        run: |
+          npm ci
+          npm run build
+          npm test
+
       - name: Run service tests
         run: |
           set -euo pipefail

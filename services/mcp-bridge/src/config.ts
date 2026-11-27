@@ -57,6 +57,8 @@ export interface BridgeConfig {
   timezone?: string;
   /** Entity-id globs the Home Assistant condenser skips (e.g. status LEDs). */
   ignoreEntities?: string[];
+  /** Verified OAuth client IDs mapped to the tools they may use. */
+  clientTools?: Record<string, string[]>;
   tools: ToolSpec[];
 }
 
@@ -98,9 +100,30 @@ export function parseConfig(raw: unknown): BridgeConfig {
       }
     }
   }
+  if (c.clientTools !== undefined) {
+    if (!c.clientTools || typeof c.clientTools !== "object" || Array.isArray(c.clientTools)) {
+      fail("`clientTools` must be an object");
+    }
+    for (const [clientId, tools] of Object.entries(c.clientTools)) {
+      if (!clientId.trim() || !Array.isArray(tools) ||
+          tools.some((tool) => tool !== "ping" && !names.has(tool))) {
+        fail("`clientTools` entries must map client IDs to lists of defined tool names");
+      }
+    }
+  }
   return c as BridgeConfig;
 }
 
 export function loadConfig(path: string): BridgeConfig {
   return parseConfig(JSON.parse(fs.readFileSync(path, "utf8")));
+}
+
+/** Reload grants against the tool definitions active in this process. */
+export function reloadClientTools(path: string, current: BridgeConfig): BridgeConfig {
+  const raw: unknown = JSON.parse(fs.readFileSync(path, "utf8"));
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("mcp-bridge config: not an object");
+  }
+  const { clientTools } = raw as Partial<BridgeConfig>;
+  return parseConfig({ ...current, clientTools });
 }

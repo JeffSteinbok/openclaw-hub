@@ -6,6 +6,9 @@
   "ignoreEntities": [
     "light.status_led_*"
   ],
+  "clientTools": {
+    "example-oauth-client-id": ["ping", "house_status", "calendar"]
+  },
   "tools": [
     {
       "name": "house_status",
