@@ -27,7 +27,7 @@ Use Home Assistant as the control plane for the house. This plugin lets the agen
 | `hass_camera_snapshot` | Take a snapshot from a Home Assistant camera |
 | `hass_logbook` | Get Home Assistant logbook entries with optional filters |
 
-Camera snapshots and collages default to `media/camera_captures` under the OpenClaw state directory (`OPENCLAW_STATE_DIR` or `~/.openclaw`). Set plugin config `captureDir` to override the destination. Camera requests prune generated JPEGs older than seven days.
+Camera snapshots and collages default to `media/camera_captures` under the OpenClaw state directory (`OPENCLAW_STATE_DIR` or `~/.openclaw`). Set plugin config `captureDir` to override the destination. Use a physical directory path for camera output. Snapshots and collages publish atomically inside that directory, and camera requests prune generated JPEGs older than seven days.
 
 ## Configuration Schema
 
