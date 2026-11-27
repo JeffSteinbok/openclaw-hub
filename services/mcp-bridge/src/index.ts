@@ -110,7 +110,16 @@ if (store.isPaired()) {
       log(`send to ${name} (${dest.channel})`);
       return gateway.send(dest, message);
     },
-    ...(reminders ? { remind: (at: number, name: string, message: string) => reminders.schedule(at, name, routeKey(destinations[name]), message) } : {}),
+    ...(reminders ? {
+      remind: (at: number, name: string, message: string) => {
+        const current = store.loadDestinations();
+        const expected = routeKey(destinations[name]);
+        if (!Object.hasOwn(current, name) || routeKey(current[name]) !== expected) {
+          throw new Error("reminder destination changed; reload the bridge before scheduling");
+        }
+        return reminders.schedule(at, name, expected, message);
+      },
+    } : {}),
     destinations: Object.fromEntries(Object.entries(destinations).map(([n, d]) => [n, d.channel])),
   };
 } else {

@@ -53,7 +53,14 @@ export class ReminderQueue {
     const temp = this.file(id, "tmp");
     try {
       fs.writeFileSync(temp, JSON.stringify(job), { mode: 0o600, flag: "wx", flush: true });
-      fs.renameSync(temp, this.file(id, "json"));
+      const saved = this.file(id, "json");
+      fs.renameSync(temp, saved);
+      try {
+        this.syncDirectory();
+      } catch (error) {
+        fs.rmSync(saved, { force: true });
+        throw error;
+      }
     } finally {
       fs.rmSync(temp, { force: true });
     }
@@ -69,6 +76,15 @@ export class ReminderQueue {
 
   private file(id: string, extension: string): string {
     return path.join(this.options.directory, `${id}.${extension}`);
+  }
+
+  private syncDirectory(): void {
+    const fd = fs.openSync(this.options.directory, "r");
+    try {
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
   }
 
   private arm(): void {
@@ -105,8 +121,10 @@ export class ReminderQueue {
     this.running = true;
     this.pending.delete(job.id);
     try {
+      this.syncDirectory();
       await this.options.deliver(job.destination, job.routeKey, job.message, `mcp-reminder:${job.id}`);
       fs.unlinkSync(sending);
+      this.syncDirectory();
       this.options.log(`delivered reminder id=${job.id}`);
     } catch {
       this.options.log(`reminder delivery unconfirmed id=${job.id}`);
