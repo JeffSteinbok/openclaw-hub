@@ -104,7 +104,12 @@ export function createProxyServer(config: Config, deps: ProxyDeps): http.Server 
     const authResult = validateAuth(route.auth, req.headers, body);
     if (!authResult.ok) {
       limiter.recordFailure(client);
-      log(`[${reqId}] 401 auth failed: ${authResult.reason}`);
+      const directLoopback = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "") &&
+        req.headers["x-forwarded-for"] === undefined && req.headers["x-forwarded-host"] === undefined &&
+        req.headers["tailscale-funnel-request"] === undefined;
+      const smoke = directLoopback && typeof ua === "string" && /^octo-healthcheck\/[a-f0-9]{32}$/.test(ua)
+        ? ` smoke=${ua} route=${path} source=loopback` : "";
+      log(`[${reqId}] 401 auth failed: ${authResult.reason}${smoke}`);
       reply(res, 401, "Unauthorized");
       return;
     }

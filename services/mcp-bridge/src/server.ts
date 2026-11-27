@@ -30,6 +30,8 @@ export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024;
 export interface ServerOptions {
   /** Host header values accepted (DNS rebinding guard). Empty = accept any. */
   allowedHosts: string[];
+  /** Mount path restored for a listener on a private Tailscale Unix socket. */
+  proxyMount?: string;
   auth: AuthConfig;
   maxBodyBytes?: number;
   /** Fetch for the authorization-server metadata fallback (tests stub it). */
@@ -99,13 +101,11 @@ function jsonRpcError(res: ServerResponse, status: number, code: number, message
 }
 
 function callerOrigin(req: IncomingMessage): string {
-  // The deployed bridge listens on loopback. Tailscale Serve sets these
-  // headers itself, including replacing X-Forwarded-For with a single IP.
-  const peer = req.socket.remoteAddress;
+  // Called only on a private Unix listener. Serve replaces X-Forwarded-For
+  // with a single IP and sets its own Funnel flag.
   const address = req.headers["x-forwarded-for"];
   const funnel = req.headers["tailscale-funnel-request"];
-  if ((peer === "127.0.0.1" || peer === "::1" || peer === "::ffff:127.0.0.1") &&
-      req.headers["x-forwarded-host"] && typeof address === "string" &&
+  if (req.headers["x-forwarded-host"] && typeof address === "string" &&
       !address.includes("%") && isIP(address) && (funnel === undefined || funnel === "?1")) {
     return `ip=${address} via=${funnel === "?1" ? "funnel" : "tailnet"}`;
   }
@@ -135,21 +135,25 @@ export function createMcpHttpServer(options: ServerOptions): Server {
 
   return createServer(async (req, res) => {
     // A Funnel mount can forward /mcp as /mcp/; treat a trailing slash as the same path.
-    const path = new URL(req.url ?? "/", "http://localhost").pathname.replace(/(.)\/+$/, "$1");
-    const host = (req.headers.host ?? "").toLowerCase();
-    const hostAllowed = allowed.size === 0 || allowed.has(host);
+    const incomingPath = new URL(req.url ?? "/", "http://localhost").pathname;
+    const path = ((options.proxyMount ?? "") + incomingPath).replace(/(.)\/+$/, "$1");
+    // Serve uses localhost as the HTTP Host on Unix sockets and provides the
+    // original host independently in its own forwarding header.
+    const host = (options.proxyMount ? req.headers["x-forwarded-host"] : req.headers.host) ?? "";
+    const hostName = typeof host === "string" ? host.toLowerCase() : "";
+    const hostAllowed = allowed.size === 0 || allowed.has(hostName);
     const auth = hostAllowed && path === MCP_PATH && req.method === "POST"
       ? await authenticate(req.headers.authorization, options.auth)
       : undefined;
     const client = auth?.clientId?.replace(/[\s\x00-\x1f\x7f-\x9f]/g, encodeURIComponent) ?? "-";
     if (auth?.ok) {
-      log(`signed-in POST /mcp ${callerOrigin(req)} client=${client}`);
+      log(`signed-in POST /mcp ${options.proxyMount ? callerOrigin(req) : "ip=- via=unknown"} client=${client}`);
     } else {
       log(`→ ${req.method} ${path} client=${client} auth=${auth?.status ?? "-"}`);
     }
 
     if (!hostAllowed) {
-      log(`421 host not allowed: ${host}`);
+      log(`421 host not allowed: ${hostName}`);
       sendJson(res, 421, { error: "misdirected request" });
       return;
     }
@@ -178,9 +182,12 @@ export function createMcpHttpServer(options: ServerOptions): Server {
 
     if (!auth.ok) {
       const agent = req.headers["user-agent"];
-      const smoke = auth.status === 401 && req.headers.authorization === undefined &&
+      const directLoopback = !options.proxyMount && req.socket.remoteAddress === "127.0.0.1" &&
+        req.headers["x-forwarded-for"] === undefined && req.headers["x-forwarded-host"] === undefined &&
+        req.headers["tailscale-funnel-request"] === undefined;
+      const smoke = directLoopback && auth.status === 401 && req.headers.authorization === undefined &&
         typeof agent === "string" && /^octo-healthcheck\/[a-f0-9]{32}$/.test(agent)
-        ? ` smoke=${agent}` : "";
+        ? ` smoke=${agent} route=/mcp source=loopback` : "";
       log(`${auth.status} ${auth.error}: ${auth.description}${smoke}`);
       req.resume();
       sendJson(res, auth.status, { error: auth.error, error_description: auth.description }, {

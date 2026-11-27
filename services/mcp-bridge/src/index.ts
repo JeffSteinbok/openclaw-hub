@@ -11,6 +11,7 @@
  *   MCP_BRIDGE_GATEWAY_URL      OpenClaw Gateway WebSocket (default ws://127.0.0.1:18789)
  *   MCP_BRIDGE_ALLOWED_HOSTS    Host header allowlist (default: loopback + the resource's host)
  *   MCP_BRIDGE_PORT             listen port (default 18793)
+ *   MCP_BRIDGE_PROXY_SOCKET_DIR private directory for Tailscale Unix listeners (optional)
  *
  * Fails closed: without a resource, an https issuer, signing keys or a valid
  * tools file it refuses to start; it never serves /mcp unauthenticated.
@@ -23,7 +24,7 @@ import path from "node:path";
 import { createRemoteJWKSet } from "jose";
 import { loadConfig, reloadClientTools, type BridgeConfig } from "./config.js";
 import { DeviceStore, OpenClawGateway, type Destination } from "./gateway.js";
-import { createMcpHttpServer } from "./server.js";
+import { createMcpHttpServer, type ServerOptions } from "./server.js";
 import { ReminderQueue } from "./reminders.js";
 import type { BridgeBackend } from "./tools.js";
 
@@ -141,13 +142,40 @@ process.on("SIGHUP", () => {
 });
 
 const keys = createRemoteJWKSet(new URL(await jwksUrl()));
-const server = createMcpHttpServer({
+const options: ServerOptions = {
   allowedHosts: ALLOWED_HOSTS,
   auth: { issuer: ISSUER, resource: RESOURCE, allowedSubjects: SUBJECTS, keys },
   config: () => config,
   log,
   ...(backend ? { backend } : {}),
-});
+};
+const socketDir = env("PROXY_SOCKET_DIR");
+if (socketDir) {
+  if (!path.isAbsolute(socketDir)) fatal("proxy socket directory must be absolute");
+  fs.mkdirSync(socketDir, { mode: 0o700, recursive: true });
+  const metadata = fs.lstatSync(socketDir);
+  if (!metadata.isDirectory() || metadata.uid !== process.getuid?.() || (metadata.mode & 0o077)) {
+    fatal("proxy socket directory must be owned by the bridge user with mode 0700");
+  }
+  // Serve strips each matched prefix. Each listener restores just its own mount.
+  const mounts = {
+    "mcp.sock": "/mcp",
+    "resource.sock": "/.well-known/oauth-protected-resource",
+    "auth.sock": "/.well-known/oauth-authorization-server",
+  };
+  for (const [name, proxyMount] of Object.entries(mounts)) {
+    const socket = path.join(socketDir, name);
+    const existing = fs.lstatSync(socket, { throwIfNoEntry: false });
+    if (existing) {
+      if (!existing.isSocket() || existing.uid !== metadata.uid) fatal("unexpected file at proxy socket path");
+      fs.unlinkSync(socket);
+    }
+    createMcpHttpServer({ ...options, proxyMount })
+      .on("error", (error) => fatal(`proxy listener error: ${error.message}`))
+      .listen(socket, () => fs.chmodSync(socket, 0o600));
+  }
+}
+const server = createMcpHttpServer(options);
 server.listen(PORT, "127.0.0.1", () => {
   try {
     startReminders?.();
