@@ -24,7 +24,8 @@ import path from "node:path";
 import { createRemoteJWKSet } from "jose";
 import { loadConfig, reloadClientTools, type BridgeConfig } from "./config.js";
 import { DeviceStore, OpenClawGateway, type Destination } from "./gateway.js";
-import { createMcpHttpServer, type ServerOptions } from "./server.js";
+import type { ServerOptions } from "./server.js";
+import { listenMcpBridge } from "./proxy-listeners.js";
 import { ReminderQueue } from "./reminders.js";
 import type { BridgeBackend } from "./tools.js";
 
@@ -149,44 +150,15 @@ const options: ServerOptions = {
   log,
   ...(backend ? { backend } : {}),
 };
-const socketDir = env("PROXY_SOCKET_DIR");
-if (socketDir) {
-  if (!path.isAbsolute(socketDir)) fatal("proxy socket directory must be absolute");
-  fs.mkdirSync(socketDir, { mode: 0o700, recursive: true });
-  const metadata = fs.lstatSync(socketDir);
-  if (!metadata.isDirectory() || metadata.uid !== process.getuid?.() || (metadata.mode & 0o077)) {
-    fatal("proxy socket directory must be owned by the bridge user with mode 0700");
+try {
+  const servers = await listenMcpBridge(options, PORT, env("PROXY_SOCKET_DIR"));
+  for (const server of servers) {
+    server.on("error", (error) => fatal(`server error: ${error.message}`));
   }
-  // Serve strips each matched prefix. Each listener restores just its own mount.
-  const mounts = {
-    "mcp.sock": "/mcp",
-    "resource.sock": "/.well-known/oauth-protected-resource",
-    "auth.sock": "/.well-known/oauth-authorization-server",
-  };
-  for (const [name, proxyMount] of Object.entries(mounts)) {
-    const socket = path.join(socketDir, name);
-    const existing = fs.lstatSync(socket, { throwIfNoEntry: false });
-    if (existing) {
-      if (!existing.isSocket() || existing.uid !== metadata.uid) fatal("unexpected file at proxy socket path");
-      fs.unlinkSync(socket);
-    }
-    createMcpHttpServer({ ...options, proxyMount })
-      .on("error", (error) => fatal(`proxy listener error: ${error.message}`))
-      .listen(socket, () => fs.chmodSync(socket, 0o600));
-  }
+  startReminders?.();
+} catch (error) {
+  fatal(error instanceof Error ? error.message : "could not start the bridge");
 }
-const server = createMcpHttpServer(options);
-server.listen(PORT, "127.0.0.1", () => {
-  try {
-    startReminders?.();
-  } catch {
-    fatal("could not start the reminder queue");
-  }
-  log(`listening on 127.0.0.1:${PORT}/mcp as "${config.name}"`);
-  log(`${SUBJECTS.length} allowed subject(s); tools: ${backend ? config.tools.map((t) => t.name).join(", ") : "ping only (not paired)"}`);
-  if (backend) log(`destinations: ${Object.keys(backend.destinations).join(", ") || "none"}`);
-});
-server.on("error", (e) => {
-  log(`server error: ${e}`);
-  process.exit(1);
-});
+log(`listening on 127.0.0.1:${PORT}/mcp as "${config.name}"`);
+log(`${SUBJECTS.length} allowed subject(s); tools: ${backend ? config.tools.map((t) => t.name).join(", ") : "ping only (not paired)"}`);
+if (backend) log(`destinations: ${Object.keys(backend.destinations).join(", ") || "none"}`);

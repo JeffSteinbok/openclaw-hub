@@ -145,5 +145,8 @@ Configure Serve or Funnel to forward `/mcp` to `unix:<directory>/mcp.sock`, `/.w
 to `unix:<directory>/resource.sock`, and `/.well-known/oauth-authorization-server` to `unix:<directory>/auth.sock`.
 Each listener restores its own mount prefix because Tailscale strips it. The bridge checks Serve’s forwarded
 original host against the host allowlist. The private socket directory limits trust to the bridge user and
-privileged local processes such as the Tailscale daemon. The direct TCP listener remains available for local probes.
+privileged local processes such as the Tailscale daemon. The bridge rejects macOS ACLs on the socket directory.
+The direct TCP listener remains available for local probes and is bound before socket setup. On macOS,
+a directory lock also serializes proxy startup across different TCP ports. Socket cleanup requires a
+failed connection and an unchanged socket entry.
 Refusals include the reason, and sends include only the destination name.
