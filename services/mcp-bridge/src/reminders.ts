@@ -121,7 +121,7 @@ export class ReminderQueue {
       send = await this.options.prepare(job.destination, job.routeKey, job.message, `mcp-reminder:${job.id}`);
     } catch {
       job.retryAfter = Date.now() + 5000;
-      this.options.log(`could not connect to deliver reminder id=${job.id}; retrying`);
+      this.options.log(`could not prepare reminder delivery id=${job.id}; retrying`);
       return;
     }
 
