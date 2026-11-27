@@ -13,6 +13,7 @@
  * the service to be paired with the Gateway (gateway.ts).
  */
 
+import { isIP } from "node:net";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -97,6 +98,20 @@ function jsonRpcError(res: ServerResponse, status: number, code: number, message
   sendJson(res, status, { jsonrpc: "2.0", error: { code, message }, id: null });
 }
 
+function callerOrigin(req: IncomingMessage): string {
+  // The deployed bridge listens on loopback. Tailscale Serve sets these
+  // headers itself, including replacing X-Forwarded-For with a single IP.
+  const peer = req.socket.remoteAddress;
+  const address = req.headers["x-forwarded-for"];
+  const funnel = req.headers["tailscale-funnel-request"];
+  if ((peer === "127.0.0.1" || peer === "::1" || peer === "::ffff:127.0.0.1") &&
+      req.headers["x-forwarded-host"] && typeof address === "string" &&
+      !address.includes("%") && isIP(address) && (funnel === undefined || funnel === "?1")) {
+    return `ip=${address} via=${funnel === "?1" ? "funnel" : "tailnet"}`;
+  }
+  return "ip=- via=unknown";
+}
+
 export function createMcpHttpServer(options: ServerOptions): Server {
   const log = options.log ?? (() => {});
   const maxBody = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
@@ -127,7 +142,11 @@ export function createMcpHttpServer(options: ServerOptions): Server {
       ? await authenticate(req.headers.authorization, options.auth)
       : undefined;
     const client = auth?.clientId?.replace(/[\s\x00-\x1f\x7f-\x9f]/g, encodeURIComponent) ?? "-";
-    log(`→ ${req.method} ${path} host=${host} ua=${req.headers["user-agent"] ?? "-"} client=${client}`);
+    if (auth?.ok) {
+      log(`signed-in POST /mcp ${callerOrigin(req)} client=${client}`);
+    } else {
+      log(`→ ${req.method} ${path} client=${client} auth=${auth?.status ?? "-"}`);
+    }
 
     if (!hostAllowed) {
       log(`421 host not allowed: ${host}`);
@@ -158,7 +177,11 @@ export function createMcpHttpServer(options: ServerOptions): Server {
     }
 
     if (!auth.ok) {
-      log(`${auth.status} ${auth.error}: ${auth.description}`);
+      const agent = req.headers["user-agent"];
+      const smoke = auth.status === 401 && req.headers.authorization === undefined &&
+        typeof agent === "string" && /^octo-healthcheck\/[a-f0-9]{32}$/.test(agent)
+        ? ` smoke=${agent}` : "";
+      log(`${auth.status} ${auth.error}: ${auth.description}${smoke}`);
       req.resume();
       sendJson(res, auth.status, { error: auth.error, error_description: auth.description }, {
         "www-authenticate": challenge(options.auth, auth.error, auth.description),

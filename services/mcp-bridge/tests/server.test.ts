@@ -36,8 +36,8 @@ async function token(claims: Record<string, unknown> = {}, opts: { key?: CryptoK
     .sign(opts.key ?? privateKey);
 }
 
-async function rpc(method: string, bearer?: string, params: unknown = {}) {
-  const headers: Record<string, string> = { "content-type": "application/json", accept: ACCEPT };
+async function rpc(method: string, bearer?: string, params: unknown = {}, extraHeaders: Record<string, string> = {}) {
+  const headers: Record<string, string> = { "content-type": "application/json", accept: ACCEPT, ...extraHeaders };
   if (bearer) headers.authorization = `Bearer ${bearer}`;
   const res = await fetch(`${base}/mcp`, {
     method: "POST",
@@ -128,7 +128,7 @@ describe("OAuth client logging", () => {
     const start = logs.length;
     expect((await rpc("tools/list", t)).status).toBe(200);
     const requestLogs = logs.slice(start);
-    expect(requestLogs).toEqual([expect.stringMatching(/^→ POST \/mcp .* client=client_connect$/)]);
+    expect(requestLogs).toEqual(["signed-in POST /mcp ip=- via=unknown client=client_connect"]);
     for (const privateValue of [t, OWNER, ISSUER, RESOURCE, "private-claim-value"]) {
       expect(requestLogs.join("\n")).not.toContain(privateValue);
     }
@@ -137,7 +137,7 @@ describe("OAuth client logging", () => {
   it.each([undefined, "", 123])("logs client=- for an unavailable client ID (%s)", async (client_id) => {
     const start = logs.length;
     expect((await rpc("tools/list", await token({ client_id }))).status).toBe(200);
-    expect(logs.slice(start)).toEqual([expect.stringMatching(/^→ POST \/mcp .* client=-$/)]);
+    expect(logs.slice(start)).toEqual(["signed-in POST /mcp ip=- via=unknown client=-"]);
   });
 
   it("keeps a verified client ID on a 403 and escapes log separators", async () => {
@@ -145,8 +145,39 @@ describe("OAuth client logging", () => {
     const t = await token({ client_id: "client\nnext", sub: "private-stranger" });
     expect((await rpc("tools/list", t)).status).toBe(403);
     expect(logs.slice(start)).toEqual([
-      expect.stringMatching(/^→ POST \/mcp .* client=client%0Anext$/),
+      "→ POST /mcp client=client%0Anext auth=403",
       "403 insufficient_scope: This account is not allowed",
+    ]);
+  });
+
+  it.each([
+    ["192.0.2.42", "?1", "ip=192.0.2.42 via=funnel"],
+    ["fd7a:115c:a1e0::8", undefined, "ip=fd7a:115c:a1e0::8 via=tailnet"],
+    ["192.0.2.42, 192.0.2.43", "?1", "ip=- via=unknown"],
+    ["fe80::1%private-interface", "?1", "ip=- via=unknown"],
+    ["192.0.2.42", "invalid", "ip=- via=unknown"],
+  ])("validates the forwarded origin (%s, %s)", async (address, funnel, origin) => {
+    const start = logs.length;
+    const forwarded: Record<string, string> = {
+      "x-forwarded-for": address,
+      "x-forwarded-host": "mcp.example.test",
+      "tailscale-user-login": "private@example.test",
+    };
+    if (funnel) forwarded["tailscale-funnel-request"] = funnel;
+    expect((await rpc("tools/list", await token(), {}, forwarded)).status).toBe(200);
+    expect(logs.slice(start)).toEqual([`signed-in POST /mcp ${origin} client=-`]);
+  });
+
+  it("logs only the exact smoke user-agent on a missing-token challenge", async () => {
+    const agent = `octo-healthcheck/${"ab".repeat(16)}`;
+    const start = logs.length;
+    await rpc("tools/list", undefined, {}, { "user-agent": agent });
+    await rpc("tools/list", "invalid-token", {}, { "user-agent": agent });
+    expect(logs.slice(start)).toEqual([
+      "→ POST /mcp client=- auth=401",
+      `401 invalid_request: Authorization needed smoke=${agent}`,
+      "→ POST /mcp client=- auth=401",
+      "401 invalid_token: Invalid token",
     ]);
   });
 
@@ -155,7 +186,7 @@ describe("OAuth client logging", () => {
     const t = await token({ client_id: "unverified-client" }, { key: otherKey });
     expect((await rpc("tools/list", t)).status).toBe(401);
     expect(logs.slice(start)).toEqual([
-      expect.stringMatching(/^→ POST \/mcp .* client=-$/),
+      "→ POST /mcp client=- auth=401",
       "401 invalid_token: Invalid token",
     ]);
   });

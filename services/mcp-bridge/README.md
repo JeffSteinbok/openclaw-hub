@@ -136,5 +136,9 @@ Keep hostnames, issuer subdomains and user IDs in the env file, not in a repo.
 
 ## Logs
 
-Requests are logged with path, user agent, and the verified token’s `client_id` (`client=-` when unavailable).
+Requests are logged with the path and verified token’s `client_id` (`client=-` when unavailable).
+Successful OAuth authentication adds the validated client IP from Tailscale Serve on the loopback
+connection and labels the route as Funnel or tailnet. Malformed or absent forwarding metadata
+is logged as an unknown origin. The log omits Tailscale user identities and ordinary user-agent strings.
+An intentional missing-token probe can carry a one-time health-check marker in its rejection log.
 Refusals include the reason, and sends include only the destination name.
