@@ -282,16 +282,24 @@ export class OpenClawGateway {
     }
   }
 
-  /** Send a message directly through the Gateway (no agent involved). */
-  async send(dest: Destination, message: string, idempotencyKey: string = crypto.randomUUID()): Promise<AskResult> {
+  /** Wait for a connection before an operation that must distinguish preflight failure from a send. */
+  async prepareSend() {
     const client = await this.connected();
-    await client.request("send", {
-      channel: dest.channel,
-      to: dest.to,
-      message,
-      idempotencyKey,
-    });
-    return { ok: true, text: "Sent." };
+    return async (dest: Destination, message: string, idempotencyKey: string = crypto.randomUUID()): Promise<AskResult> => {
+      await client.request("send", {
+        channel: dest.channel,
+        to: dest.to,
+        message,
+        idempotencyKey,
+      });
+      return { ok: true, text: "Sent." };
+    };
+  }
+
+  /** Send a message directly through the Gateway (no agent involved). */
+  async send(dest: Destination, message: string): Promise<AskResult> {
+    const send = await this.prepareSend();
+    return send(dest, message);
   }
 
   stop(): void {

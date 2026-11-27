@@ -92,12 +92,15 @@ if (store.isPaired()) {
     ? new ReminderQueue({
         directory,
         log,
-        deliver: async (name, expectedRoute, message, id) => {
-          const current = store.loadDestinations();
-          if (!Object.hasOwn(current, name) || routeKey(current[name]) !== expectedRoute) {
-            throw new Error("destination changed");
-          }
-          await gateway.send(current[name], message, id);
+        prepare: async (name, expectedRoute, message, id) => {
+          const send = await gateway.prepareSend();
+          return async () => {
+            const current = store.loadDestinations();
+            if (!Object.hasOwn(current, name) || routeKey(current[name]) !== expectedRoute) {
+              throw new Error("destination changed");
+            }
+            await send(current[name], message, id);
+          };
         },
       })
     : undefined;
@@ -115,7 +118,7 @@ if (store.isPaired()) {
         const current = store.loadDestinations();
         const expected = routeKey(destinations[name]);
         if (!Object.hasOwn(current, name) || routeKey(current[name]) !== expected) {
-          throw new Error("reminder destination changed; reload the bridge before scheduling");
+          throw new Error("reminder destination changed; restart the bridge before scheduling");
         }
         return reminders.schedule(at, name, expected, message);
       },

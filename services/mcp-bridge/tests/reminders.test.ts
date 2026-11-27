@@ -8,10 +8,15 @@ let directory: string;
 const log = vi.fn();
 const deliver = vi.fn<(destination: string, routeKey: string, message: string, id: string) => Promise<void>>();
 
+const prepare = vi.fn(async (destination: string, routeKey: string, message: string, id: string) =>
+  () => deliver(destination, routeKey, message, id),
+);
+
 beforeEach(() => {
   vi.useFakeTimers();
   log.mockReset();
   deliver.mockReset();
+  prepare.mockClear();
   directory = mkdtempSync(join(tmpdir(), "mcp-reminders-"));
 });
 
@@ -21,14 +26,14 @@ afterEach(() => {
 });
 
 it("persists and deduplicates a job, then delivers it through the configured path after restart", async () => {
-  const original = new ReminderQueue({ directory, deliver, log });
+  const original = new ReminderQueue({ directory, prepare, log });
   const at = Date.now() + 2000;
   const id = original.schedule(at, "owner", "route", "Call home");
   expect(original.schedule(at, "owner", "route", "Call home")).toBe(id);
   expect(readdirSync(directory)).toEqual([`${id}.json`]);
   expect(statSync(join(directory, `${id}.json`)).mode & 0o777).toBe(0o600);
   original.close();
-  const resumed = new ReminderQueue({ directory, deliver, log });
+  const resumed = new ReminderQueue({ directory, prepare, log });
   try {
     await vi.advanceTimersByTimeAsync(1999);
     expect(deliver).not.toHaveBeenCalled();
@@ -42,13 +47,13 @@ it("persists and deduplicates a job, then delivers it through the configured pat
 
 it("retains ambiguous deliveries for inspection without replaying them on restart", async () => {
   deliver.mockRejectedValue(new Error("ambiguous failure"));
-  const original = new ReminderQueue({ directory, deliver, log });
+  const original = new ReminderQueue({ directory, prepare, log });
   const id = original.schedule(Date.now() + 1000, "owner", "route", "Call home");
   await vi.advanceTimersByTimeAsync(1000);
   original.close();
   expect(readdirSync(directory)).toEqual([`${id}.sending`]);
   expect(log).toHaveBeenCalledWith(`reminder delivery unconfirmed id=${id}`);
-  const resumed = new ReminderQueue({ directory, deliver, log });
+  const resumed = new ReminderQueue({ directory, prepare, log });
   try {
     await vi.advanceTimersByTimeAsync(1000);
     expect(deliver).toHaveBeenCalledTimes(1);
@@ -58,7 +63,7 @@ it("retains ambiguous deliveries for inspection without replaying them on restar
 });
 
 it("keeps a reminder pending when its claim fails and allows other reminders through", async () => {
-  const queue = new ReminderQueue({ directory, deliver, log });
+  const queue = new ReminderQueue({ directory, prepare, log });
   queue.schedule(Date.now() + 1000, "owner", "route", "Retry me");
   queue.schedule(Date.now() + 2000, "owner", "route", "Second reminder");
   const claim = vi.spyOn(fs, "renameSync").mockImplementationOnce(() => {
@@ -74,6 +79,22 @@ it("keeps a reminder pending when its claim fails and allows other reminders thr
     expect(deliver.mock.calls.map((call) => call[2])).toEqual(["Second reminder", "Retry me"]);
   } finally {
     claim.mockRestore();
+    queue.close();
+  }
+});
+
+it("retries preflight failures when no send was attempted", async () => {
+  prepare.mockRejectedValueOnce(new Error("Gateway offline"));
+  const queue = new ReminderQueue({ directory, prepare, log });
+  const id = queue.schedule(Date.now() + 1000, "owner", "route", "Call home");
+  try {
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(readdirSync(directory)).toEqual([`${id}.json`]);
+    expect(deliver).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(deliver).toHaveBeenCalledTimes(1);
+    expect(readdirSync(directory)).toEqual([]);
+  } finally {
     queue.close();
   }
 });
