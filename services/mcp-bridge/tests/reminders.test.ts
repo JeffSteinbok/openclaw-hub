@@ -98,3 +98,19 @@ it("retries preflight failures when no send was attempted", async () => {
     queue.close();
   }
 });
+
+it("restores the pending job if syncing its claim fails before sending", async () => {
+  const queue = new ReminderQueue({ directory, prepare, log });
+  const id = queue.schedule(Date.now() + 1000, "owner", "route", "Call home");
+  const sync = vi.spyOn(fs, "fsyncSync").mockImplementationOnce(() => { throw new Error("temporary sync error"); });
+  try {
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(readdirSync(directory)).toEqual([`${id}.json`]);
+    expect(deliver).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(deliver).toHaveBeenCalledTimes(1);
+  } finally {
+    sync.mockRestore();
+    queue.close();
+  }
+});

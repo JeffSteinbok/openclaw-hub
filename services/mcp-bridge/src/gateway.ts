@@ -199,21 +199,28 @@ export class OpenClawGateway {
 
   constructor(private readonly opts: GatewayOptions) {}
 
-  private connect(): Promise<void> {
-    if (this.ready) return this.ready;
+  private resetReady(): void {
     this.ready = new Promise<void>((resolve) => {
       this.resolveReady = resolve;
     });
+  }
+
+  private connect(): Promise<void> {
+    if (this.ready) return this.ready;
+    this.resetReady();
     this.client = createGatewayClient(
       this.opts,
-      () => this.resolveReady?.(),
       () => {
-        // The client reconnects on its own; later requests wait for the next hello.
-        this.ready = null;
+        this.resolveReady?.();
+        this.resolveReady = null;
+      },
+      () => {
+        // After a successful hello, wait for this same client's next handshake.
+        if (!this.resolveReady) this.resetReady();
       },
     );
     this.client.start();
-    return this.ready;
+    return this.ready!;
   }
 
   private async connected(): Promise<GatewayClient> {

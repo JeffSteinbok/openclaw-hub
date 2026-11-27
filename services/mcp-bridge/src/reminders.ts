@@ -138,9 +138,21 @@ export class ReminderQueue {
       }
       return;
     }
-    this.pending.delete(job.id);
     try {
       this.syncDirectory();
+    } catch {
+      try {
+        fs.renameSync(sending, this.file(job.id, "json"));
+        job.retryAfter = Date.now() + 5000;
+        this.options.log(`could not sync reminder claim id=${job.id}; retrying`);
+      } catch {
+        this.pending.delete(job.id);
+        this.options.log(`could not restore reminder claim id=${job.id}`);
+      }
+      return;
+    }
+    this.pending.delete(job.id);
+    try {
       await send();
       fs.unlinkSync(sending);
       this.syncDirectory();
