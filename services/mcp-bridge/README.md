@@ -34,7 +34,8 @@ flowchart LR
 Set `clientTools` in that file to map verified OAuth `client_id` claims to tool names.
 The bridge lists and accepts only granted tools, plus the built-in `ping`. Clients with
 no entry or no client ID receive only `ping`, including when `clientTools` is omitted.
-Grant entries can reference configured names and `ping`.
+Grant entries can reference configured names and `ping`. Replace `example-oauth-client-id`
+with the verified client ID shown in the bridge log.
 
 Replace the JSON file atomically and signal the running process with `SIGHUP` to reload.
 The bridge reloads only the grants and checks names against the running tool definitions.
@@ -48,6 +49,7 @@ Tool definition changes take effect on restart.
   "agent": "external",
   "timezone": "America/Los_Angeles",
   "ignoreEntities": ["light.status_led_*"],
+  "clientTools": { "example-oauth-client-id": ["ping", "house_status", "calendar"] },
   "tools": [
     { "name": "house_status", "kind": "read", "description": "…",
       "invoke": [{ "tool": "hass_state_list", "args": { "domain": "light" }, "label": "Lights" }],
