@@ -2,7 +2,7 @@
  * config.ts — the bridge's tool definitions, loaded from a JSON file.
  *
  * The bridge itself knows nothing about any particular house or person: every
- * tool it offers is declared here. A tool does exactly one of three things:
+ * tool it offers is declared here. A tool does exactly one of the following:
  *
  *   invoke   call one or more OpenClaw tools directly (tools.invoke, under the
  *            configured agent's tool policy) and condense the results
@@ -10,6 +10,7 @@
  *            reply; caller values are validated and quoted into the template
  *   send     send a message to one of the named destinations in the private
  *            destinations file (no AI involved)
+ *   reminder schedule one such message for a future instant
  *
  * `kind` decides the MCP annotation: "read" tools are marked read-only (clients
  * like ChatGPT run them without asking); "change" tools are not (clients ask the
@@ -44,6 +45,8 @@ export interface ToolSpec {
   dateRange?: boolean;
   ask?: { agent?: string; prompt: string };
   send?: boolean;
+  /** Channel names mapped to existing private destinations for one-shot delivery. */
+  reminder?: { defaultChannel: string; destinations: Record<string, string> };
 }
 
 export interface BridgeConfig {
@@ -80,12 +83,22 @@ export function parseConfig(raw: unknown): BridgeConfig {
     names.add(t.name);
     if (!t.description) fail(`${t.name}: description is required`);
     if (t.kind !== "read" && t.kind !== "change") fail(`${t.name}: kind must be "read" or "change"`);
-    const actions = [t.invoke ? 1 : 0, t.ask ? 1 : 0, t.send ? 1 : 0].reduce((a, b) => a + b, 0);
-    if (actions !== 1) fail(`${t.name}: needs exactly one of invoke, ask, send`);
+    const actions = [t.invoke ? 1 : 0, t.ask ? 1 : 0, t.send ? 1 : 0, t.reminder ? 1 : 0].reduce((a, b) => a + b, 0);
+    if (actions !== 1) fail(`${t.name}: needs exactly one of invoke, ask, send, reminder`);
     if (t.invoke && (!Array.isArray(t.invoke) || t.invoke.some((call) => typeof call?.tool !== "string"))) {
       fail(`${t.name}: invoke must be a list of { tool, args? }`);
     }
     if (t.send && t.kind !== "change") fail(`${t.name}: send tools must be kind "change"`);
+    if (t.reminder) {
+      const { defaultChannel, destinations } = t.reminder;
+      if (t.kind !== "change" || typeof defaultChannel !== "string" || !destinations ||
+          typeof destinations !== "object" || Array.isArray(destinations) ||
+          !Object.hasOwn(destinations, defaultChannel) ||
+          Object.entries(destinations).some(([channel, destination]) =>
+            !["imessage", "discord"].includes(channel) || typeof destination !== "string" || !destination.trim())) {
+        fail(`${t.name}: reminder needs kind "change" and a default channel in its destination map`);
+      }
+    }
     if (t.ask && t.kind === "read" && Object.values(t.params ?? {}).some((p) => p.type === "string")) {
       fail(`${t.name}: read tools that ask an agent can't take free-text parameters`);
     }

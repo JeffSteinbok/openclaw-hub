@@ -73,7 +73,17 @@ Tool definition changes take effect on restart.
 | `dateRange` | Adds `range` (`today`, `tomorrow`, `this_week`, `next_7_days`) or `start`/`end` dates, mapped onto every call's `after`/`before` |
 | `ask` | Send `prompt` to an agent (`agent`, or the tool's own) and return its reply. `{param}` placeholders are filled with validated values; strings are JSON-quoted so they read as data |
 | `send` | Send to a named destination from the private destinations file; no model involved |
+| `reminder` | Schedule a one-shot message. Configure `defaultChannel` and a `destinations` map from each allowed channel (`imessage` or `discord`) to a private named destination |
 | `params` | `enum`, `date` (YYYY-MM-DD) or `string` (with `maxLength`). A `read` tool that asks an agent can't take free text |
+
+A reminder action exposes `text`, a future ISO 8601 `time` with a UTC offset, and
+an optional `channel`. The bridge persists pending reminders in its private device
+directory and resumes them on restart. Use a dedicated device directory for each
+bridge process. At delivery time the bridge uses the same paired
+Gateway `send` method as messaging. The configured recipient must still match the
+one selected at scheduling. An interrupted or failed send leaves a private
+`.sending` record for inspection. The bridge does not automatically resend an
+unconfirmed delivery.
 
 ## Setup
 

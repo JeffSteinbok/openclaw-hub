@@ -103,17 +103,25 @@ export class DeviceStore {
   }
 
   /** Allowlisted message destinations, by name. Missing file = nobody. */
-  loadDestinations(): Record<string, Destination> {
-    let data: Record<string, unknown>;
-    const file = ["destinations.json", "recipients.json"].map((f) => path.join(this.dir, f)).find((f) => fs.existsSync(f));
-    try {
-      data = file ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
-    } catch {
-      return {};
+  loadDestinations({ strict = false } = {}): Record<string, Destination> {
+    let data: Record<string, unknown> = {};
+    for (const name of ["destinations.json", "recipients.json"]) {
+      try {
+        const parsed: unknown = JSON.parse(fs.readFileSync(path.join(this.dir, name), "utf8"));
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("invalid destination config");
+        }
+        data = parsed as Record<string, unknown>;
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        if (strict) throw error;
+        return {};
+      }
     }
     const out: Record<string, Destination> = {};
     for (const [name, value] of Object.entries(data)) {
-      if (!/^[a-z][a-z0-9_-]*$/.test(name)) continue;
+      if (!/^[a-z][a-z0-9_-]*$/.test(name) || !value) continue;
       // A bare string is an iMessage handle (the original format).
       const dest = typeof value === "string" ? { channel: "imessage", to: value } : (value as Partial<Destination>);
       if ((dest.channel === "imessage" || dest.channel === "discord") && typeof dest.to === "string" && dest.to) {
@@ -140,6 +148,7 @@ export interface GatewayOptions {
   displayName?: string;
   log?: (message: string) => void;
   onConnectError?: (err: Error) => void;
+  onReconnectPaused?: () => void;
 }
 
 export function createGatewayClient(opts: GatewayOptions, onReady: () => void, onClose: () => void): GatewayClient {
@@ -156,7 +165,7 @@ export function createGatewayClient(opts: GatewayOptions, onReady: () => void, o
     // pairing, so the bridge ends up with its own scoped device token.
     clientName: "cli",
     clientDisplayName: opts.displayName ?? "mcp-bridge",
-    clientVersion: "0.3.1",
+    clientVersion: "0.3.3",
     mode: "backend",
     platform: "macos",
     role: ROLE,
@@ -173,6 +182,7 @@ export function createGatewayClient(opts: GatewayOptions, onReady: () => void, o
     },
     onHelloOk: () => onReady(),
     onClose: () => onClose(),
+    onReconnectPaused: () => opts.onReconnectPaused?.(),
     onConnectError: (err) => {
       log(`gateway connect error: ${err.message}`);
       opts.onConnectError?.(err);
@@ -199,21 +209,36 @@ export class OpenClawGateway {
 
   constructor(private readonly opts: GatewayOptions) {}
 
-  private connect(): Promise<void> {
-    if (this.ready) return this.ready;
+  private resetReady(): void {
     this.ready = new Promise<void>((resolve) => {
       this.resolveReady = resolve;
     });
-    this.client = createGatewayClient(
-      this.opts,
-      () => this.resolveReady?.(),
-      () => {
-        // The client reconnects on its own; later requests wait for the next hello.
+  }
+
+  private connect(): Promise<void> {
+    if (this.ready) return this.ready;
+    this.resetReady();
+    const client = createGatewayClient(
+      { ...this.opts, onReconnectPaused: () => {
+        if (this.client !== client) return;
+        this.client = null;
         this.ready = null;
+        this.resolveReady = null;
+        client.stop();
+      } },
+      () => {
+        if (this.client !== client) return;
+        this.resolveReady?.();
+        this.resolveReady = null;
+      },
+      () => {
+        // After a successful hello, wait for this same client's next handshake.
+        if (this.client === client && !this.resolveReady) this.resetReady();
       },
     );
-    this.client.start();
-    return this.ready;
+    this.client = client;
+    client.start();
+    return this.ready!;
   }
 
   private async connected(): Promise<GatewayClient> {
@@ -282,16 +307,29 @@ export class OpenClawGateway {
     }
   }
 
+  /** Wait for a connection before an operation that must distinguish preflight failure from a send. */
+  async prepareSend() {
+    const client = await this.connected();
+    return async (
+      dest: Destination,
+      message: string,
+      idempotencyKey: string = crypto.randomUUID(),
+      onSent?: () => void,
+    ): Promise<AskResult> => {
+      await client.request("send", {
+        channel: dest.channel,
+        to: dest.to,
+        message,
+        idempotencyKey,
+      }, { onSent });
+      return { ok: true, text: "Sent." };
+    };
+  }
+
   /** Send a message directly through the Gateway (no agent involved). */
   async send(dest: Destination, message: string): Promise<AskResult> {
-    const client = await this.connected();
-    await client.request("send", {
-      channel: dest.channel,
-      to: dest.to,
-      message,
-      idempotencyKey: crypto.randomUUID(),
-    });
-    return { ok: true, text: "Sent." };
+    const send = await this.prepareSend();
+    return send(dest, message);
   }
 
   stop(): void {

@@ -43,7 +43,7 @@ export interface ServerOptions {
 
 export function buildMcpServer(config: BridgeConfig, now: () => Date = () => new Date(), backend?: BridgeBackend): McpServer {
   const server = new McpServer(
-    { name: config.name, version: "0.3.2" },
+    { name: config.name, version: "0.3.3" },
     config.instructions ? { instructions: config.instructions } : undefined,
   );
   registerTools(server, config, now, backend);

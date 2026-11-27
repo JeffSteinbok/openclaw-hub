@@ -16,12 +16,15 @@
  * tools file it refuses to start; it never serves /mcp unauthenticated.
  */
 
+import { createHash } from "node:crypto";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRemoteJWKSet } from "jose";
 import { loadConfig, reloadClientTools, type BridgeConfig } from "./config.js";
-import { DeviceStore, OpenClawGateway } from "./gateway.js";
+import { DeviceStore, OpenClawGateway, type Destination } from "./gateway.js";
 import { createMcpHttpServer } from "./server.js";
+import { ReminderQueue } from "./reminders.js";
 import type { BridgeBackend } from "./tools.js";
 
 const env = (name: string) => process.env[`MCP_BRIDGE_${name}`] ?? "";
@@ -80,9 +83,28 @@ async function jwksUrl(): Promise<string> {
 
 const store = new DeviceStore(DEVICE_DIR);
 let backend: BridgeBackend | undefined;
+let startReminders: (() => void) | undefined;
 if (store.isPaired()) {
   const gateway = new OpenClawGateway({ url: GATEWAY_URL, store, log });
   const destinations = store.loadDestinations();
+  const routeKey = (destination: Destination) => createHash("sha256").update(JSON.stringify(destination)).digest("hex");
+  const directory = path.join(DEVICE_DIR, "reminders");
+  const remindersEnabled = config.tools.some((tool) => tool.reminder) || fs.existsSync(directory);
+  let reminders: ReminderQueue | undefined;
+  if (remindersEnabled) {
+    startReminders = () => {
+      reminders = new ReminderQueue({
+        directory,
+        log,
+        prepare: async (name, expectedRoute, message, id) => {
+          const send = await gateway.prepareSend();
+          const current = store.loadDestinations({ strict: true });
+          if (!Object.hasOwn(current, name) || routeKey(current[name]) !== expectedRoute) return null;
+          return async (onSent) => { await send(current[name], message, id, onSent); };
+        },
+      });
+    };
+  }
   backend = {
     invoke: (agent, tool, args) => gateway.invoke(agent, tool, args),
     ask: (agent, prompt) => gateway.ask(agent, prompt),
@@ -92,6 +114,17 @@ if (store.isPaired()) {
       log(`send to ${name} (${dest.channel})`);
       return gateway.send(dest, message);
     },
+    ...(remindersEnabled ? {
+      remind: (at: number, name: string, message: string) => {
+        if (!reminders) throw new Error("reminder queue unavailable");
+        const current = store.loadDestinations();
+        const expected = routeKey(destinations[name]);
+        if (!Object.hasOwn(current, name) || routeKey(current[name]) !== expected) {
+          throw new Error("reminder destination changed; restart the bridge before scheduling");
+        }
+        return reminders.schedule(at, name, expected, message);
+      },
+    } : {}),
     destinations: Object.fromEntries(Object.entries(destinations).map(([n, d]) => [n, d.channel])),
   };
 } else {
@@ -116,6 +149,11 @@ const server = createMcpHttpServer({
   ...(backend ? { backend } : {}),
 });
 server.listen(PORT, "127.0.0.1", () => {
+  try {
+    startReminders?.();
+  } catch {
+    fatal("could not start the reminder queue");
+  }
   log(`listening on 127.0.0.1:${PORT}/mcp as "${config.name}"`);
   log(`${SUBJECTS.length} allowed subject(s); tools: ${backend ? config.tools.map((t) => t.name).join(", ") : "ping only (not paired)"}`);
   if (backend) log(`destinations: ${Object.keys(backend.destinations).join(", ") || "none"}`);

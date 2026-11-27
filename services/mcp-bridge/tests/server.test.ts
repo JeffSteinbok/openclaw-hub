@@ -192,7 +192,7 @@ describe("mcp with a valid token", () => {
 });
 
 describe("configured tools", () => {
-  type Call = { kind: "invoke" | "ask" | "send"; args: unknown[] };
+  type Call = { kind: "invoke" | "ask" | "send" | "remind"; args: unknown[] };
   const HA = {
     light: { output: [
       { entity_id: "light.kitchen", state: "on", attributes: { friendly_name: "Kitchen" } },
@@ -204,14 +204,18 @@ describe("configured tools", () => {
     media_player: { output: [{ entity_id: "media_player.tv", state: "on", attributes: { friendly_name: "TV" } }] },
   } as Record<string, unknown>;
 
-  async function serverWith(destinations: Record<string, string> | null, fail = false) {
-    let config = CONFIG;
+  async function serverWith(destinations: Record<string, string> | null, fail = false, initialConfig = CONFIG) {
+    let config = initialConfig;
     const calls: Call[] = [];
     const backend =
       destinations === null
         ? undefined
         : {
             destinations,
+            remind: (at: number, to: string, text: string) => {
+              calls.push({ kind: "remind", args: [at, to, text] });
+              return "reminder-id";
+            },
             invoke: async (agent: string, tool: string, args: Record<string, unknown>) => {
               calls.push({ kind: "invoke" as const, args: [agent, tool, args] });
               if (fail) throw new Error("gateway down");
@@ -361,6 +365,43 @@ describe("configured tools", () => {
     expect(bad.result?.isError ?? bad.error).toBeTruthy();
     expect(calls).toEqual([{ kind: "send", args: ["owner", "hi"] }]);
     s.close();
+  });
+
+  it("schedules a future reminder on approved routes and grants it only to OctoDot", async () => {
+    const config = parseConfig({
+      ...CONFIG,
+      clientTools: { ...CONFIG.clientTools, [OCTODOT]: [...CONFIG.clientTools![OCTODOT], "set_reminder"] },
+      tools: [...CONFIG.tools, {
+        name: "set_reminder", kind: "change", description: "Schedule a reminder",
+        reminder: { defaultChannel: "imessage", destinations: { imessage: "owner", discord: "owner_discord" } },
+      }],
+    });
+    const { s, call, calls, tools } = await serverWith({ owner: "imessage", owner_discord: "discord" }, false, config);
+    const args = { text: "Call home", time: "2026-10-26T09:00:00-07:00" };
+    const request = (args: object, client_id = OCTODOT) =>
+      call("tools/call", { name: "set_reminder", arguments: args }, { client_id });
+    try {
+      expect((await tools()).set_reminder).toBe(false);
+      expect((await request(args)).result.isError).toBe(false);
+      expect((await request({ ...args, channel: "discord" })).result.isError).toBe(false);
+      for (const params of [
+        { ...args, time: "2026-10-20T09:00:00-07:00" },
+        { ...args, time: "2026-10-26T09:00:00" },
+        { ...args, channel: "arbitrary" },
+        { ...args, text: "  " },
+      ]) {
+        const rejected = await request(params);
+        expect(rejected.result?.isError ?? rejected.error).toBeTruthy();
+      }
+      const denied = await request(args, "unlisted");
+      expect(denied.result?.isError ?? denied.error).toBeTruthy();
+      expect(calls).toEqual([
+        { kind: "remind", args: [Date.parse(args.time), "owner", args.text] },
+        { kind: "remind", args: [Date.parse(args.time), "owner_discord", args.text] },
+      ]);
+    } finally {
+      s.close();
+    }
   });
 
   it("reports backend failures as tool errors", async () => {
