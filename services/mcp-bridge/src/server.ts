@@ -36,14 +36,14 @@ export interface ServerOptions {
   log?: (message: string) => void;
   now?: () => Date;
   /** The tools to offer. */
-  config: BridgeConfig;
+  config: () => BridgeConfig;
   /** OpenClaw behind the tools; omitted when the bridge isn't paired (only `ping` is offered). */
   backend?: BridgeBackend;
 }
 
 export function buildMcpServer(config: BridgeConfig, now: () => Date = () => new Date(), backend?: BridgeBackend): McpServer {
   const server = new McpServer(
-    { name: config.name, version: "0.3.1" },
+    { name: config.name, version: "0.3.2" },
     config.instructions ? { instructions: config.instructions } : undefined,
   );
   registerTools(server, config, now, backend);
@@ -178,7 +178,20 @@ export function createMcpHttpServer(options: ServerOptions): Server {
       return;
     }
 
-    const server = buildMcpServer(options.config, options.now, options.backend);
+    const config = options.config();
+    const map = config.clientTools;
+    const grants = auth.clientId && map && Object.hasOwn(map, auth.clientId) ? map[auth.clientId] : [];
+    const permitted = new Set(["ping", ...grants]);
+    for (const message of Array.isArray(body) ? body : [body]) {
+      if (message?.method === "tools/call" && typeof message.params?.name === "string" &&
+          !permitted.has(message.params.name)) {
+        log(`tool call denied client=${client}`);
+      }
+    }
+    const server = buildMcpServer({
+      ...config,
+      tools: config.tools.filter((tool) => permitted.has(tool.name)),
+    }, options.now, options.backend);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on("close", () => {
       void transport.close();

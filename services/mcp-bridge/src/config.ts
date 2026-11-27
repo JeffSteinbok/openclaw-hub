@@ -57,6 +57,8 @@ export interface BridgeConfig {
   timezone?: string;
   /** Entity-id globs the Home Assistant condenser skips (e.g. status LEDs). */
   ignoreEntities?: string[];
+  /** Verified OAuth client IDs mapped to the tools they may use. */
+  clientTools?: Record<string, string[]>;
   tools: ToolSpec[];
 }
 
@@ -95,6 +97,17 @@ export function parseConfig(raw: unknown): BridgeConfig {
     if (t.ask?.prompt) {
       for (const m of t.ask.prompt.matchAll(/\{([a-z][a-z0-9_]*)\}/g)) {
         if (!t.params?.[m[1]]) fail(`${t.name}: prompt uses {${m[1]}} but no such parameter`);
+      }
+    }
+  }
+  if (c.clientTools !== undefined) {
+    if (!c.clientTools || typeof c.clientTools !== "object" || Array.isArray(c.clientTools)) {
+      fail("`clientTools` must be an object");
+    }
+    for (const [clientId, tools] of Object.entries(c.clientTools)) {
+      if (!clientId.trim() || !Array.isArray(tools) ||
+          tools.some((tool) => tool !== "ping" && !names.has(tool))) {
+        fail("`clientTools` entries must map client IDs to lists of defined tool names");
       }
     }
   }

@@ -58,6 +58,15 @@ try {
   fatal(e instanceof Error ? e.message : String(e));
 }
 
+process.on("SIGHUP", () => {
+  try {
+    config = loadConfig(env("TOOLS"));
+    log("reloaded tools and client grants");
+  } catch {
+    log("failed to reload tools and client grants; keeping the previous config");
+  }
+});
+
 const ALLOWED_HOSTS = list(env("ALLOWED_HOSTS") || `127.0.0.1:${PORT},localhost:${PORT},${new URL(RESOURCE).host}`);
 
 /** The signing keys URL: configured, or jwks_uri from the issuer's published metadata. */
@@ -102,7 +111,7 @@ const keys = createRemoteJWKSet(new URL(await jwksUrl()));
 const server = createMcpHttpServer({
   allowedHosts: ALLOWED_HOSTS,
   auth: { issuer: ISSUER, resource: RESOURCE, allowedSubjects: SUBJECTS, keys },
-  config,
+  config: () => config,
   log,
   ...(backend ? { backend } : {}),
 });

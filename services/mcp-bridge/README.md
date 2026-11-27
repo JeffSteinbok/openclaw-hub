@@ -31,6 +31,15 @@ flowchart LR
 
 `MCP_BRIDGE_TOOLS` points at a JSON file. See [`tools.example.json`](tools.example.json).
 
+Set `clientTools` in that file to map verified OAuth `client_id` claims to tool names.
+The bridge lists and accepts only granted tools, plus the built-in `ping`. Clients with
+no entry or no client ID receive only `ping`, including when `clientTools` is omitted.
+Grant entries can reference configured names and `ping`.
+
+Replace the JSON file atomically and signal the running process with `SIGHUP` to reload.
+The bridge keeps the previous configuration if parsing or validation fails. Check the
+log for reload confirmation. New requests use the reloaded grants.
+
 ```json
 {
   "name": "home",

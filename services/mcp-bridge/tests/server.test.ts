@@ -7,7 +7,11 @@ import { authenticate, type AuthConfig } from "../src/auth.js";
 import { parseConfig } from "../src/config.js";
 import exampleConfig from "../tools.example.json" with { type: "json" };
 
-const CONFIG = parseConfig(exampleConfig);
+const OCTODOT = "https://chatgpt.example.test/oauth/example/client.json";
+const CONFIG = parseConfig({
+  ...exampleConfig,
+  clientTools: { [OCTODOT]: ["ping", "house_status", "calendar", "control_house", "send_message"] },
+});
 
 const ISSUER = "https://auth.example.test";
 const RESOURCE = "https://mcp.example.test/mcp";
@@ -50,7 +54,7 @@ beforeAll(async () => {
   otherKey = (await generateKeyPair("RS256")).privateKey;
   const jwk = { ...(await exportJWK(pair.publicKey)), kid: "test", alg: "RS256" };
   auth = { issuer: ISSUER, resource: RESOURCE, allowedSubjects: [OWNER], keys: createLocalJWKSet({ keys: [jwk] }) };
-  server = createMcpHttpServer({ config: CONFIG,
+  server = createMcpHttpServer({ config: () => CONFIG,
     allowedHosts: [],
     auth,
     log: (line) => logs.push(line),
@@ -201,6 +205,7 @@ describe("configured tools", () => {
   } as Record<string, unknown>;
 
   async function serverWith(destinations: Record<string, string> | null, fail = false) {
+    let config = CONFIG;
     const calls: Call[] = [];
     const backend =
       destinations === null
@@ -223,18 +228,19 @@ describe("configured tools", () => {
             },
           };
     const s = createMcpHttpServer({
-      config: CONFIG,
+      config: () => config,
       allowedHosts: [],
       auth,
+      log: (line) => logs.push(line),
       now: () => new Date("2026-10-25T18:00:00Z"), // a Sunday in America/Los_Angeles
       ...(backend ? { backend } : {}),
     });
     await new Promise<void>((resolve) => s.listen(0, "127.0.0.1", resolve));
     const url = `http://127.0.0.1:${(s.address() as AddressInfo).port}/mcp`;
-    const call = async (method: string, params: unknown = {}) => {
+    const call = async (method: string, params: unknown = {}, claims = { client_id: OCTODOT }) => {
       const res = await fetch(url, {
         method: "POST",
-        headers: { "content-type": "application/json", accept: ACCEPT, authorization: `Bearer ${await token()}` },
+        headers: { "content-type": "application/json", accept: ACCEPT, authorization: `Bearer ${await token(claims)}` },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
       });
       return res.json();
@@ -246,8 +252,39 @@ describe("configured tools", () => {
           t.annotations.readOnlyHint,
         ]),
       );
-    return { s, call, calls, tools };
+    return { s, call, calls, tools, reload: (next: typeof CONFIG) => { config = next; } };
   }
+
+  it("filters signed but unlisted, missing and inherited client IDs and refuses their calls", async () => {
+    const { s, call, calls, tools } = await serverWith({ owner: "imessage" });
+    try {
+      expect(Object.keys(await tools())).toEqual(["ping", "house_status", "calendar", "control_house", "send_message"]);
+      for (const client_id of ["unlisted", "constructor", ""]) {
+        const claims = { client_id };
+        const list = await call("tools/list", {}, claims);
+        expect(list.result.tools.map((tool: { name: string }) => tool.name)).toEqual(["ping"]);
+        const denied = await call("tools/call", { name: "house_status" }, claims);
+        expect(denied.result?.isError ?? denied.error).toBeTruthy();
+      }
+      expect(calls).toEqual([]);
+      expect(logs).toContain("tool call denied client=unlisted");
+    } finally {
+      s.close();
+    }
+  });
+
+  it("applies a reloaded allowlist on the next request", async () => {
+    const { s, tools, reload } = await serverWith({});
+    try {
+      expect((await tools()).house_status).toBe(true);
+      reload({ ...CONFIG, clientTools: { [OCTODOT]: ["calendar"] } });
+      expect(await tools()).toEqual({ ping: true, calendar: true });
+      reload({ ...CONFIG, clientTools: {} });
+      expect(await tools()).toEqual({ ping: true });
+    } finally {
+      s.close();
+    }
+  });
 
   it("offers only ping when not paired", async () => {
     const { s, tools } = await serverWith(null);
@@ -349,7 +386,7 @@ describe("http hygiene", () => {
   });
 
   it("enforces the Host allowlist before anything else", async () => {
-    const guarded = createMcpHttpServer({ config: CONFIG, allowedHosts: ["mcp.example.test"], auth });
+    const guarded = createMcpHttpServer({ config: () => CONFIG, allowedHosts: ["mcp.example.test"], auth });
     await new Promise<void>((resolve) => guarded.listen(0, "127.0.0.1", resolve));
     const res = await fetch(`http://127.0.0.1:${(guarded.address() as AddressInfo).port}/mcp`, { method: "POST" });
     expect(res.status).toBe(421);
