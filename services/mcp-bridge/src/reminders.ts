@@ -2,6 +2,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { GatewayClientRequestTimeoutError } from "@openclaw/gateway-client";
 
 interface Reminder {
   id: string;
@@ -115,6 +116,18 @@ export class ReminderQueue {
     }
   }
 
+  private restorePending(job: Reminder, sending: string): void {
+    try {
+      fs.renameSync(sending, this.file(job.id, "json"));
+      job.retryAfter = Date.now() + 5000;
+      this.pending.set(job.id, job);
+      this.options.log(`reminder send did not start id=${job.id}; retrying`);
+    } catch {
+      this.pending.delete(job.id);
+      this.options.log(`could not restore reminder claim id=${job.id}`);
+    }
+  }
+
   private async attempt(job: Reminder): Promise<void> {
     let send: () => Promise<void>;
     try {
@@ -141,14 +154,7 @@ export class ReminderQueue {
     try {
       this.syncDirectory();
     } catch {
-      try {
-        fs.renameSync(sending, this.file(job.id, "json"));
-        job.retryAfter = Date.now() + 5000;
-        this.options.log(`could not sync reminder claim id=${job.id}; retrying`);
-      } catch {
-        this.pending.delete(job.id);
-        this.options.log(`could not restore reminder claim id=${job.id}`);
-      }
+      this.restorePending(job, sending);
       return;
     }
     this.pending.delete(job.id);
@@ -157,8 +163,12 @@ export class ReminderQueue {
       fs.unlinkSync(sending);
       this.syncDirectory();
       this.options.log(`delivered reminder id=${job.id}`);
-    } catch {
-      this.options.log(`reminder delivery unconfirmed id=${job.id}`);
+    } catch (error) {
+      if (error instanceof GatewayClientRequestTimeoutError && !error.requestSent) {
+        this.restorePending(job, sending);
+      } else {
+        this.options.log(`reminder delivery unconfirmed id=${job.id}`);
+      }
     }
   }
 }
